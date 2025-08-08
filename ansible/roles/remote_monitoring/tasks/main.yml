@@ -1,0 +1,31 @@
+---
+# tasks file for remote_monitoring
+# This role orchestrates remote monitoring by:
+# 1. Setting up Nginx stub_status on remote machines
+# 2. Deploying Nginx Exporter on remote machines  
+# 3. Updating Prometheus config on monitoring server
+
+- name: Include prerequisites
+  include_tasks: prerequisites.yml
+  when: remote_monitoring_enabled | default(true)
+  tags: [remote_monitoring, setup]
+
+- name: Configure Nginx stub_status on remote machine
+  include_tasks: nginx_config.yml
+  when: remote_monitoring_enabled | default(true)
+  tags: [remote_monitoring, nginx]
+
+- name: Deploy Nginx Exporter on remote machine
+  include_tasks: nginx_exporter.yml
+  when: remote_monitoring_enabled | default(true)
+  tags: [remote_monitoring, exporter]
+
+- name: Update Prometheus configuration on monitoring server
+  include_tasks: prometheus_config.yml
+  when: remote_monitoring_enabled | default(true) and monitoring_server_host is defined
+  tags: [remote_monitoring, prometheus]
+
+- name: Include cleanup tasks
+  include_tasks: cleanup.yml
+  when: remote_monitoring_cleanup | default(false)
+  tags: [remote_monitoring, cleanup] 

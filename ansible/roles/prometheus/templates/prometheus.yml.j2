@@ -1,0 +1,120 @@
+global:
+  scrape_interval: {{ prometheus_config.global.scrape_interval | default('15s') }}
+  evaluation_interval: {{ prometheus_config.global.evaluation_interval | default('15s') }}
+
+# Alertmanager configuration
+alerting:
+  alertmanagers: {{ monitoring_alertmanagers | default([]) | to_nice_yaml(indent=2) | indent(4) }}
+
+# Alert rules configuration
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# Service discovery configuration
+scrape_configs:
+  # Base scrape configurations
+{% for job in prometheus_config.scrape_configs %}
+  - job_name: '{{ job.job_name }}'
+{% if job.static_configs is defined %}
+    static_configs:
+{% for static_config in job.static_configs %}
+      - targets:
+{% for target in static_config.targets %}
+        - {{ target }}
+{% endfor %}
+{% if static_config.labels is defined %}
+        labels:
+{% for key, value in static_config.labels.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% if monitoring_scrape_configs is defined and monitoring_scrape_configs | length > 0 %}
+  # Dynamic scrape configurations from other roles
+{% for job in monitoring_scrape_configs %}
+  - job_name: '{{ job.job_name }}'
+{% if job.static_configs is defined %}
+    static_configs:
+{% for static_config in job.static_configs %}
+      - targets:
+{% for target in static_config.targets %}
+        - {{ target }}
+{% endfor %}
+{% if static_config.labels is defined %}
+        labels:
+{% for key, value in static_config.labels.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+  # File-based service discovery for extensibility
+  - job_name: 'file_sd'
+    file_sd_configs:
+      - files:
+        - '/etc/prometheus/targets/*.yml'
+        refresh_interval: 30s
+
+  # Loki targets via service discovery (dynamically updated)
+  - job_name: 'loki'
+    file_sd_configs:
+      - files:
+        - '/etc/prometheus/targets/loki_targets.yml'
+        refresh_interval: 30s
+
+  # Blackbox targets via service discovery (dynamically updated)
+  - job_name: 'blackbox_targets'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    relabel_configs:
+      # Use the __param_target from the file_sd labels
+      - source_labels: [__param_target]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      # Set the blackbox exporter address
+      - target_label: __address__
+        replacement: blackbox_exporter:9115
+      # Copy the target URL to the target label
+      - source_labels: [__param_target]
+        regex: '(.*)'
+        target_label: target
+      # Use the module from file_sd labels
+      - source_labels: [__param_module]
+        target_label: __param_module
+    file_sd_configs:
+      - files:
+        - '/etc/prometheus/targets/blackbox_targets.yml'
+        refresh_interval: 30s
+
+{% if prometheus_blackbox_targets is defined and prometheus_blackbox_targets | length > 0 %}
+  # Blackbox targets (static fallback)
+  - job_name: 'blackbox_targets_static'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox_exporter:9115
+      - source_labels: [__param_target]
+        regex: '(.*)'
+        target_label: target
+    static_configs:
+      - targets:
+{% for target in prometheus_blackbox_targets %}
+        - {{ target }}
+{% endfor %}
+{% endif %}
+
+ 

@@ -1,0 +1,38 @@
+#!/bin/bash
+# WireGuard PostDown script - cleans up routing and firewall rules
+
+# Enable logging
+exec > >(logger -t wireguard-postdown) 2>&1
+
+echo "Starting WireGuard PostDown cleanup..."
+
+# === Docker Integration Rules ===
+# Remove rules from DOCKER-USER chain
+iptables -D DOCKER-USER -i {{ wireguard_interface }} -j ACCEPT 2>/dev/null || true
+iptables -D DOCKER-USER -o {{ wireguard_interface }} -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+
+# Clean up the old FORWARD rule from previous attempts, just in case.
+iptables -D FORWARD -i {{ wireguard_interface }} -j ACCEPT 2>/dev/null || true
+
+# Remove VPN client access rule
+iptables -D INPUT -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT 2>/dev/null || true
+
+{% if wireguard_vpn_only_ports.tcp | length > 0 %}
+# Remove VPN-only TCP port rules
+{% for port in wireguard_vpn_only_ports.tcp %}
+# Remove rules for port {{ port }}
+iptables -D INPUT -p tcp --dport {{ port }} -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT 2>/dev/null || true
+iptables -D INPUT -p tcp --dport {{ port }} -j DROP 2>/dev/null || true
+{% endfor %}
+{% endif %}
+
+{% if wireguard_vpn_only_ports.udp | length > 0 %}
+# Remove VPN-only UDP port rules
+{% for port in wireguard_vpn_only_ports.udp %}
+# Remove rules for port {{ port }}
+iptables -D INPUT -p udp --dport {{ port }} -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT 2>/dev/null || true
+iptables -D INPUT -p udp --dport {{ port }} -j DROP 2>/dev/null || true
+{% endfor %}
+{% endif %}
+
+echo "WireGuard PostDown cleanup completed successfully" 

@@ -1,0 +1,31 @@
+---
+# handlers file for cadvisor
+
+- name: restart cadvisor
+  command: docker compose restart
+  args:
+    chdir: "{{ cadvisor_data_dir }}"
+  become: true
+  listen: restart cadvisor
+
+- name: stop cadvisor
+  command: docker compose down
+  args:
+    chdir: "{{ cadvisor_data_dir }}"
+  become: true
+  listen: stop cadvisor
+
+- name: start cadvisor
+  command: docker compose up -d
+  args:
+    chdir: "{{ cadvisor_data_dir }}"
+  become: true
+  listen: start cadvisor
+
+- name: reload prometheus
+  uri:
+    url: "http://localhost:9090/-/reload"
+    method: POST
+    status_code: 200
+  ignore_errors: true
+  listen: reload prometheus 

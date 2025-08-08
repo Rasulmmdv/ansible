@@ -1,0 +1,365 @@
+---
+# defaults file for blackbox_exporter
+
+blackbox_exporter_image: "prom/blackbox-exporter:latest"
+blackbox_exporter_container_name: "blackbox_exporter"
+blackbox_exporter_data_dir: "/opt/monitoring/blackbox_exporter"
+blackbox_exporter_user: "blackbox_exporter"
+blackbox_exporter_group: "blackbox_exporter"
+blackbox_exporter_ports:
+  - "9115:9115"
+blackbox_exporter_volumes:
+  - "{{ blackbox_exporter_data_dir }}/blackbox.yml:/etc/blackbox_exporter/config.yml:ro"
+blackbox_exporter_command:
+  - '--config.file=/etc/blackbox_exporter/config.yml'
+
+# Website endpoint monitoring configuration
+blackbox_enable_website_monitoring: true
+
+# Blackbox targets for Prometheus monitoring
+blackbox_targets:
+  - http://example.com
+  - https://google.com
+  - http://prometheus.io
+
+# Endpoint configuration - can be defined as variables or loaded from config file
+blackbox_endpoints_config_file: "{{ blackbox_exporter_data_dir }}/endpoints.yml"
+
+# Comprehensive list of publicly accessible sites for monitoring
+blackbox_endpoints:
+  # Main Production Websites
+  - name: "clinicack-kimdevs-ru"
+    url: "https://clinicack.kimdevs.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "costx-kimdevs-com"
+    url: "https://costx.kimdevs.com"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "batumi-estate"
+    url: "https://batumi.estate"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "dev-batumi-estate"
+    url: "https://dev.batumi.estate"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "test-batumi-estate"
+    url: "https://test.batumi.estate"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "ami-system-com"
+    url: "https://ami-system.com"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "kimretail-ru"
+    url: "https://kimretail.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "begoclinic-ru"
+    url: "https://begoclinic.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "mafia-game"
+    url: "https://mafia.game"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "trudresursy-ru"
+    url: "https://trudresursy.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "kimdevs-ru"
+    url: "https://kimdevs.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "realtyevents-ru"
+    url: "https://realtyevents.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "badges-bio"
+    url: "https://badges.bio"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "dollars-ge"
+    url: "https://dollars.ge"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "auto-discounts-ru"
+    url: "https://auto-discounts.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "ami-system-kimdevs-ru"
+    url: "https://ami-system.kimdevs.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "aibot-kimdevs-ru"
+    url: "https://aibot.kimdevs.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "mapi-ge"
+    url: "https://mapi.ge"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "moscow-estate"
+    url: "https://moscow.estate"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "glowfurs-ru"
+    url: "https://glowfurs.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  # Development and Testing Sites
+  - name: "fix-ci-fail-badges-bio"
+    url: "https://fix-ci-fail.badges.bio"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "branches-badges-bio"
+    url: "https://branches.badges.bio"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "begoclinic-kimdevs-ru"
+    url: "https://begoclinic.kimdevs.ru"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "dev-mafia-game"
+    url: "https://dev.mafia.game"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  # API Endpoints
+  - name: "api-batumi-estate"
+    url: "https://api.batumi.estate"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-kimdevs-ru"
+    url: "https://api.kimdevs.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-moscow-estate"
+    url: "https://api.moscow.estate"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-realtyevents-ru"
+    url: "https://api.realtyevents.ru"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-kimdevs-com"
+    url: "https://api.kimdevs.com"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-mafia-game"
+    url: "https://api.mafia.game"
+    module: "http_2xx"
+    interval: "30s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  # Test API Endpoints
+  - name: "directus-test-kimdevs-ru"
+    url: "https://directus-test.kimdevs.ru"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "admin-realtyevents-ru"
+    url: "https://admin.realtyevents.ru"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-test-kimdevs-ru"
+    url: "https://api-test.kimdevs.ru"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "test-api-batumi-estate"
+    url: "https://test-api.batumi.estate"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-dev-mafia-game"
+    url: "https://api-dev.mafia.game"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+  - name: "api-test1-kimdevs-ru"
+    url: "https://api.test1.kimdevs.ru"
+    module: "http_2xx"
+    interval: "60s"
+    timeout: "10s"
+    headers:
+      User-Agent: "Prometheus/Blackbox Exporter"
+    valid_status_codes: [200, 201, 202, 301, 302]
+
+# Legacy single endpoint support (for backward compatibility)
+blackbox_target_endpoint: "http://your-website.com"
+
+# Prometheus integration paths (referenced from prometheus role)
+blackbox_exporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+blackbox_exporter_prometheus_data_dir: "/opt/monitoring/prometheus"
+blackbox_exporter_prometheus_user_id: "65533"
+blackbox_exporter_prometheus_group_id: "65533" 

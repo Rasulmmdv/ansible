@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Restic Prune Script
+# This script removes old snapshots according to retention policy
+
+set -euo pipefail
+
+# Source environment file if it exists
+if [ -f "{{ restic_config_dir }}/restic.env" ]; then
+    source "{{ restic_config_dir }}/restic.env"
+fi
+
+# Log function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a {{ restic_log_dir }}/restic.log
+}
+
+# Error handling
+trap 'log "ERROR: Prune failed with exit code $?"' ERR
+
+log "Starting restic prune"
+
+# Apply retention policy
+log "Applying retention policy"
+restic forget \
+    --verbose \
+    --keep-last={{ restic_keep_last }} \
+    --keep-daily={{ restic_keep_daily }} \
+    --keep-weekly={{ restic_keep_weekly }} \
+    --keep-monthly={{ restic_keep_monthly }} \
+    --keep-yearly={{ restic_keep_yearly }} \
+    --prune
+
+log "Prune completed successfully" 

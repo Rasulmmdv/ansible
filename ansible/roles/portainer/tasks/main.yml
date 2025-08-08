@@ -1,0 +1,23 @@
+---
+- name: Make sure portainer config directory exists
+  ansible.builtin.file:
+    path: /etc/portainer
+    state: directory
+    mode: "0755"
+
+- name: Make sure portainer data directory exists
+  ansible.builtin.file:
+    path: "{{ portainer_data_directory }}"
+    state: directory
+    mode: "0755"
+
+- name: Template docker-compose file for portainer
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: /etc/portainer/docker-compose.yml
+    mode: "0644"
+
+- name: Run docker-compose for portainer
+  community.docker.docker_compose_v2:
+    project_src: /etc/portainer
+    state: present 

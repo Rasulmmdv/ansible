@@ -1,0 +1,84 @@
+global:
+  smtp_smarthost: "{{ alertmanager_email_smtp }}"
+  smtp_from: "{{ alertmanager_email_from }}"
+{% if alertmanager_email_auth_username and alertmanager_email_auth_password %}
+  smtp_auth_username: "{{ alertmanager_email_auth_username }}"
+  smtp_auth_password: "{{ alertmanager_email_auth_password }}"
+{% endif %}
+  smtp_require_tls: true
+
+route:
+  group_by: {{ alertmanager_route_group_by | to_json }}
+  group_wait: {{ alertmanager_route_group_wait }}
+  group_interval: {{ alertmanager_route_group_interval }}
+  repeat_interval: {{ alertmanager_route_repeat_interval }}
+  receiver: 'default'
+  routes:
+    - receiver: 'email'
+      matchers:
+        - severity =~ "{{ alertmanager_default_severity }}"
+{% if alertmanager_telegram_bot_token %}
+    - receiver: 'telegram'
+      matchers:
+        - severity =~ "{{ alertmanager_critical_severity }}"
+{% endif %}
+
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: "{{ alertmanager_email_to }}"
+        send_resolved: true
+{% if alertmanager_telegram_bot_token %}
+    telegram_configs:
+      - bot_token: "{{ alertmanager_telegram_bot_token }}"
+        chat_id: {{ alertmanager_telegram_chat_id }}
+        api_url: "{{ alertmanager_telegram_api_url }}"
+        send_resolved: true
+        message: |
+          🚨 Alert: {% raw %}{{ .GroupLabels.alertname }}{% endraw %}
+          Status: {% raw %}{{ .Status }}{% endraw %}
+          Severity: {% raw %}{{ .CommonLabels.severity }}{% endraw %}
+          Instance: {% raw %}{{ .CommonLabels.instance }}{% endraw %}
+          Summary: {% raw %}{{ .CommonAnnotations.summary }}{% endraw %}
+          Description: {% raw %}{{ .CommonAnnotations.description }}{% endraw %}
+{% endif %}
+
+  - name: 'email'
+    email_configs:
+      - to: "{{ alertmanager_email_to }}"
+        send_resolved: true
+        headers:
+          subject: "Alert: {% raw %}{{ .GroupLabels.alertname }}{% endraw %}"
+        html: |
+          <h2>Alert: {% raw %}{{ .GroupLabels.alertname }}{% endraw %}</h2>
+          <p><strong>Status:</strong> {% raw %}{{ .Status }}{% endraw %}</p>
+          <p><strong>Severity:</strong> {% raw %}{{ .CommonLabels.severity }}{% endraw %}</p>
+          <p><strong>Instance:</strong> {% raw %}{{ .CommonLabels.instance }}{% endraw %}</p>
+          <p><strong>Summary:</strong> {% raw %}{{ .CommonAnnotations.summary }}{% endraw %}</p>
+          <p><strong>Description:</strong> {% raw %}{{ .CommonAnnotations.description }}{% endraw %}</p>
+
+{% if alertmanager_telegram_bot_token %}
+  - name: 'telegram'
+    telegram_configs:
+      - bot_token: "{{ alertmanager_telegram_bot_token }}"
+        chat_id: {{ alertmanager_telegram_chat_id }}
+        api_url: "{{ alertmanager_telegram_api_url }}"
+        send_resolved: true
+        message: |
+          🚨 CRITICAL ALERT 🚨
+          
+          Alert: {% raw %}{{ .GroupLabels.alertname }}{% endraw %}
+          Status: {% raw %}{{ .Status }}{% endraw %}
+          Severity: {% raw %}{{ .CommonLabels.severity }}{% endraw %}
+          Instance: {% raw %}{{ .CommonLabels.instance }}{% endraw %}
+          
+          Summary: {% raw %}{{ .CommonAnnotations.summary }}{% endraw %}
+          Description: {% raw %}{{ .CommonAnnotations.description }}{% endraw %}
+{% endif %}
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance'] 

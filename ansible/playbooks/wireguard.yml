@@ -1,0 +1,32 @@
+---
+# Playbook: wireguard.yml
+# Description: Configures WireGuard VPN server
+# Usage: ansible-playbook -i inventory.yml playbooks/wireguard.yml
+
+- name: Configure WireGuard VPN server
+  hosts: all
+  become: true
+  vars:
+    # REQUIRED: Set your project name for VPN naming
+    # project_name: myproject
+    project_name: "kimdevs"
+
+    # REQUIRED: Set your WireGuard private key (per host, or in host_vars)
+    # wireguard_private_key: "..."
+
+    # REQUIRED: Set your DNS domain
+    # dnsmasq_domain: "example.local"
+    # domain: "example.local"
+    dnsmasq_domain: "kimdevs.ru"
+    domain: "kimdevs.ru"
+    wireguard_interface: wg0
+    wireguard_port: 51820
+    wireguard_manage_iptables: false
+  roles:
+    - wireguard
+  handlers:
+    - name: Save iptables rules
+      become: true
+      ansible.builtin.shell: iptables-save > /etc/iptables.rules
+      args:
+        executable: /bin/bash

@@ -1,0 +1,69 @@
+#!groovy
+
+// Jenkins Plugin Installation Script (Groovy-based)
+// This file is managed by Ansible - do not edit manually
+// Plugin installation method: {{ jenkins_plugin_installation_method }}
+// Total plugins to install: {{ jenkins_plugins_list | length }}
+
+import jenkins.model.*
+import hudson.model.*
+import hudson.util.*
+import jenkins.install.*
+import java.util.logging.Logger
+
+def logger = Logger.getLogger("jenkins.plugins.InstallPlugins")
+def installed = false
+def initialized = false
+
+logger.info("Starting Groovy-based plugin installation...")
+
+def pluginParameter="{{ jenkins_plugins_list | join(' ') }}"
+def plugins = pluginParameter.split()
+
+logger.info("Plugins to check/install: " + plugins.join(", "))
+
+def instance = Jenkins.getInstance()
+def pm = instance.getPluginManager()
+def uc = instance.getUpdateCenter()
+
+plugins.each { pluginName ->
+  logger.info("Checking plugin: " + pluginName)
+  
+  if (!pm.getPlugin(pluginName)) {
+    logger.info("Plugin not found locally, checking UpdateCenter: " + pluginName)
+    
+    if (!initialized) {
+      logger.info("Initializing UpdateCenter...")
+      uc.updateAllSites()
+      initialized = true
+    }
+    
+    def plugin = uc.getPlugin(pluginName)
+    if (plugin) {
+      logger.info("Installing plugin: " + pluginName)
+      try {
+        def installFuture = plugin.deploy()
+        while(!installFuture.isDone()) {
+          logger.info("Waiting for plugin install to complete: " + pluginName)
+          sleep(3000)
+        }
+        installed = true
+        logger.info("Plugin installed successfully: " + pluginName)
+      } catch (Exception e) {
+        logger.severe("Failed to install plugin " + pluginName + ": " + e.getMessage())
+      }
+    } else {
+      logger.warning("Plugin not found in UpdateCenter: " + pluginName)
+    }
+  } else {
+    logger.info("Plugin already installed: " + pluginName)
+  }
+}
+
+if (installed) {
+  logger.info("New plugins were installed, scheduling Jenkins restart...")
+  instance.save()
+  instance.doSafeRestart()
+} else {
+  logger.info("No new plugins were installed, restart not needed.")
+} 

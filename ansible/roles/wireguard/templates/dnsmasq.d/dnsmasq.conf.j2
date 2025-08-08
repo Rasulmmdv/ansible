@@ -1,0 +1,10 @@
+# DNS configuration
+# This file contains DNS entries for services
+# Format: address=/hostname.domain/ip
+
+# Jenkins
+address=/jenkins.{{ dnsmasq_domain }}/{{ wireguard_address | regex_replace('/[0-9]+$', '') }}
+
+# Add more services here as needed
+# Example:
+# address=/gitlab.{{ dnsmasq_domain }}/{{ wireguard_address | regex_replace('/[0-9]+$', '') }}

@@ -1,0 +1,4 @@
+# Local DNS entries
+{% for host in dnsmasq_host_entries %}
+{{ host.ip }} {{ host.name }}.{{ host.domain }} {{ host.name }}
+{% endfor %} 

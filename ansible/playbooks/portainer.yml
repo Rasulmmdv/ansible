@@ -1,0 +1,9 @@
+---
+- name: Deploy Portainer
+  hosts: infra-01
+  become: yes
+  roles:
+    - portainer 
+  vars:
+    # REQUIRED: Set your Portainer domain
+    # portainer_domain: "portainer.example.com" 

@@ -1,0 +1,23 @@
+services:
+  registry:
+    image: "{{ docker_registry_image }}"
+    container_name: "{{ docker_registry_container_name }}"
+    ports:
+      - "{{ docker_registry_port }}:5000"
+    environment:
+      REGISTRY_REPORTING_OPENTELEMETRY_TRACE_SAMPLER_TYPE: "always_off"
+      REGISTRY_STORAGE: s3
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      REGISTRY_STORAGE_S3_REGION: "{{ docker_registry_s3_region }}"
+      REGISTRY_STORAGE_S3_BUCKET: "{{ docker_registry_s3_bucket }}"
+      REGISTRY_STORAGE_S3_ACCESSKEY: "{{ docker_registry_s3_access_key }}"
+      REGISTRY_STORAGE_S3_SECRETKEY: "{{ docker_registry_s3_secret_key }}"
+{% if docker_registry_s3_region_endpoint is defined and docker_registry_s3_region_endpoint %}
+      REGISTRY_STORAGE_S3_REGIONENDPOINT: "{{ docker_registry_s3_region_endpoint }}"
+      REGISTRY_STORAGE_S3_FORCEPATHSTYLE: "true"
+      REGISTRY_STORAGE_S3_SIGNATUREVERSION: "2"
+      REGISTRY_STORAGE_S3_ROOTCERTIFICATEBUNDLE: /etc/docker/registry/root.crt
+{% endif %}
+    volumes:
+      - "{{ docker_registry_data_dir }}/root.crt:/etc/docker/registry/root.crt:ro"
+    restart: always 

@@ -1,0 +1,6 @@
+---
+- name: Deploy Grafana Alloy for log and metrics collection
+  hosts: all
+  become: true
+  roles:
+    - alloy 

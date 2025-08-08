@@ -1,0 +1,11 @@
+---
+# Loki targets for Prometheus file-based service discovery
+# This file is automatically managed by Ansible
+# Targets can be dynamically updated by other roles or scripts
+
+- targets:
+    - loki:3100
+  labels:
+    job: loki
+    instance: loki
+    service: logging 

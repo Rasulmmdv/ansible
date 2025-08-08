@@ -1,0 +1,120 @@
+---
+- name: Download Tailscale install script
+  ansible.builtin.get_url:
+    url: "{{ tailscale_install_url }}"
+    dest: "{{ tailscale_install_script_path }}"
+    mode: "0755"
+    timeout: 60
+
+- name: Install Tailscale
+  ansible.builtin.command: "{{ tailscale_install_script_path }}"
+  args:
+    creates: "/usr/bin/tailscale"
+  register: tailscale_install
+
+- name: Clean up install script
+  ansible.builtin.file:
+    path: "{{ tailscale_install_script_path }}"
+    state: absent
+
+- name: Start and enable Tailscale service
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}"
+    state: "{{ tailscale_service_state }}"
+    enabled: "{{ tailscale_service_enabled }}"
+    daemon_reload: yes
+
+- name: Check current Tailscale status
+  ansible.builtin.command: "tailscale status"
+  register: tailscale_current_status
+  changed_when: false
+  failed_when: false
+
+- name: Debug - Show current Tailscale status
+  ansible.builtin.debug:
+    msg: |
+      Current Tailscale status:
+      {{ tailscale_current_status.stdout_lines }}
+      Return code: {{ tailscale_current_status.rc }}
+
+- name: Build complete Tailscale up command
+  ansible.builtin.set_fact:
+    tailscale_up_cmd: "tailscale up --authkey={{ tailscale_auth_key }} --accept-dns={{ tailscale_accept_dns | lower }} --accept-routes={{ tailscale_accept_routes | lower }}"
+  when: 
+    - tailscale_auth_key is defined and tailscale_auth_key != ""
+    - tailscale_current_status.rc != 0 or "Logged out" in tailscale_current_status.stdout
+
+- name: Build Tailscale up command without auth key (if already authenticated)
+  ansible.builtin.set_fact:
+    tailscale_up_cmd: "tailscale up --accept-dns={{ tailscale_accept_dns | lower }} --accept-routes={{ tailscale_accept_routes | lower }}"
+  when: 
+    - tailscale_current_status.rc == 0 and "Logged out" not in tailscale_current_status.stdout
+
+- name: Add hostname to Tailscale up command
+  ansible.builtin.set_fact:
+    tailscale_up_cmd: "{{ tailscale_up_cmd }} --hostname={{ tailscale_hostname }}"
+  when: tailscale_hostname is defined and tailscale_hostname != ""
+
+- name: Add route advertisement to Tailscale up command
+  ansible.builtin.set_fact:
+    tailscale_up_cmd: "{{ tailscale_up_cmd }} --advertise-routes={{ tailscale_advertise_routes | join(',') }}"
+  when: 
+    - tailscale_enable_route_advertisement | default(false)
+    - tailscale_advertise_routes | length > 0
+
+- name: Add exit node advertisement to Tailscale up command
+  ansible.builtin.set_fact:
+    tailscale_up_cmd: "{{ tailscale_up_cmd }} --advertise-exit-node={{ tailscale_advertise_exit_node | lower }}"
+  when: tailscale_advertise_exit_node | default(false)
+
+- name: Debug - Show complete Tailscale up command
+  ansible.builtin.debug:
+    msg: |
+      Complete Tailscale up command:
+      {{ tailscale_up_cmd }}
+      
+      Configuration:
+      - Auth key: {{ tailscale_auth_key | default('NOT_SET') }}
+      - Hostname: {{ tailscale_hostname | default('NOT_SET') }}
+      - Accept DNS: {{ tailscale_accept_dns | default(true) }}
+      - Accept routes: {{ tailscale_accept_routes | default(false) }}
+      - Advertise routes: {{ tailscale_advertise_routes | default([]) }}
+      - Advertise exit node: {{ tailscale_advertise_exit_node | default(false) }}
+  when: tailscale_up_cmd is defined
+
+# - name: Authenticate Tailscale with complete configuration
+#   ansible.builtin.command: "{{ tailscale_up_cmd }}"
+#   register: tailscale_auth
+#   timeout: 60
+#   when: tailscale_up_cmd is defined
+
+# - name: Debug - Show Tailscale authentication result
+#   ansible.builtin.debug:
+#     msg: |
+#       Tailscale authentication result:
+#       - Command: {{ tailscale_auth.cmd | default('NOT_RUN') }}
+#       - Return code: {{ tailscale_auth.rc | default('NOT_RUN') }}
+#       - Changed: {{ tailscale_auth.changed | default(false) }}
+#       - Stdout: {{ tailscale_auth.stdout | default('NOT_RUN') }}
+#       - Stderr: {{ tailscale_auth.stderr | default('NOT_RUN') }}
+#   when: 
+#     - tailscale_up_cmd is defined
+#     - tailscale_auth is defined
+
+- name: Wait for Tailscale to be ready
+  ansible.builtin.wait_for:
+    path: "/var/lib/tailscale/tailscaled.state"
+    timeout: 30
+  when: tailscale_auth is changed
+
+- name: Show Tailscale status
+  ansible.builtin.command: "tailscale status"
+  register: tailscale_status
+  changed_when: false
+
+- name: Debug - Show Tailscale status
+  ansible.builtin.debug:
+    msg: |
+      Tailscale status:
+      {{ tailscale_status.stdout_lines }}
+  when: tailscale_status is defined 

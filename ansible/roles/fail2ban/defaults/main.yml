@@ -1,0 +1,4 @@
+---
+# defaults file for fail2ban
+fail2ban_jail_local: {}
+fail2ban_enable_nginx: false

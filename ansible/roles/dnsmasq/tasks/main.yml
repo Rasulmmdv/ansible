@@ -1,0 +1,54 @@
+---
+# tasks file for dnsmasq
+
+- name: Install dnsmasq
+  apt:
+    name: dnsmasq
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Create dnsmasq configuration directory
+  file:
+    path: "{{ dnsmasq_conf_dir }}"
+    state: directory
+    owner: "{{ dnsmasq_user }}"
+    group: "{{ dnsmasq_group }}"
+    mode: '0755'
+  become: true
+
+- name: Configure dnsmasq
+  template:
+    src: dnsmasq.conf.j2
+    dest: "{{ dnsmasq_conf_file }}"
+    owner: "{{ dnsmasq_user }}"
+    group: "{{ dnsmasq_group }}"
+    mode: '0644'
+  become: true
+  notify: restart dnsmasq
+
+- name: Create host entries configuration
+  template:
+    src: hosts.j2
+    dest: "{{ dnsmasq_conf_dir }}/hosts"
+    owner: "{{ dnsmasq_user }}"
+    group: "{{ dnsmasq_group }}"
+    mode: '0644'
+  become: true
+  notify: restart dnsmasq
+
+- name: Stop and disable systemd-resolved to avoid port 53 conflict
+  systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: no
+    daemon_reload: yes
+  become: true
+
+- name: Ensure dnsmasq is enabled and started
+  systemd:
+    name: dnsmasq
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: true 

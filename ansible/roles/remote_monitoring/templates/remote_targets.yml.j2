@@ -1,0 +1,17 @@
+---
+# Remote monitoring targets for Prometheus service discovery
+# This file is automatically updated by the remote_monitoring role
+# Prometheus will pick up changes within 30 seconds (refresh_interval)
+
+- targets: ['{{ ansible_default_ipv4.address }}:9113']
+  labels:
+    job: remote_nginx_exporter
+    instance: '{{ inventory_hostname }}'
+    service: 'nginx'
+    environment: '{{ remote_monitoring_environment | default("production") }}'
+    nginx_version: '{{ nginx_version | default("unknown") }}'
+{% if remote_monitoring_labels is defined %}
+{% for key, value in remote_monitoring_labels.items() %}
+    {{ key }}: '{{ value }}'
+{% endfor %}
+{% endif %}

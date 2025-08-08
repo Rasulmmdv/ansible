@@ -1,0 +1,42 @@
+#!/bin/bash
+# WireGuard PostUp script - sets up routing and firewall rules for split-tunnel VPN
+
+# Enable logging
+exec > >(logger -t wireguard-postup) 2>&1
+
+echo "Starting WireGuard PostUp configuration (split-tunnel mode)..."
+
+# === Docker Integration Rules ===
+# Allow traffic from WireGuard clients to be forwarded to Docker containers.
+# This rule is inserted into the DOCKER-USER chain, which is the recommended
+# way to add custom rules for Docker.
+iptables -I DOCKER-USER -i {{ wireguard_interface }} -j ACCEPT
+
+# Allow return traffic from Docker containers back to WireGuard clients.
+iptables -I DOCKER-USER -o {{ wireguard_interface }} -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Allow VPN clients to access the server itself
+iptables -A INPUT -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT
+
+# Note: No NAT masquerading - clients use their own internet connection
+# Only traffic destined for the server network goes through VPN
+
+{% if wireguard_vpn_only_ports.tcp | length > 0 %}
+# Block external access to VPN-only TCP ports
+{% for port in wireguard_vpn_only_ports.tcp %}
+# Block external access to port {{ port }} but allow VPN access
+iptables -A INPUT -p tcp --dport {{ port }} -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT
+iptables -A INPUT -p tcp --dport {{ port }} -j DROP
+{% endfor %}
+{% endif %}
+
+{% if wireguard_vpn_only_ports.udp | length > 0 %}
+# Block external access to VPN-only UDP ports
+{% for port in wireguard_vpn_only_ports.udp %}
+# Block external access to port {{ port }} but allow VPN access
+iptables -A INPUT -p udp --dport {{ port }} -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT
+iptables -A INPUT -p udp --dport {{ port }} -j DROP
+{% endfor %}
+{% endif %}
+
+echo "WireGuard PostUp configuration completed successfully" 

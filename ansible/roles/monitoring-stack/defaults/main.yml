@@ -1,0 +1,26 @@
+---
+# Monitoring stack defaults
+# Default configuration for the monitoring stack meta-role
+
+# Stack-wide configuration
+monitoring_stack:
+  network_name: "monitoring"
+  data_root: "/opt/monitoring"
+  validation_enabled: true
+  validation_timeout: 300  # seconds
+
+# Default monitoring configuration
+monitoring_config:
+  # Enable/disable validation after deployment
+  validate_deployment: true
+  
+  # Health check configuration
+  health_check:
+    enabled: true
+    timeout: 30
+    retries: 3
+    
+  # Service discovery configuration
+  service_discovery:
+    enabled: true
+    refresh_interval: "30s"

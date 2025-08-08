@@ -1,0 +1,24 @@
+---
+# handlers file for alertmanager
+
+- name: restart alertmanager
+  command: docker compose restart
+  args:
+    chdir: "{{ alertmanager_data_dir }}"
+  become: true
+  listen: restart alertmanager
+
+- name: stop alertmanager
+  command: docker compose down
+  args:
+    chdir: "{{ alertmanager_data_dir }}"
+  become: true
+  listen: stop alertmanager
+
+- name: start alertmanager
+  command: docker compose up -d
+  args:
+    chdir: "{{ alertmanager_data_dir }}"
+  become: true
+  listen: start alertmanager
+

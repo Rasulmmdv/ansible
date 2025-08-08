@@ -1,0 +1,25 @@
+services:
+  grafana:
+    image: "{{ grafana_image }}"
+    container_name: "{{ grafana_container_name }}"
+    restart: unless-stopped
+    ports:
+{% for port in grafana_ports %}
+      - "{{ port }}"
+{% endfor %}
+    volumes:
+{% for volume in grafana_volumes %}
+      - {{ volume }}
+{% endfor %}
+      - {{ grafana_data_dir }}/provisioning:/etc/grafana/provisioning
+    environment:
+{% for key, value in grafana_env.items() %}
+      - {{ key }}={{ value }}
+{% endfor %}
+    user: '0'
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true 

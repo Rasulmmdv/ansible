@@ -1,0 +1,100 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Alert rules configuration
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+        labels:
+          instance: "10.0.0.169"
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+  - job_name: 'blackbox_exporter'
+    static_configs:
+      - targets: ['blackbox_exporter:9115']
+
+  # Blackbox targets configuration
+  - job_name: 'blackbox_targets'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox_exporter:9115
+      - source_labels: [__param_target]
+        regex: '(.*)'
+        target_label: target
+    static_configs:
+      - targets:
+        - https://clinicack.kimdevs.ru
+        - https://costx.kimdevs.com
+        - https://batumi.estate
+        - https://dev.batumi.estate
+        - https://test.batumi.estate
+        - https://ami-system.com
+        - https://kimretail.ru
+        - https://begoclinic.ru
+        - https://mafia.game
+        - https://trudresursy.ru
+        - https://kimdevs.ru
+        - https://realtyevents.ru
+        - https://badges.bio
+        - https://dollars.ge
+        - https://auto-discounts.ru
+        - https://ami-system.kimdevs.ru
+        - https://aibot.kimdevs.ru
+        - https://mapi.ge
+        - https://moscow.estate
+        - https://glowfurs.ru
+        - https://fix-ci-fail.badges.bio
+        - https://branches.badges.bio
+        - https://begoclinic.kimdevs.ru
+        - https://dev.mafia.game
+        - https://api.batumi.estate
+        - https://api.kimdevs.ru
+        - https://api.moscow.estate
+        - https://api.realtyevents.ru
+        - https://api.kimdevs.com
+        - https://api.mafia.game
+        - https://directus-test.kimdevs.ru
+        - https://admin.realtyevents.ru
+        - https://api-test.kimdevs.ru
+        - https://test-api.batumi.estate
+        - https://api-dev.mafia.game
+        - https://api.test1.kimdevs.ru
+
+{% if remote_monitoring_enabled and monitoring_server_host is defined %}
+  # Remote Nginx monitoring configuration
+  - job_name: '{{ remote_monitoring_job_name }}'
+    scrape_interval: {{ remote_monitoring_scrape_interval }}
+    static_configs:
+      - targets:
+          - "{{ ansible_host | default(ansible_default_ipv4.address) }}:{{ nginx_exporter_port }}"
+        labels:
+          instance: "{{ remote_monitoring_labels.instance }}"
+          environment: "{{ remote_monitoring_labels.environment }}"
+          service: "{{ remote_monitoring_labels.service }}"
+          datacenter: "{{ remote_monitoring_labels.datacenter | default('unknown') }}"
+          team: "{{ remote_monitoring_labels.team | default('unknown') }}"
+          deployment_type: "{{ remote_monitoring_labels.deployment_type | default('docker') }}"
+{% endif %} 

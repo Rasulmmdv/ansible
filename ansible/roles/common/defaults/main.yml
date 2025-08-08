@@ -1,0 +1,49 @@
+---
+# Common role configuration
+
+# Enable/disable different package categories
+common_install_system_utils: true
+common_install_shell_utils: true
+common_install_network_utils: true
+common_install_monitoring: true
+
+# Essential system utilities
+common_system_utils_packages:
+  - htop
+  - vim
+  - curl
+  - wget
+  - git
+  - unzip
+  - tree
+  - jq
+  - rsync
+  - tmux
+
+# Shell utilities
+common_shell_utils_packages:
+  - bash-completion
+  - command-not-found
+  - fzf
+  - bat
+  - eza
+  - fd-find
+
+# Network utilities
+common_network_utils_packages:
+  - net-tools
+  - iproute2
+  - nmap
+  - traceroute
+  - tcpdump
+  - iperf3
+  - iftop
+
+# Monitoring tools
+common_monitoring_packages:
+  - htop
+  - iotop
+  - dstat
+  - sysstat
+  - glances
+  - strace 

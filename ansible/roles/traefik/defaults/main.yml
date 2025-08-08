@@ -1,0 +1,166 @@
+---
+# defaults file for traefik
+# NOTE: Some variables must be set in your playbook or inventory (see playbook example)
+
+# Traefik Docker configuration
+traefik_image: "traefik:v3.4"
+traefik_container_name: "traefik"
+traefik_dashboard_port: 8080
+traefik_web_port: 80
+traefik_websecure_port: 443
+# traefik_domain: "" # Set in playbook or inventory
+
+# Traefik directories
+traefik_data_dir: "/opt/traefik"
+traefik_config_dir: "/opt/traefik/config"
+traefik_certs_dir: "/opt/traefik/certs"
+traefik_logs_dir: "/opt/traefik/logs"
+
+# User and group
+traefik_user: "traefik"
+traefik_group: "traefik"
+
+# Docker network
+traefik_network_name: "traefik-network"
+
+# Dashboard configuration
+traefik_dashboard_enabled: true
+traefik_dashboard_insecure: false
+traefik_dashboard_domain: "traefik.local"
+traefik_dashboard_auth_enabled: true
+traefik_dashboard_username: "admin"
+# traefik_dashboard_password: ""  # Set in playbook or inventory (REQUIRED)
+
+# Whether to publish Traefik's internal port 8080 (dashboard/API) to the host.
+# If set to true the dashboard will be reachable at http://<host>:8080/.
+# Leaving it disabled is recommended – the dashboard is still accessible through
+# the main web/websecure entry-points using the configured router and (optionally)
+# basic-auth middleware.
+traefik_dashboard_expose_port: true
+
+# SSL/TLS configuration
+traefik_ssl_enabled: true
+# Certificate type: "acme" for Let's Encrypt, "custom" for own certificates
+traefik_certificate_type: "acme"
+traefik_ssl_certificate_resolver: "letsencrypt"
+
+# ACME (Let's Encrypt) configuration - automatically controlled by traefik_certificate_type
+traefik_acme_enabled: "{{ traefik_certificate_type == 'acme' }}"
+traefik_acme_email: "admin@example.com"
+traefik_acme_use_staging: true  # Use staging by default
+traefik_acme_ca_server: "{{ 'https://acme-staging-v02.api.letsencrypt.org/directory' if traefik_acme_use_staging else 'https://acme-v02.api.letsencrypt.org/directory' }}"
+traefik_acme_storage: "/certificates/acme.json"
+
+# Custom certificate configuration - automatically controlled by traefik_certificate_type
+traefik_certificates_enabled: "{{ traefik_certificate_type == 'custom' }}"
+traefik_certificates_dir: "/opt/traefik/certs"
+traefik_certificate_files:
+  - cert: "/opt/traefik/certs/cert.pem"
+    key: "/opt/traefik/certs/key.pem"
+    stores:
+      - default
+
+# Certificate paths inside the container (for Traefik config)
+traefik_certificate_files_container:
+  - cert: "/certificates/cert.pem"
+    key: "/certificates/key.pem"
+    stores:
+      - default
+
+# Let's Encrypt challenge type
+traefik_acme_challenge_type: "http"  # Options: http, dns, tls
+# traefik_acme_dns_provider: ""  # Set in playbook if using DNS challenge
+
+# Entrypoints
+traefik_entrypoints:
+  web:
+    port: 80
+    redirect_to_https: true
+  websecure:
+    port: 443
+    tls: true
+
+# Logging
+traefik_log_level: "INFO"  # Options: DEBUG, INFO, WARN, ERROR, FATAL, PANIC
+traefik_access_logs_enabled: true
+traefik_access_logs_file: "/logs/access.log"
+traefik_logs_file: "/logs/traefik.log"
+
+# Security settings
+traefik_global_redirect_to_https: true
+traefik_hsts_enabled: true
+traefik_frame_deny: true
+traefik_content_type_nosniff: true
+traefik_browser_xss_filter: true
+
+# API configuration
+traefik_api_enabled: true
+traefik_api_dashboard: true
+traefik_api_insecure: false
+
+# Metrics
+traefik_metrics_enabled: false
+traefik_metrics_prometheus: false
+traefik_metrics_prometheus_buckets: "0.1,0.3,1.2,5.0"
+
+# Provider configuration
+traefik_docker_provider_enabled: true
+traefik_docker_endpoint: "unix:///var/run/docker.sock"
+traefik_docker_expose_by_default: false
+traefik_docker_network: "{{ traefik_network_name }}"
+
+# File provider for static configuration
+traefik_file_provider_enabled: true
+traefik_file_provider_directory: "/config"
+traefik_file_provider_watch: true
+
+# Health check
+traefik_ping_enabled: true
+traefik_ping_entrypoint: "traefik"
+
+# Rate limiting (optional)
+traefik_rate_limit_enabled: false
+traefik_rate_limit_average: 100
+traefik_rate_limit_burst: 200
+
+# Default middlewares
+traefik_default_middlewares:
+  - "default-headers"
+  - "secure-headers"
+  - "vpn-whitelist"
+
+# VPN whitelist configuration
+traefik_vpn_network: "10.0.0.0/24"  # Default WireGuard network (test environment)
+# Note: For production environments, this should be set to "10.0.1.0/24"
+# For multi-environment setups, consider using a broader range like "10.0.0.0/16"
+
+# System requirements
+minimum_disk_space_gb: 2
+minimum_memory_mb: 256
+
+# Role dependencies and prerequisites
+traefik_ensure_docker_installed: true
+traefik_configure_firewall: true
+
+# Prerequisites packages (can be customized)
+traefik_system_packages:
+  - python3
+  - python3-pip
+  - python3-venv
+  - curl
+  - gnupg
+  - ca-certificates
+  - apt-transport-https
+
+# Python packages via system package manager (recommended)
+traefik_system_python_packages:
+  - python3-bcrypt
+  - python3-docker
+
+# Additional pip packages (only if not available via system packages)
+traefik_pip_packages: []
+
+# Legacy variable for backwards compatibility
+traefik_python_packages:
+  - python3-bcrypt
+  - python3-docker 

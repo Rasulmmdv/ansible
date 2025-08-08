@@ -1,0 +1,21 @@
+---
+# Default variables for wireguard_xray_gost_client role
+
+# Gost version to install
+gost_version: "3.0.1"
+
+# Xray configuration
+xray_config_file: "xray_config.json"
+xray_config_owner: "nobody"
+xray_config_group: "nogroup"
+xray_config_mode: "0644"
+
+# WireGuard configuration
+wireguard_config_file: "wg0.conf"
+wireguard_config_owner: "root"
+wireguard_config_group: "root"
+wireguard_config_mode: "0600"
+
+# Gost service configuration
+gost_service_file: "gost.service"
+gost_service_mode: "0644" 

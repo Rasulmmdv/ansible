@@ -1,0 +1,8 @@
+# Jenkins plugins list for Docker-based installation
+# This file is managed by Ansible - do not edit manually
+# These plugins will be installed during Jenkins Docker container initialization
+# Total plugins: {{ jenkins_plugins_list | length }}
+
+{% for plugin in jenkins_plugins_list -%}
+{{ plugin }}
+{% endfor %}

@@ -1,0 +1,52 @@
+services:
+  traefik:
+    image: "{{ traefik_image }}"
+    container_name: "{{ traefik_container_name }}"
+    restart: always
+    command:
+      - --configfile=/etc/traefik/traefik.yml
+      - --providers.file.directory=/config
+      - --providers.file.watch=true
+    ports:
+      - "{{ traefik_web_port }}:80"
+      - "{{ traefik_websecure_port }}:443"
+{% if traefik_dashboard_enabled and traefik_dashboard_expose_port %}
+      - "{{ traefik_dashboard_port }}:8080"
+{% endif %}
+    volumes:
+      - "{{ traefik_data_dir }}/traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "{{ traefik_config_dir }}:/config:ro"
+      - "{{ traefik_certs_dir }}:/certificates"
+      - "{{ traefik_logs_dir }}:/logs"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    environment:
+      - TRAEFIK_LOG_LEVEL={{ traefik_log_level }}
+{% if traefik_acme_enabled and traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider %}
+      # DNS provider specific environment variables can be added here
+{% endif %}
+    networks:
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`{{ traefik_dashboard_domain }}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+{% if traefik_ssl_enabled %}
+      - "traefik.http.routers.traefik.tls=true"
+{% if traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+      - "traefik.http.routers.traefik.tls.certresolver={{ traefik_ssl_certificate_resolver }}"
+{% endif %}
+{% endif %}
+{% if traefik_dashboard_auth_enabled %}
+{% if traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+      - "traefik.http.routers.traefik.middlewares=traefik-auth,vpn-whitelist@file"
+{% else %}
+      - "traefik.http.routers.traefik.middlewares=traefik-auth"
+{% endif %}
+      - "traefik.http.middlewares.traefik-auth.basicauth.users={{ traefik_dashboard_username }}:{{ traefik_password_bcrypt.stdout | replace('$', '$$') }}"
+{% endif %}
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+networks:
+  traefik-network:
+    name: "{{ traefik_network_name }}"
+    external: true

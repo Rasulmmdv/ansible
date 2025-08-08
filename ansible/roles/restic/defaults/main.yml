@@ -1,0 +1,120 @@
+---
+# defaults file for restic
+# NOTE: Some variables must be set in your playbook or inventory (see playbook example)
+
+# Base directories
+restic_instance_name: backup
+restic_base_dir: "/opt/{{ project_name }}/{{ restic_instance_name }}"
+restic_config_dir: "{{ restic_base_dir }}/config"
+restic_log_dir: "{{ restic_base_dir }}/logs"
+restic_cache_dir: "{{ restic_base_dir }}/cache"
+restic_scripts_dir: "{{ restic_base_dir }}/scripts"
+
+# User and group
+restic_user: "restic"
+restic_group: "restic"
+
+# Restic repository configuration
+restic_repository: "s3:s3.ru-7.storage.selcloud.ru/{{ project_name }}-backups-{{ inventory_hostname }}"
+restic_repository_type: "s3"  # Options: s3, local, sftp, rest, azure, gs, swift
+# restic_repository_path: ""  # For local repositories (set in playbook if needed)
+
+# AWS S3 configuration (when using S3 backend)
+# restic_aws_access_key_id: ""  # Set in playbook
+# restic_aws_secret_access_key: ""  # Set in playbook
+restic_aws_region: "ru-7"
+restic_aws_endpoint: "s3.ru-7.storage.selcloud.ru"
+
+# Selectel S3 specific configuration
+restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
+restic_s3_ca_bundle: "{{ restic_config_dir }}/selectel-ca.crt"
+restic_setup_selectel_ca: true
+
+# Repository password (required for all repository types)
+# restic_password: ""  # Set in playbook or inventory (REQUIRED)
+
+# Backup configuration
+restic_backup_paths:
+  - "/data"
+  - "/opt"
+  - "/etc/wireguard"
+  - "/etc/portainer"
+
+# PostgreSQL backup configuration
+restic_postgresql_backup_enabled: true
+restic_postgresql_backup_dir: "{{ restic_base_dir }}/db-dumps"
+restic_postgresql_retention_days: 7  # Keep database dumps for 7 days locally
+
+# Database configurations are now stored in {{ restic_config_dir }}/databases.conf
+# Example databases (will be templated to databases.conf):
+restic_postgresql_databases:
+  - container_name: "{{ project_name }}_postgres"
+    name: "postgres"
+    username: "postgres"
+    password: "password"
+    port: 5432
+
+# Additional backup paths (will be added to restic_backup_paths when PostgreSQL backup is enabled)
+restic_postgresql_backup_paths:
+  - "{{ restic_postgresql_backup_dir }}"
+
+restic_exclude_patterns:
+  - "*.tmp"
+  - "*.log"
+  - "*.cache"
+  - "/tmp/*"
+  - "/var/tmp/*"
+  - "/var/cache/*"
+  - "node_modules"
+  - ".git"
+  - "/etc/*"
+
+# Retention policy
+restic_keep_last: 7      # Keep last 7 snapshots
+restic_keep_daily: 7     # Keep daily snapshots for 7 days
+restic_keep_weekly: 4    # Keep weekly snapshots for 4 weeks
+restic_keep_monthly: 6   # Keep monthly snapshots for 6 months
+restic_keep_yearly: 2    # Keep yearly snapshots for 2 years
+
+# Backup schedule
+restic_backup_schedule: "*-*-* 02:00:00"  # Daily at 2 AM
+restic_prune_schedule: "Sun *-*-* 03:00:00"   # Weekly on Sunday at 3 AM
+restic_check_schedule: "Sun *-*-* 04:00:00"   # Weekly on Sunday at 4 AM
+
+# Systemd service configuration
+restic_service_name: "{{ project_name }}_{{ restic_instance_name }}"
+restic_service_description: "Restic Backup Service"
+restic_service_type: "oneshot"
+restic_service_restart: "no"
+
+# Logging
+restic_log_level: "info"
+restic_log_file: "{{ restic_log_dir }}/restic.log"
+restic_backup_log_file: "{{ restic_log_dir }}/backup.log"
+
+# Notification settings
+# restic_notification_email: ""  # Set in playbook if needed
+# restic_notification_webhook: ""  # Set in playbook if needed
+
+# Security
+restic_encryption_enabled: true
+restic_verify_backups: true
+
+# Monitoring and health checks
+restic_health_check_enabled: true
+restic_health_check_interval: 3600  # 1 hour
+
+# System packages required
+restic_system_packages:
+  - restic
+  - python3
+  - python3-pip
+  - curl
+  - gnupg
+  - ca-certificates
+  - systemd
+  - openssl
+  - wget
+  - postgresql-client
+# Python packages required
+restic_python_packages: [] 

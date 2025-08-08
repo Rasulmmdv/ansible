@@ -1,0 +1,6 @@
+---
+- name: Deploy Loki for log aggregation
+  hosts: all
+  become: true
+  roles:
+    - loki 

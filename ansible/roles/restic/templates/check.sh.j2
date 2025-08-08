@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Restic Check Script
+# This script verifies repository integrity
+
+set -euo pipefail
+
+# Source environment file if it exists
+if [ -f "{{ restic_config_dir }}/restic.env" ]; then
+    source "{{ restic_config_dir }}/restic.env"
+fi
+
+# Log function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a {{ restic_log_dir }}/restic.log
+}
+
+# Error handling
+trap 'log "ERROR: Check failed with exit code $?"' ERR
+
+log "Starting restic repository check"
+
+# Check repository integrity
+log "Checking repository integrity"
+restic check --verbose
+
+log "Repository check completed successfully" 

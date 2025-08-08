@@ -1,0 +1,20 @@
+---
+# handlers file for jenkins-docker
+
+- name: restart jenkins
+  shell: |
+    docker compose down && docker compose up -d
+  args:
+    chdir: "{{ jenkins_data_dir }}"
+  become: true
+  listen: "restart jenkins"
+
+- name: reload jenkins
+  uri:
+    url: "http://localhost:{{ jenkins_host_port }}/reload"
+    method: POST
+    user: "{{ jenkins_admin_username }}"
+    password: "{{ jenkins_admin_password }}"
+    force_basic_auth: yes
+    status_code: [200, 302]
+  listen: "reload jenkins"

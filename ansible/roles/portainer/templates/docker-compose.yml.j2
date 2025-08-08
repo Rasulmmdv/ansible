@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+  portainer:
+    image: "{{ portainer_image }}"
+    container_name: portainer
+    restart: "{{ portainer_restart_policy }}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "{{ portainer_data_directory }}:/data"
+    networks:
+      - "{{ portainer_traefik_network }}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`{{ portainer_domain }}`)"
+      - "traefik.http.routers.portainer.entrypoints={{ portainer_traefik_entrypoint }}"
+      - "traefik.http.routers.portainer.middlewares={{ portainer_traefik_middleware }}"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+volumes:
+  portainer_data: {}
+
+networks:
+  "{{ portainer_traefik_network }}":
+    external: true 

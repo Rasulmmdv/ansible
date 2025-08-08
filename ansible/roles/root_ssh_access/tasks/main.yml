@@ -1,0 +1,22 @@
+---
+# Add public SSH keys to /root/.ssh/authorized_keys
+- name: Ensure /root/.ssh directory exists
+  file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  tags:
+    - root_ssh_access
+
+- name: Add authorized keys for root
+  authorized_key:
+    user: root
+    key: "{{ item }}"
+    state: present
+    manage_dir: false
+  loop: "{{ root_authorized_keys }}"
+  when: root_authorized_keys | length > 0
+  tags:
+    - root_ssh_access

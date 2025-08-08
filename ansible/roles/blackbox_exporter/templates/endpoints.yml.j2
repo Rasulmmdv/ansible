@@ -1,0 +1,42 @@
+# Blackbox Exporter Endpoints Configuration
+# This file defines the endpoints to be monitored by Blackbox Exporter
+# Each endpoint can have different modules and intervals
+
+endpoints:
+{% for endpoint in blackbox_endpoints %}
+  - name: "{{ endpoint.name }}"
+    url: "{{ endpoint.url }}"
+    module: "{{ endpoint.module | default('http_2xx') }}"
+    interval: "{{ endpoint.interval | default('30s') }}"
+    timeout: "{{ endpoint.timeout | default('5s') }}"
+    {% if endpoint.headers is defined %}
+    headers:
+    {% for header_name, header_value in endpoint.headers.items() %}
+      {{ header_name }}: "{{ header_value }}"
+    {% endfor %}
+    {% endif %}
+    {% if endpoint.valid_status_codes is defined %}
+    valid_status_codes: {{ endpoint.valid_status_codes }}
+    {% endif %}
+{% endfor %}
+
+# Example endpoints (uncomment and modify as needed):
+# - name: "production-website"
+#   url: "https://example.com"
+#   module: "http_2xx"
+#   interval: "30s"
+#   timeout: "10s"
+#   headers:
+#     User-Agent: "Prometheus/Blackbox Exporter"
+#     Authorization: "Bearer your-token"
+#   valid_status_codes: [200, 201, 202]
+
+# - name: "database-health"
+#   url: "tcp://db.example.com:5432"
+#   module: "tcp_connect"
+#   interval: "60s"
+
+# - name: "dns-resolution"
+#   url: "example.com"
+#   module: "dns"
+#   interval: "120s" 

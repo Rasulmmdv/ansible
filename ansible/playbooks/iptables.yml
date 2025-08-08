@@ -1,0 +1,11 @@
+---
+- name: Apply iptables firewall with Docker compatibility
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Ensure iptables_allowed_tcp_ports includes the SSH port used by Ansible
+      set_fact:
+        iptables_allowed_tcp_ports: >
+          {{ (iptables_allowed_tcp_ports | default([22, 80, 443]) + [(ansible_port | default(22))]) | unique }}
+  roles:
+    - iptables

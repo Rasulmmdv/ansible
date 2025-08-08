@@ -1,0 +1,57 @@
+---
+# Sample playbook for deploying Jenkins with Docker
+# Save as: playbooks/jenkins-docker.yml
+
+- name: Deploy Jenkins with Docker
+  hosts: jenkins_servers
+  become: true
+  vars:
+    # REQUIRED: Set your Jenkins admin password
+    # jenkins_admin_password: "supersecret"
+    # Override default variables as needed
+    jenkins_admin_password: ""
+    jenkins_host_port: 8080
+    jenkins_agent_port: 50000
+    jenkins_java_opts: "-Xmx4096m -Djenkins.install.runSetupWizard=false"
+    jenkins_domain: "" # TODO: add domain name
+    
+    # Custom plugin list (optional)
+    jenkins_plugins_list:
+      - "ant"
+      - "build-timeout"
+      - "credentials-binding"
+      - "email-ext"
+      - "git"
+      - "github-branch-source"
+      - "gradle"
+      - "pipeline-build-step"
+      - "pipeline-model-definition"
+      - "ssh-slaves"
+      - "timestamper"
+      - "workflow-aggregator"
+      - "ws-cleanup"
+      - "blueocean"
+      - "docker-plugin"
+      - "kubernetes"
+      - "prometheus"
+      
+  roles:
+    - docker  # Ensure Docker is installed first
+    - jenkins-docker
+
+  post_tasks:
+    - name: Run Jenkins deployment verification
+      include_tasks: ../roles/jenkins-docker/tasks/verify.yml
+      vars:
+        jenkins_verification_enabled: true
+        
+    - name: Display Jenkins access information
+      debug:
+        msg:
+          - "✅ Jenkins deployment completed successfully!"
+          - "================================================"
+          - "Jenkins URL: https://{{ jenkins_domain }}"
+          - "Admin username: {{ jenkins_admin_username }}"
+          - "Admin password: {{ jenkins_admin_password }}"
+          - "Verification: Run 'ansible-playbook playbooks/verify-jenkins.yml' for detailed testing"
+          - "================================================"

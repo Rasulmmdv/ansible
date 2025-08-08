@@ -1,0 +1,6 @@
+---
+- name: Deploy Grafana for metrics visualization
+  hosts: all
+  become: true
+  roles:
+    - grafana 

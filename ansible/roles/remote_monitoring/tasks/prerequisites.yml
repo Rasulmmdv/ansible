@@ -1,0 +1,41 @@
+---
+# Prerequisites for remote monitoring
+
+- name: Create nginx_exporter group
+  group:
+    name: "{{ nginx_exporter_group }}"
+    gid: "{{ nginx_exporter_group_id }}"
+  become: true
+
+- name: Create nginx_exporter user
+  user:
+    name: "{{ nginx_exporter_user }}"
+    group: "{{ nginx_exporter_group }}"
+    uid: "{{ nginx_exporter_user_id }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+  become: true
+
+- name: Create nginx_exporter data directory
+  file:
+    path: "{{ nginx_exporter_data_dir }}"
+    state: directory
+    owner: "{{ nginx_exporter_user }}"
+    group: "{{ nginx_exporter_group }}"
+    mode: '0755'
+  become: true
+
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: true
+
+- name: Create monitoring network if it doesn't exist
+  docker_network:
+    name: "{{ docker_network_name }}"
+    state: present
+  become: true
+  ignore_errors: yes  # Network might already exist 

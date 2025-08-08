@@ -1,0 +1,47 @@
+---
+# Global variables for all hosts
+
+# Monitoring stack global configuration
+monitoring_stack:
+  network_name: "monitoring"
+  data_root: "/opt/monitoring"
+  
+# Prometheus configuration
+prometheus_config:
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  
+  # Alertmanager configuration (populated by alertmanager role)
+  alerting:
+    alertmanagers: "{{ monitoring_alertmanagers | default([]) }}"
+  
+  # Alert rules configuration
+  rule_files:
+    - "/etc/prometheus/rules/*.yml"
+  
+  # Base scrape configurations
+  scrape_configs:
+    - job_name: 'prometheus'
+      static_configs:
+        - targets: ['localhost:9090']
+    
+    - job_name: 'node_exporter'
+      static_configs:
+        - targets: ['host.docker.internal:9100']
+          labels:
+            instance: "{{ ansible_default_ipv4.address | default('host.docker.internal') }}"
+    
+    - job_name: 'cadvisor'
+      static_configs:
+        - targets: ['cadvisor:8080']
+    
+    - job_name: 'blackbox_exporter'
+      static_configs:
+        - targets: ['blackbox_exporter:9115']
+
+# Default blackbox monitoring targets
+prometheus_blackbox_targets:
+  - "http://example.com"
+  - "https://google.com"
+  - "http://prometheus.io" 

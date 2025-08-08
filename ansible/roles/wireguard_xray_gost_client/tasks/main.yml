@@ -1,0 +1,105 @@
+---
+- name: Ensure dependencies are installed
+  apt:
+    name:
+      - curl
+      - unzip
+      - wireguard
+      - resolvconf
+    state: present
+    update_cache: yes
+
+- name: Install Xray
+  shell: |
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+  args:
+    creates: /usr/local/bin/xray
+
+- name: Create Xray config directory
+  file:
+    path: /usr/local/etc/xray
+    state: directory
+    mode: '0755'
+
+- name: Deploy Xray config (user must provide file)
+  copy:
+    src: xray_config.json
+    dest: /usr/local/etc/xray/config.json
+    owner: nobody
+    group: nogroup
+    mode: '0644'
+  notify: Restart xray
+
+- name: Ensure Xray service is enabled and started
+  systemd:
+    name: xray
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Download Gost
+  get_url:
+    url: "https://github.com/go-gost/gost/releases/download/v{{ gost_version }}/gost_{{ gost_version }}_linux_amd64.tar.gz"
+    dest: "/tmp/gost_{{ gost_version }}.tar.gz"
+    mode: '0644'
+
+- name: Extract Gost binary
+  unarchive:
+    src: "/tmp/gost_{{ gost_version }}.tar.gz"
+    dest: /tmp/
+    remote_src: yes
+    creates: /tmp/gost
+
+- name: Move Gost binary to /usr/local/bin
+  copy:
+    src: /tmp/gost
+    dest: /usr/local/bin/gost
+    mode: '0755'
+    remote_src: yes
+
+- name: Deploy Gost systemd service
+  copy:
+    src: gost.service
+    dest: /etc/systemd/system/gost.service
+    mode: '0644'
+
+- name: Reload systemd for gost
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start gost service
+  systemd:
+    name: gost
+    enabled: yes
+    state: started
+
+- name: Add iptables rule for UDP port 51820 to 51821
+  iptables:
+    table: nat
+    chain: PREROUTING
+    protocol: udp
+    destination_port: 51820
+    jump: REDIRECT
+    to_ports: 51821
+    state: present
+  notify: commit iptables rules
+
+- name: Create WireGuard config directory
+  file:
+    path: /etc/wireguard
+    state: directory
+    mode: '0700'
+
+- name: Deploy WireGuard config (user must provide file)
+  copy:
+    src: wg0.conf
+    dest: /etc/wireguard/wg0.conf
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Ensure WireGuard (wg-quick@wg0) service is enabled and started
+  systemd:
+    name: wg-quick@wg0
+    enabled: yes
+    state: started

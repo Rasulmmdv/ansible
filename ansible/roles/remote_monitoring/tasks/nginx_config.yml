@@ -1,0 +1,164 @@
+---
+# Configure Nginx stub_status for Docker-based Nginx setups
+
+- name: Check if Nginx container is running
+  docker_container_info:
+    name: "{{ nginx_docker_container_name }}"
+  register: nginx_container_info
+  failed_when: false
+
+- name: Fail if Nginx container is not running
+  fail:
+    msg: "Nginx container '{{ nginx_docker_container_name }}' is not running. Please start it before running this role."
+  when: nginx_container_info.exists == false or nginx_container_info.container.State.Status != "running"
+
+- name: Display Nginx container information
+  debug:
+    msg: "Nginx container is running with image: {{ nginx_container_info.container.Image }}"
+
+- name: Check for volume mounts in Nginx container
+  set_fact:
+    nginx_volume_mounts: "{{ nginx_container_info.container.Mounts | selectattr('Destination', 'match', '/etc/nginx/conf.d/default.conf') | list }}"
+
+- name: Check if stub_status is already configured
+  command: docker exec {{ nginx_docker_container_name }} grep -q "stub_status" /etc/nginx/conf.d/default.conf
+  register: stub_status_exists
+  failed_when: false
+  changed_when: false
+
+- name: Handle volume-mounted configuration
+  block:
+    - name: Get current nginx configuration from volume mount
+      slurp:
+        src: "{{ nginx_volume_mounts[0].Source }}"
+      register: current_nginx_config
+      when: nginx_volume_mounts | length > 0
+
+    - name: Create updated nginx configuration with stub_status
+      copy:
+        content: |
+          # nginx.conf
+          # This file configures Nginx to act as a reverse proxy.
+
+          upstream app_upstream {
+              # 'app' refers to the service name defined in docker-compose.yml.
+              # Docker's internal DNS allows resolving service names to their IP addresses.
+              # Port 3000 is the port our 'app' container is listening on.
+              server app:3000;
+          }
+
+          server {
+              listen 80; # Nginx listens on port 80 for incoming HTTP requests.
+              server_name localhost; # Replace with your domain name if applicable.
+
+              # Log format for access and error logs.
+              access_log /var/log/nginx/access.log;
+              error_log /var/log/nginx/error.log;
+
+              # Nginx stub_status endpoint for monitoring
+              location = {{ nginx_stub_status_path }} {
+                  stub_status on;
+                  access_log off;
+                  allow 127.0.0.1;
+                  allow ::1;
+          {% for ip in nginx_status_allowed_ips %}
+                  allow {{ ip }};
+          {% endfor %}
+                  allow 172.29.0.0/16;
+                  deny all;
+              }
+
+              # Health check endpoint
+              location = /health {
+                  access_log off;
+                  return 200 "healthy\n";
+                  add_header Content-Type text/plain;
+              }
+
+              location / {
+                  # Proxy all requests to the 'app_upstream' defined above.
+                  proxy_pass http://app_upstream;
+
+                  # These headers are important for passing client information to the backend app.
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+
+                  # Optional: Set a timeout for connecting to the backend.
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+              }
+          }
+        dest: "{{ nginx_volume_mounts[0].Source }}"
+        backup: yes
+      when: nginx_volume_mounts | length > 0 and stub_status_exists.rc != 0
+
+  when: stub_status_exists.rc != 0
+
+- name: Handle non-volume-mounted configuration (fallback)
+  block:
+    - name: Create stub_status configuration snippet
+      copy:
+        content: |
+          # Nginx stub_status endpoint for monitoring
+          location = {{ nginx_stub_status_path }} {
+              stub_status on;
+              access_log off;
+              allow 127.0.0.1;
+              allow ::1;
+          {% for ip in nginx_status_allowed_ips %}
+              allow {{ ip }};
+          {% endfor %}
+              allow 172.29.0.0/16;
+              deny all;
+          }
+          
+          # Health check endpoint
+          location = /health {
+              access_log off;
+              return 200 "healthy\n";
+              add_header Content-Type text/plain;
+          }
+        dest: /tmp/stub_status_snippet.conf
+
+    - name: Backup original default.conf
+      command: docker exec {{ nginx_docker_container_name }} cp /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.backup
+
+    - name: Add stub_status configuration to default.conf
+      shell: |
+        docker cp /tmp/stub_status_snippet.conf {{ nginx_docker_container_name }}:/tmp/snippet.conf
+        docker exec {{ nginx_docker_container_name }} sh -c '
+        sed -i "/location \/ {/r /tmp/snippet.conf" /etc/nginx/conf.d/default.conf
+        rm /tmp/snippet.conf'
+      become: true
+
+  when: stub_status_exists.rc != 0 and (nginx_volume_mounts | length == 0)
+
+- name: Test Nginx configuration in container
+  command: docker exec {{ nginx_docker_container_name }} nginx -t
+  register: nginx_test_result
+  changed_when: false
+  failed_when: false
+
+- name: Reload Nginx if configuration is valid
+  command: docker exec {{ nginx_docker_container_name }} nginx -s reload
+  when: nginx_test_result.rc == 0
+  notify: reload nginx
+
+- name: Wait for Nginx to be ready after reload
+  wait_for:
+    port: 80
+    host: "127.0.0.1"
+    timeout: 30
+  when: nginx_test_result.rc == 0
+
+- name: Verify Nginx stub_status endpoint from within container
+  command: docker exec {{ nginx_docker_container_name }} curl -s -f "http://127.0.0.1{{ nginx_stub_status_path }}"
+  register: nginx_status_check
+  retries: 3
+  delay: 5
+  until: nginx_status_check is succeeded
+  when: nginx_test_result.rc == 0
+  changed_when: false 

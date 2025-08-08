@@ -1,0 +1,11 @@
+---
+dependencies:
+  - role: dnsmasq
+    vars:
+      dnsmasq_interface: "{{ wireguard_interface | default('wg0') }}"
+      dnsmasq_server_ip: "{{ wireguard_address | regex_replace('/[0-9]+$', '') }}"
+      dnsmasq_upstream_dns:
+        - "1.1.1.1"
+        - "1.0.0.1" 
+        - "8.8.8.8"
+        - "8.8.4.4" 

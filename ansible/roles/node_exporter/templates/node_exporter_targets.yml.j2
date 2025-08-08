@@ -1,0 +1,17 @@
+---
+# Node Exporter targets for Prometheus service discovery
+# This file is automatically updated by the node_exporter role
+# Prometheus will pick up changes within 30 seconds (refresh_interval)
+
+- targets: ['host.docker.internal:9100']
+  labels:
+    job: node_exporter
+    instance: '{{ ansible_default_ipv4.address | default("host.docker.internal") }}'
+    service: 'node_exporter'
+    hostname: '{{ inventory_hostname }}'
+    os: '{{ ansible_os_family | default("unknown") }}'
+{% if node_exporter_labels is defined %}
+{% for key, value in node_exporter_labels.items() %}
+    {{ key }}: '{{ value }}'
+{% endfor %}
+{% endif %}

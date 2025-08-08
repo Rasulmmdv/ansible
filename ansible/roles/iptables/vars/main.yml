@@ -1,0 +1,6 @@
+# vars file for iptables
+---
+# You can override these in playbooks or host/group vars
+
+# Note: Do not hardcode port lists here as they will override host-specific configurations
+# Use defaults/main.yml for default values and inventory for host-specific overrides

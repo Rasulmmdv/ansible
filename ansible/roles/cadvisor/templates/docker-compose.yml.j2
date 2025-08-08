@@ -1,0 +1,50 @@
+services:
+  cadvisor:
+    image: "{{ cadvisor_image }}"
+    container_name: "{{ cadvisor_container_name }}"
+    restart: unless-stopped
+    privileged: true
+{% if cadvisor_security_opts | length > 0 %}
+    security_opt:
+{% for opt in cadvisor_security_opts %}
+      - {{ opt }}
+{% endfor %}
+{% endif %}
+    command:
+{% for arg in cadvisor_command %}
+      - {{ arg }}
+{% endfor %}
+    ports:
+{% for port in cadvisor_ports %}
+      - "{{ port }}"
+{% endfor %}
+    volumes:
+{% for volume in cadvisor_volumes %}
+      - {{ volume }}
+{% endfor %}
+    networks:
+      - monitoring
+    # Resource limits for cAdvisor container
+    mem_limit: "{{ cadvisor_resources.memory }}"
+    mem_reservation: "{{ cadvisor_resources.memory_reservation }}"
+    cpus: "{{ cadvisor_resources.cpus }}"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Environment variables for enhanced monitoring
+    environment:
+      - CADVISOR_HEALTHCHECK_URL=http://localhost:8080/healthz
+    # Labels for better container identification
+    labels:
+      - "monitoring.role=cadvisor"
+      - "monitoring.service=container-monitoring"
+      - "monitoring.environment={{ cadvisor_labels.environment }}"
+
+networks:
+  monitoring:
+    external: true 

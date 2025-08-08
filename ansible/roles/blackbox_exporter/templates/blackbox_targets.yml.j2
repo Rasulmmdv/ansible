@@ -1,0 +1,21 @@
+---
+# Blackbox Exporter targets for Prometheus service discovery
+# This file is automatically updated by the blackbox_exporter role
+# Prometheus will pick up changes within 30 seconds (refresh_interval)
+
+{% for endpoint in blackbox_endpoints %}
+- targets: ['blackbox_exporter:9115']
+  labels:
+    job: blackbox_targets
+    module: '{{ endpoint.module | default("http_2xx") }}'
+    instance: '{{ endpoint.url }}'
+    __param_target: '{{ endpoint.url }}'
+    __param_module: '{{ endpoint.module | default("http_2xx") }}'
+    endpoint_name: '{{ endpoint.name }}'
+    endpoint_url: '{{ endpoint.url }}'
+{% if endpoint.labels is defined %}
+{% for key, value in endpoint.labels.items() %}
+    {{ key }}: '{{ value }}'
+{% endfor %}
+{% endif %}
+{% endfor %}

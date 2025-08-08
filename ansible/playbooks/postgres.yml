@@ -1,0 +1,10 @@
+---
+- hosts: all
+  become: yes
+  vars:
+    # REQUIRED: Set your project name for database naming
+    # project_name: myproject
+    # REQUIRED: Set your Postgres database password
+    # postgres_password: "supersecret"
+  roles:
+    - postgres 

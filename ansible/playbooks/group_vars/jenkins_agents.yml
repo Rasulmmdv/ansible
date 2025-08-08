@@ -1,0 +1,29 @@
+---
+# Group variables for Jenkins agents
+
+# SSH Agent configuration
+jenkins_ssh_agent_image: "jenkins/ssh-agent:jdk21"
+jenkins_ssh_agent_container_name: "jenkins-ssh-agent"
+jenkins_ssh_agent_workdir: "/home/jenkins/agent"
+jenkins_compose_path: "/opt/jenkins-ssh-agent"
+
+# SSH key configuration
+jenkins_ssh_key_path: "/opt/jenkins/ssh"
+jenkins_ssh_key_name: "jenkins_agent_key"
+jenkins_ssh_key_type: "rsa"
+jenkins_ssh_key_bits: 4096
+jenkins_ssh_key_comment: "jenkins-agent"
+
+# Docker network configuration
+jenkins_network_name: "jenkins-network"
+
+# Docker volume mounts
+jenkins_ssh_agent_volumes:
+  - "/var/run/docker.sock:/var/run/docker.sock"
+  - "/tmp:/tmp"
+
+# Restart policy
+jenkins_ssh_agent_restart_policy: "always"
+
+# Pull image on each deployment
+jenkins_ssh_agent_force_pull: true 

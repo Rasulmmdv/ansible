@@ -1,0 +1,108 @@
+# Traefik static configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# Entry points
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+{% if traefik_hsts_enabled %}
+    http:
+      tls:
+        options: default
+{% endif %}
+{% if traefik_dashboard_enabled %}
+  traefik:
+    address: ":8080"
+{% endif %}
+
+# Providers
+providers:
+{% if traefik_docker_provider_enabled %}
+  docker:
+    endpoint: "{{ traefik_docker_endpoint }}"
+    exposedByDefault: {{ traefik_docker_expose_by_default | lower }}
+    network: "{{ traefik_docker_network }}"
+    watch: true
+{% endif %}
+{% if traefik_file_provider_enabled %}
+  file:
+    directory: "{{ traefik_file_provider_directory }}"
+    watch: {{ traefik_file_provider_watch | lower }}
+{% endif %}
+
+# API and Dashboard
+{% if traefik_api_enabled %}
+api:
+  dashboard: {{ traefik_api_dashboard | lower }}
+  insecure: {{ traefik_api_insecure | lower }}
+{% endif %}
+
+# Ping endpoint
+{% if traefik_ping_enabled %}
+ping:
+  entryPoint: "{{ traefik_ping_entrypoint }}"
+{% endif %}
+
+# Certificate resolvers
+{% if traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+certificatesResolvers:
+  {{ traefik_ssl_certificate_resolver }}:
+    acme:
+      email: "{{ traefik_acme_email }}"
+      storage: "{{ traefik_acme_storage }}"
+      caServer: "{{ traefik_acme_ca_server }}"
+{% if traefik_acme_challenge_type == "http" %}
+      httpChallenge:
+        entryPoint: web
+{% elif traefik_acme_challenge_type == "tls" %}
+      tlsChallenge: {}
+{% elif traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider %}
+      dnsChallenge:
+        provider: "{{ traefik_acme_dns_provider }}"
+        delayBeforeCheck: 0
+{% endif %}
+{% endif %}
+
+# Logging
+log:
+  level: "{{ traefik_log_level }}"
+{% if traefik_logs_file %}
+  filePath: "{{ traefik_logs_file }}"
+{% endif %}
+
+{% if traefik_access_logs_enabled %}
+accessLog:
+{% if traefik_access_logs_file %}
+  filePath: "{{ traefik_access_logs_file }}"
+{% endif %}
+  bufferingSize: 100
+{% endif %}
+
+# Metrics
+{% if traefik_metrics_enabled %}
+metrics:
+{% if traefik_metrics_prometheus %}
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+{% if traefik_metrics_prometheus_buckets %}
+    buckets:
+      - {{ traefik_metrics_prometheus_buckets | join('\n      - ') }}
+{% endif %}
+{% endif %}
+{% endif %}
+
+# TLS Options
+tls:
+  options:
+    default:
+      minVersion: "VersionTLS12"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"

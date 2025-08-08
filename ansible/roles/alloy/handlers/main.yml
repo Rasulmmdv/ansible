@@ -1,0 +1,23 @@
+---
+# handlers file for alloy
+
+- name: restart alloy
+  command: docker compose restart
+  args:
+    chdir: "{{ alloy_data_dir }}"
+  become: true
+  listen: restart alloy
+
+- name: stop alloy
+  command: docker compose down
+  args:
+    chdir: "{{ alloy_data_dir }}"
+  become: true
+  listen: stop alloy
+
+- name: start alloy
+  command: docker compose up -d
+  args:
+    chdir: "{{ alloy_data_dir }}"
+  become: true
+  listen: start alloy 

@@ -1,0 +1,2 @@
+ansible_user: root
+user_name: "{{ ansible_user }}"

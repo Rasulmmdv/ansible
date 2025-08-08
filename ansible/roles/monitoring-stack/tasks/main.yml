@@ -1,0 +1,37 @@
+---
+# Monitoring stack orchestration tasks
+# This role coordinates configuration and validation across all monitoring components
+
+- name: Create monitoring network
+  community.docker.docker_network:
+    name: "{{ monitoring_stack.network_name }}"
+    state: present
+  become: true
+
+- name: Create monitoring data root directory
+  file:
+    path: "{{ monitoring_stack.data_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Initialize monitoring configuration variables
+  set_fact:
+    monitoring_alertmanagers: []
+    monitoring_scrape_configs: []
+  
+- name: Display monitoring stack configuration summary
+  debug:
+    msg:
+      - "Monitoring Stack Configuration:"
+      - "Network: {{ monitoring_stack.network_name }}"
+      - "Data Root: {{ monitoring_stack.data_root }}"
+      - "Alertmanagers: {{ monitoring_alertmanagers | default([]) | length }} configured"
+      - "Scrape Configs: {{ monitoring_scrape_configs | default([]) | length }} configured"
+      - "Blackbox Targets: {{ prometheus_blackbox_targets | default([]) | length }} configured"
+
+- name: Validate monitoring stack deployment
+  include_tasks: validate.yml
+  tags: ["validate"]

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Restic prune on schedule
+Requires={{ restic_service_name }}_prune.service
+
+[Timer]
+OnCalendar={{ restic_prune_schedule }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target 

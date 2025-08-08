@@ -1,0 +1,7 @@
+# Database Backup Configuration
+# Format: container_name|database_name|username|password|port
+# Lines starting with # are ignored
+
+{% for db in restic_postgresql_databases %}
+{{ db.container_name }}|{{ db.name }}|{{ db.username | default('postgres') }}|{{ db.password | default('password') }}|{{ db.port | default(5432) }}
+{% endfor %} 

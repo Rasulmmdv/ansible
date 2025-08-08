@@ -1,0 +1,33 @@
+---
+galaxy_info:
+  author: your_name
+  description: Ansible role to install and configure Tailscale VPN
+  company: your_company
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: CentOS
+      versions:
+        - all
+    - name: RHEL
+      versions:
+        - all
+    - name: Fedora
+      versions:
+        - all
+    - name: Alpine
+      versions:
+        - all
+  galaxy_tags:
+    - vpn
+    - tailscale
+    - networking
+    - security
+
+dependencies: [] 

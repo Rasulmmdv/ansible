@@ -1,0 +1,121 @@
+---
+# Jenkins deployment verification playbook
+# This playbook performs comprehensive testing of Jenkins deployment
+# Usage: ansible-playbook -i inventory.yml playbooks/verify-jenkins.yml
+
+- name: Verify Jenkins Deployment
+  hosts: jenkins_servers
+  become: false
+  gather_facts: true
+  
+  vars:
+    jenkins_host_port: "{{ jenkins_host_port | default(8080) }}"
+    jenkins_container_name: "jenkins"
+    jenkins_domain: "" # TODO: add domain name
+  
+  tasks:
+    - name: Check if Docker is running
+      command: docker info
+      register: docker_status
+      failed_when: docker_status.rc != 0
+      changed_when: false
+      
+    - name: Verify Jenkins container is running
+      community.docker.docker_container_info:
+        name: "{{ jenkins_container_name }}"
+      register: jenkins_container_info
+      failed_when: 
+        - not jenkins_container_info.exists
+        - jenkins_container_info.container.State.Status != "running"
+        
+    - name: Display container status
+      debug:
+        msg:
+          - "Container Status: {{ jenkins_container_info.container.State.Status }}"
+          - "Container ID: {{ jenkins_container_info.container.Id[:12] }}"
+          - "Started at: {{ jenkins_container_info.container.State.StartedAt }}"
+          - "Restart Count: {{ jenkins_container_info.container.RestartCount }}"
+          
+    - name: Check Jenkins container logs for errors
+      command: docker logs {{ jenkins_container_name }} --tail 50
+      register: jenkins_logs
+      changed_when: false
+      
+    - name: Fail if permission errors found in logs
+      fail:
+        msg: "Permission errors detected in Jenkins logs"
+      when: 
+        - "'Permission denied' in jenkins_logs.stdout or 'Wrong volume permissions' in jenkins_logs.stdout"
+        - "'INSTALL WARNING' in jenkins_logs.stdout"
+        
+    - name: Verify Jenkins home directory exists and has correct permissions
+      stat:
+        path: "{{ jenkins_home }}"
+      register: jenkins_home_stat
+      become: true
+      
+    - name: Display Jenkins home directory info
+      debug:
+        msg:
+          - "Jenkins Home: {{ jenkins_home }}"
+          - "Owner: {{ jenkins_home_stat.stat.pw_name }}:{{ jenkins_home_stat.stat.gr_name }}"
+          - "Permissions: {{ jenkins_home_stat.stat.mode }}"
+          - "Writable: {{ jenkins_home_stat.stat.writeable }}"
+      when: jenkins_home_stat.stat.exists
+      
+    - name: Wait for Jenkins web interface to be ready
+      uri:
+        url: "https://{{ jenkins_domain }}/login"
+        method: GET
+        status_code: [200, 403]
+        validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+      register: jenkins_health_check
+      until: jenkins_health_check.status in [200, 403]
+      retries: 30
+      delay: 10
+      
+    - name: Test Jenkins API endpoint with authentication
+      uri:
+        url: "https://{{ jenkins_domain }}/api/json"
+        method: GET
+        user: "{{ jenkins_admin_username | default('admin') }}"
+        password: "{{ jenkins_admin_password | default('changeme') }}"
+        force_basic_auth: yes
+        status_code: 200
+        validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+      register: jenkins_api_test
+      
+    - name: Verify Jenkins version and basic info
+      uri:
+        url: "https://{{ jenkins_domain }}/api/json?pretty=true"
+        method: GET
+        user: "{{ jenkins_admin_username | default('admin') }}"
+        password: "{{ jenkins_admin_password | default('changeme') }}"
+        force_basic_auth: yes
+        return_content: yes
+        status_code: 200
+        validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+      register: jenkins_info
+      
+    - name: Display Jenkins deployment verification results
+      debug:
+        msg:
+          - "✅ Jenkins Deployment Verification PASSED"
+          - "================================================"
+          - "Jenkins URL: https://{{ jenkins_domain }}"
+          - "Jenkins Version: {{ (jenkins_info.content | from_json).hudson.version | default('Unknown') }}"
+          - "Container Status: {{ jenkins_container_info.container.State.Status }}"
+          - "API Accessible: {{ jenkins_api_test.status == 200 }}"
+          - "Home Directory: {{ jenkins_home }} ({{ jenkins_home_stat.stat.pw_name }}:{{ jenkins_home_stat.stat.gr_name }})"
+          - "================================================"
+          
+  handlers:
+    - name: Display troubleshooting info
+      debug:
+        msg:
+          - "❌ Jenkins verification failed. Troubleshooting info:"
+          - "1. Check container logs: docker logs {{ jenkins_container_name }}"
+          - "2. Check container status: docker ps -a"
+          - "3. Check port availability: netstat -tulpn | grep {{ jenkins_host_port }}"
+          - "4. Check Jenkins home permissions: ls -la {{ jenkins_home }}"
+      listen: "jenkins verification failed"

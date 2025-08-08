@@ -1,0 +1,58 @@
+# Traefik dynamic configuration
+http:
+  # Routers
+  routers:
+    # Router to catch all HTTP traffic and redirect to HTTPS
+    web-redirect:
+      entryPoints:
+        - "web"
+      rule: "HostRegexp(`{host:.+}`) && !PathPrefix(`/.well-known/acme-challenge`)"
+      middlewares:
+        - "https-redirect@file"
+      service: "noop@internal" # A dummy service, as it's just a redirect
+      priority: 1 # Low priority to not interfere with other routers
+
+    # Router to redirect www to non-www
+    www-redirect:
+      entryPoints:
+        - "websecure"
+      rule: "Host(`www.{{ traefik_domain }}`)"
+      middlewares:
+        - "www-redirect@file"
+      service: "noop@internal"
+      priority: 100 # High priority to catch www requests first
+      tls: true
+
+  # Services
+  services:
+    # Noop service for redirect
+    noop:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:1"
+
+{% if traefik_rate_limit_enabled %}
+  # Middlewares
+  middlewares:
+    # Rate limiting middleware
+    rate-limit:
+      rateLimit:
+        average: {{ traefik_rate_limit_average }}
+        burst: {{ traefik_rate_limit_burst }}
+{% endif %}
+
+{% if traefik_certificate_type == 'custom' and traefik_certificates_enabled %}
+# TLS Configuration for Custom Certificates
+tls:
+  certificates:
+{% for cert in traefik_certificate_files_container %}
+    - certFile: "{{ cert.cert }}"
+      keyFile: "{{ cert.key }}"
+{% if cert.stores is defined %}
+      stores:
+{% for store in cert.stores %}
+        - "{{ store }}"
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
