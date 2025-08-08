@@ -1,0 +1,136 @@
+---
+# tasks file for loki
+
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: true
+
+- name: Create loki data directory
+  file:
+    path: "{{ loki_data_dir }}"
+    state: directory
+    owner: "{{ loki_user }}"
+    group: "{{ loki_group }}"
+    mode: '0755'
+  become: true
+
+- name: Deploy loki config
+  template:
+    src: loki-config.yaml.j2
+    dest: "{{ loki_data_dir }}/loki-config.yaml"
+    owner: "{{ loki_user }}"
+    group: "{{ loki_group }}"
+    mode: '0644'
+  become: true
+
+- name: Deploy docker-compose.yml for loki
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ loki_data_dir }}/docker-compose.yml"
+    owner: "{{ loki_user }}"
+    group: "{{ loki_group }}"
+    mode: '0644'
+  become: true
+
+- name: Ensure loki data directory and subdirectories exist and are owned by Loki's container user (UID 10001)
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: '0755'
+  loop:
+    - "{{ loki_data_dir }}"
+    - "{{ loki_data_dir }}/data"
+    - "{{ loki_data_dir }}/rules"
+    - "{{ loki_data_dir }}/chunks"
+    - "{{ loki_data_dir }}/wal"
+    - "{{ loki_data_dir }}/tsdb-index"
+    - "{{ loki_data_dir }}/tsdb-cache"
+    - "{{ loki_data_dir }}/rules-temp"
+    - "{{ loki_compactor.working_directory }}"
+  become: true
+
+- name: Ensure all loki subdirectories have correct ownership for container
+  file:
+    path: "{{ loki_data_dir }}"
+    owner: "10001"
+    group: "10001"
+    mode: '0755'
+    recurse: yes
+  become: true
+
+- name: Start loki with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ loki_data_dir }}"
+  become: true
+  notify: restart loki
+
+# Register Loki with Prometheus file-based service discovery
+- name: Ensure Prometheus targets directory exists
+  file:
+    path: "{{ monitoring_shared_dirs.prometheus_targets | default('/opt/monitoring/prometheus/targets') }}"
+    state: directory
+    owner: "{{ monitoring_users.prometheus.uid | default(65533) }}"
+    group: "{{ monitoring_users.prometheus.gid | default(65533) }}"
+    mode: '0755'
+  become: true
+
+- name: Update Loki targets for Prometheus
+  template:
+    src: loki_targets.yml.j2
+    dest: "{{ monitoring_shared_dirs.prometheus_targets | default('/opt/monitoring/prometheus/targets') }}/loki_targets.yml"
+    owner: "{{ monitoring_users.prometheus.uid | default(65533) }}"
+    group: "{{ monitoring_users.prometheus.gid | default(65533) }}"
+    mode: '0644'
+  become: true
+  notify: reload prometheus
+
+# Verify Loki retention configuration
+- name: Wait for Loki to be ready
+  uri:
+    url: "http://localhost:3100/ready"
+    method: GET
+    status_code: 200
+  register: loki_ready
+  until: loki_ready.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: true
+
+- name: Check Loki configuration
+  uri:
+    url: "http://localhost:3100/config"
+    method: GET
+    status_code: 200
+  register: loki_config_check
+  ignore_errors: true
+
+- name: Display Loki retention settings
+  debug:
+    msg:
+      - "Loki retention configuration:"
+      - "Time retention: {{ loki_retention.time }}"
+      - "Retention enabled: {{ loki_retention.enabled }}"
+      - "Compactor enabled: {{ loki_compactor.enabled }}"
+      - "Table manager retention: {{ loki_retention.table_manager.retention_period }}"
+      - "Config endpoint: {{ 'Available' if loki_config_check.status == 200 else 'Not available' }}"
+
+- name: Check Loki metrics for retention status
+  uri:
+    url: "http://localhost:3100/metrics"
+    method: GET
+    status_code: 200
+  register: loki_metrics
+  ignore_errors: true
+
+- name: Display Loki compactor status
+  debug:
+    msg:
+      - "Loki compactor metrics: {{ 'Available' if loki_metrics.status == 200 else 'Not available' }}"
+      - "Check /metrics endpoint for loki_compactor_* metrics to monitor retention"
+  when: loki_metrics.status == 200 

@@ -1,0 +1,28 @@
+# dnsmasq configuration
+no-resolv
+no-poll
+# Remove domain-needed and bogus-priv to allow more flexible DNS resolution
+
+# Listen on WireGuard interface
+interface={{ dnsmasq_interface | default('wg0') }}
+listen-address=127.0.0.1
+listen-address={{ dnsmasq_server_ip }}
+
+# Cache settings for better performance
+cache-size=1000
+neg-ttl=3600
+
+# Log queries for debugging (remove in production)
+# log-queries
+
+# Domain configuration
+domain={{ dnsmasq_domain }}
+expand-hosts
+
+# Upstream DNS servers
+{% for dns in dnsmasq_upstream_dns %}
+server={{ dns }}
+{% endfor %}
+
+# Additional configuration
+conf-dir={{ dnsmasq_conf_dir }},*.conf 

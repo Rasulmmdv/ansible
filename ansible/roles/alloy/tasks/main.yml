@@ -1,0 +1,57 @@
+---
+# tasks file for alloy
+
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: true
+
+- name: Create alloy group
+  group:
+    name: "{{ alloy_group }}"
+  become: true
+
+- name: Create alloy user
+  user:
+    name: "{{ alloy_user }}"
+    group: "{{ alloy_group }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+  become: true
+
+- name: Create alloy data directory
+  file:
+    path: "{{ alloy_data_dir }}"
+    state: directory
+    owner: "{{ alloy_user }}"
+    group: "{{ alloy_group }}"
+    mode: '0755'
+  become: true
+
+- name: Deploy alloy config
+  template:
+    src: config.alloy.j2
+    dest: "{{ alloy_data_dir }}/config.alloy"
+    owner: "{{ alloy_user }}"
+    group: "{{ alloy_group }}"
+    mode: '0644'
+  become: true
+
+- name: Deploy docker-compose.yml for alloy
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ alloy_data_dir }}/docker-compose.yml"
+    owner: "{{ alloy_user }}"
+    group: "{{ alloy_group }}"
+    mode: '0644'
+  become: true
+
+- name: Start alloy with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ alloy_data_dir }}"
+  become: true
+  notify: restart alloy 

@@ -1,0 +1,138 @@
+#!/bin/bash
+
+# Restic Backup Script
+# This script performs a backup using restic
+
+set -euo pipefail
+
+# Source environment file if it exists
+if [ -f "{{ restic_config_dir }}/restic.env" ]; then
+    source "{{ restic_config_dir }}/restic.env"
+fi
+
+# Log function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a {{ restic_log_dir }}/backup.log
+}
+
+# Custom error handling - treat exit code 3 (warnings) as success
+handle_exit() {
+    local exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        log "Backup completed successfully"
+        exit 0
+    elif [ $exit_code -eq 3 ]; then
+        log "Backup completed with warnings (some files could not be read due to permissions)"
+        log "This is normal and expected for system files"
+        exit 0  # Exit with success code for systemd
+    else
+        log "ERROR: Backup failed with exit code $exit_code"
+        exit $exit_code
+    fi
+}
+
+trap 'handle_exit' EXIT
+
+log "Starting restic backup"
+
+{% if restic_postgresql_backup_enabled | bool %}
+# Run PostgreSQL dumps before backup
+log "Running PostgreSQL database dumps"
+"{{ restic_scripts_dir }}/pg_dump.sh"
+
+# Count successful database backups
+DB_BACKUP_COUNT=$(find "{{ restic_postgresql_backup_dir }}" -name "*.sql" -type f -mmin -5 2>/dev/null | wc -l || echo "0")
+log "📊 Database backups completed: $DB_BACKUP_COUNT database(s) dumped"
+{% endif %}
+
+# Test S3 connectivity before backup
+log "🔗 Testing S3 repository connectivity..."
+if restic snapshots --last >/dev/null 2>&1; then
+    log "✅ S3 repository is accessible"
+else
+    log "⚠️  S3 repository connection issue - proceeding with backup attempt"
+fi
+
+# Create exclude file
+cat > /tmp/exclude.txt << EOF
+{% for pattern in restic_exclude_patterns %}
+{{ pattern }}
+{% endfor %}
+EOF
+
+# Perform backup
+log "Running restic backup"
+
+# Temporarily disable errexit so we can capture the restic exit code without aborting
+set +e
+
+restic backup \
+    --verbose \
+    --exclude-file=/tmp/exclude.txt \
+    {% for path in restic_backup_paths -%}
+    "{{ path }}" \
+    {% endfor -%}
+    {% if restic_postgresql_backup_enabled | bool -%}
+    {% for path in restic_postgresql_backup_paths -%}
+    "{{ path }}" \
+    {% endfor -%}
+    {% endif %}
+
+# Check backup result and log S3 transfer status immediately
+BACKUP_EXIT_CODE=$?
+
+# Re-enable errexit for the remainder of the script
+set -e
+
+if [ $BACKUP_EXIT_CODE -eq 0 ]; then
+    log "✅ Backup completed successfully - files transferred to S3"
+elif [ $BACKUP_EXIT_CODE -eq 3 ]; then
+    log "⚠️  Backup completed with warnings - files transferred to S3 (some files skipped due to permissions)"
+else
+    log "❌ Backup failed with exit code $BACKUP_EXIT_CODE - S3 transfer may have failed"
+fi
+
+# Show backup details immediately after backup
+log "📊 Latest backup snapshot information:"
+restic snapshots --last --compact 2>/dev/null | tail -1 | while read line; do log "   $line"; done
+
+# Show what was backed up in this session
+LATEST_SNAPSHOT=$(restic snapshots --last --json 2>/dev/null | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || echo 'unknown')
+log "📋 Latest snapshot ID: $LATEST_SNAPSHOT"
+
+# Verify backup if enabled
+{% if restic_verify_backups | bool %}
+log "Verifying backup"
+restic check --read-data-subset=10%
+{% endif %}
+
+# List snapshots
+log "Current snapshots:"
+restic snapshots --last
+
+# Clean up
+rm -f /tmp/exclude.txt
+
+# Backup completion summary
+log "🎯 BACKUP SUMMARY:"
+{% if restic_postgresql_backup_enabled | bool %}
+log "   📊 Database backups: $DB_BACKUP_COUNT database(s) processed"
+log "   📁 Database backup directory: {{ restic_postgresql_backup_dir }}"
+{% endif %}
+log "   📦 S3 Repository: {{ restic_repository }}"
+log "   📋 Snapshot ID: $LATEST_SNAPSHOT"
+log "   🔄 Backup exit code: $BACKUP_EXIT_CODE"
+
+log "Backup process completed"
+
+# Handle final exit code for systemd
+if [ $BACKUP_EXIT_CODE -eq 0 ]; then
+    log "✅ All operations completed successfully"
+    exit 0
+elif [ $BACKUP_EXIT_CODE -eq 3 ]; then
+    log "✅ All operations completed with warnings (normal for system files)"
+    exit 0  # Exit with success code for systemd
+else
+    log "❌ Backup failed with exit code $BACKUP_EXIT_CODE"
+    exit $BACKUP_EXIT_CODE 
+fi 

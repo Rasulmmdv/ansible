@@ -1,0 +1,36 @@
+---
+# Tailscale Agent Configuration
+
+# Authentication
+# Set this to your Tailscale auth key for automatic authentication
+# You can generate one at https://login.tailscale.com/admin/settings/keys
+tailscale_auth_key: ""
+
+# Hostname configuration
+# Set a custom hostname for this node in Tailscale
+tailscale_hostname: ""
+
+# Installation settings
+tailscale_install_url: "https://tailscale.com/install.sh"
+tailscale_install_script_path: "/tmp/tailscale-install.sh"
+
+# Service configuration
+tailscale_service_name: "tailscaled"
+tailscale_service_enabled: true
+tailscale_service_state: "started"
+
+# Simple network configuration
+tailscale_accept_dns: true
+tailscale_accept_routes: false
+
+# Route advertisement configuration
+# List of routes to advertise to other Tailscale nodes
+# Example: ["10.0.0.0/24", "169.254.169.254/32"]
+tailscale_advertise_routes: []
+
+# Enable/disable route advertisement
+tailscale_enable_route_advertisement: false
+
+# Exit node configuration
+# Enable this node as an exit node for other Tailscale nodes
+tailscale_advertise_exit_node: false 

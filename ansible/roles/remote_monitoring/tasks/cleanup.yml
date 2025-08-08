@@ -1,0 +1,38 @@
+---
+# Cleanup tasks for remote monitoring
+# This file should be included when hosts are removed from monitoring
+
+- name: Remove target file for this host
+  file:
+    path: "{{ prometheus_config_dir }}/targets/{{ inventory_hostname }}_nginx.yml"
+    state: absent
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  when: monitoring_server_host is defined
+
+- name: Stop and remove nginx_exporter container
+  command: docker compose down
+  args:
+    chdir: "{{ nginx_exporter_data_dir }}"
+  become: true
+  failed_when: false
+  changed_when: false
+  when: nginx_exporter_data_dir is defined
+
+- name: Remove nginx_exporter data directory
+  file:
+    path: "{{ nginx_exporter_data_dir }}"
+    state: absent
+  become: true
+  when: nginx_exporter_data_dir is defined
+
+- name: Reload Prometheus configuration after cleanup
+  uri:
+    url: "http://localhost:9090/-/reload"
+    method: POST
+    status_code: [200]
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  failed_when: false
+  changed_when: false
+  when: monitoring_server_host is defined 

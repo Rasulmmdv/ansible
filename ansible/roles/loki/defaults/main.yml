@@ -1,0 +1,33 @@
+---
+# defaults file for loki
+
+loki_image: "grafana/loki:3.5.3"
+loki_container_name: "loki"
+loki_data_dir: "/opt/monitoring/loki"
+loki_user: "loki"
+loki_group: "loki"
+loki_system_packages:
+  - docker-compose
+loki_ensure_docker_installed: true
+loki_ports:
+  - "3100:3100"
+loki_volumes:
+  - "{{ loki_data_dir }}/loki-config.yaml:/etc/loki/local-config.yaml:ro"
+  - "{{ loki_data_dir }}:/loki"
+loki_command:
+  - '-config.file=/etc/loki/local-config.yaml'
+  - '-config.expand-env=true'
+  - '-log.level=info'
+
+# Data retention configuration
+loki_retention:
+  # Time-based retention (30 days maximum)
+  time: "720h"  # 30 days in hours
+  enabled: true
+  table_manager:
+    retention_period: "720h"  # 30 days in hours
+
+# Compactor configuration for retention management
+loki_compactor:
+  enabled: true
+  working_directory: "{{ loki_data_dir }}/compactor" 

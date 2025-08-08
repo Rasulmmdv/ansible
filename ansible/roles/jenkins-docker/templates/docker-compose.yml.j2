@@ -1,0 +1,43 @@
+services:
+  jenkins:
+    image: "{{ jenkins_image }}"
+    container_name: "{{ jenkins_container_name }}"
+    restart: always
+    volumes:
+      - "{{ jenkins_home }}:/var/jenkins_home"
+{% if jenkins_install_plugins %}
+      - "{{ jenkins_data_dir }}/plugins.txt:/usr/share/jenkins/ref/plugins.txt:ro"
+{% endif %}
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - JAVA_OPTS={{ jenkins_java_opts }}
+      - JENKINS_OPTS={{ jenkins_opts }}
+      - JENKINS_AGENT_PORT={{ jenkins_agent_port }}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.jenkins.rule=Host(`{{ jenkins_domain | default('jenkins.local') }}`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jenkins.middlewares=vpn-whitelist@file"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+    networks:
+      - jenkins-network
+      - traefik-network
+    user: "1000:1001"
+    entrypoint: >
+      /bin/sh -c '
+      if ! id -u jenkins > /dev/null 2>&1; then
+        groupadd -g {{ jenkins_gid }} jenkins;
+        useradd -u {{ jenkins_uid }} -g {{ jenkins_gid }} -d /var/jenkins_home jenkins;
+      fi;
+      exec /usr/local/bin/jenkins.sh'
+
+networks:
+  jenkins-network:
+    name: "{{ jenkins_network_name }}"
+    external: true
+  traefik-network:
+    name: "{{ traefik_network_name | default('traefik-network') }}"
+    external: true

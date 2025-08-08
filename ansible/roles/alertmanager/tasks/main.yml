@@ -1,0 +1,81 @@
+---
+# tasks file for alertmanager
+
+- name: Create alertmanager group
+  group:
+    name: "{{ alertmanager_group }}"
+    gid: "{{ alertmanager_group_id }}"
+  become: true
+
+- name: Create alertmanager user
+  user:
+    name: "{{ alertmanager_user }}"
+    group: "{{ alertmanager_group }}"
+    uid: "{{ alertmanager_user_id }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+  become: true
+
+- name: Create alertmanager directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ alertmanager_user_id }}"
+    group: "{{ alertmanager_group_id }}"
+    mode: '0755'
+  loop:
+    - "{{ alertmanager_data_dir }}"
+    - "{{ alertmanager_data_dir }}/data"
+  become: true
+
+- name: Deploy alertmanager configuration
+  template:
+    src: alertmanager.yml.j2
+    dest: "{{ alertmanager_data_dir }}/alertmanager.yml"
+    owner: "{{ alertmanager_user_id }}"
+    group: "{{ alertmanager_group_id }}"
+    mode: '0644'
+  become: true
+  notify: restart alertmanager
+
+- name: Deploy docker-compose.yml for alertmanager
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ alertmanager_data_dir }}/docker-compose.yml"
+    owner: "{{ alertmanager_user_id }}"
+    group: "{{ alertmanager_group_id }}"
+    mode: '0644'
+  become: true
+
+- name: Start alertmanager with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ alertmanager_data_dir }}"
+  become: true
+  notify: restart alertmanager
+
+# Register alertmanager endpoint for prometheus configuration
+- name: Register alertmanager endpoint
+  set_fact:
+    monitoring_alertmanagers: "{{ monitoring_alertmanagers | default([]) + [{'static_configs': [{'targets': ['alertmanager:9093']}]}] }}"
+
+# Deploy sample alert rules
+- name: Create Prometheus rules directory
+  file:
+    path: "{{ alertmanager_prometheus_rules_dir }}"
+    state: directory
+    owner: "{{ alertmanager_prometheus_user_id }}"
+    group: "{{ alertmanager_prometheus_group_id }}"
+    mode: '0755'
+  become: true
+
+- name: Deploy sample alert rules
+  copy:
+    src: sample_alerts.yml
+    dest: "{{ alertmanager_prometheus_rules_dir }}/sample_alerts.yml"
+    owner: "{{ alertmanager_prometheus_user_id }}"
+    group: "{{ alertmanager_prometheus_group_id }}"
+    mode: '0644'
+  become: true
+  notify: restart prometheus 

@@ -1,0 +1,19 @@
+---
+# Playbook: docker.yml
+# Description: Installs and configures Docker
+# Usage: ansible-playbook -i inventory.yml playbooks/docker.yml
+
+- name: Install and configure Docker
+  hosts: all
+  become: true
+  vars:
+    docker_install_compose: true
+    docker_users: []
+  roles:
+    - docker
+  post_tasks:
+    - name: Verify Docker installation
+      command: docker info
+      register: docker_info
+      changed_when: false
+      failed_when: docker_info.rc != 0

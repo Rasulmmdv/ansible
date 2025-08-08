@@ -1,0 +1,6 @@
+---
+- name: Deploy cAdvisor for container monitoring
+  hosts: all
+  become: true
+  roles:
+    - cadvisor 

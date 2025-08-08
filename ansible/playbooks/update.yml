@@ -1,0 +1,18 @@
+---
+# Playbook: update.yml
+# Description: Updates system packages
+# Usage: ansible-playbook -i inventory.yml playbooks/update.yml
+
+- name: Update and reboot hosts if required
+  hosts: all
+  become: true
+  vars:
+    update_reboot: false  # Set to true for automatic reboot
+  roles:
+    - update
+  post_tasks:
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      changed_when: false

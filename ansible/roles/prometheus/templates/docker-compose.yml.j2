@@ -1,0 +1,27 @@
+services:
+  prometheus:
+    image: "{{ prometheus_image }}"
+    container_name: "{{ prometheus_container_name }}"
+    restart: unless-stopped
+    command:
+{% for arg in prometheus_command %}
+      - {{ arg }}
+{% endfor %}
+    ports:
+{% for port in prometheus_ports %}
+      - "{{ port }}"
+{% endfor %}
+    volumes:
+{% for volume in prometheus_volumes %}
+      - {{ volume }}
+{% endfor %}
+      - "{{ prometheus_config_dir }}/targets:/etc/prometheus/targets"
+    user: "{{ prometheus_user_id }}:{{ prometheus_group_id }}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true 

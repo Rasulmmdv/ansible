@@ -1,0 +1,68 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200, 201, 202, 203, 204, 205, 206, 207, 208, 226]
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        User-Agent: "Prometheus/Blackbox Exporter"
+      body_size_limit: "1MB"
+
+  http_post_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: POST
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200, 201, 202, 203, 204, 205, 206, 207, 208, 226]
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        User-Agent: "Prometheus/Blackbox Exporter"
+        Content-Type: "application/json"
+      body_size_limit: "1MB"
+
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+  dns:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: "ip4"
+      query_name: "kubernetes.default.svc.cluster.local"
+      query_type: "A"
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_matches_regexp:
+          - ".*\\.skydns\\.test$"
+        fail_if_not_matches_regexp:
+          - ".*\\.cluster\\.local$"
+      validate_authority_rrs:
+        fail_if_matches_regexp:
+          - ".*\\.skydns\\.test$"
+        fail_if_not_matches_regexp:
+          - ".*\\.cluster\\.local$"
+      validate_additional_rrs:
+        fail_if_matches_regexp:
+          - ".*\\.skydns\\.test$"
+        fail_if_not_matches_regexp:
+          - ".*\\.cluster\\.local$" 

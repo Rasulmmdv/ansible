@@ -1,0 +1,5 @@
+---
+- name: Restart docker-registry
+  community.docker.docker_compose_v2:
+    project_src: "{{ docker_registry_data_dir }}"
+    state: present 

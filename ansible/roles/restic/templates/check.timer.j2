@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Restic check on schedule
+Requires={{ restic_service_name }}_check.service
+
+[Timer]
+OnCalendar={{ restic_check_schedule }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target 

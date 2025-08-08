@@ -1,0 +1,11 @@
+[Unit]
+Description=Gost UDP Tunnel for WireGuard over SOCKS5
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/gost -L udp://:51821?transparent=true -F socks5://127.0.0.1:10808
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target 

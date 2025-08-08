@@ -1,0 +1,37 @@
+---
+- name: Create docker registry data dir
+  ansible.builtin.file:
+    path: "{{ docker_registry_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Download Selectel CA certificate
+  ansible.builtin.get_url:
+    url: https://secure.globalsign.net/cacert/root-r6.crt
+    dest: "{{ docker_registry_data_dir }}/root.crt.der"
+    mode: '0644'
+
+- name: Convert certificate from DER to PEM
+  ansible.builtin.command:
+    cmd: openssl x509 -inform der -in {{ docker_registry_data_dir }}/root.crt.der -out {{ docker_registry_data_dir }}/root.crt
+    creates: "{{ docker_registry_data_dir }}/root.crt"
+  changed_when: false
+
+- name: Set certificate permissions
+  ansible.builtin.file:
+    path: "{{ docker_registry_data_dir }}/root.crt"
+    mode: '0600'
+
+- name: Template docker-compose for docker registry
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ docker_registry_data_dir }}/docker-compose.yml"
+  notify: Restart docker-registry
+
+- name: Start docker registry
+  community.docker.docker_compose_v2:
+    project_src: "{{ docker_registry_data_dir }}"
+    state: present
+  register: docker_registry_service 

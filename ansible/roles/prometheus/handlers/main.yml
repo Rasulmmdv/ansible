@@ -1,0 +1,31 @@
+---
+# handlers file for prometheus
+
+- name: restart prometheus
+  command: docker compose restart
+  args:
+    chdir: "{{ prometheus_data_dir }}"
+  become: true
+  listen: restart prometheus
+
+- name: stop prometheus
+  command: docker compose down
+  args:
+    chdir: "{{ prometheus_data_dir }}"
+  become: true
+  listen: stop prometheus
+
+- name: start prometheus
+  command: docker compose up -d
+  args:
+    chdir: "{{ prometheus_data_dir }}"
+  become: true
+  listen: start prometheus
+
+- name: reload prometheus
+  uri:
+    url: "http://localhost:9090/-/reload"
+    method: POST
+    status_code: 200
+  become: true
+  listen: reload prometheus 

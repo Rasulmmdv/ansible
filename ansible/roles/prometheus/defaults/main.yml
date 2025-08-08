@@ -1,0 +1,105 @@
+---
+# defaults file for prometheus
+
+prometheus_image: "prom/prometheus:latest"
+prometheus_container_name: "prometheus"
+prometheus_data_dir: "/opt/monitoring/prometheus"
+prometheus_config_dir: "/opt/monitoring/prometheus/config"
+prometheus_rules_dir: "/opt/monitoring/prometheus/rules"
+prometheus_alerts_dir: "/opt/monitoring/prometheus/alerts"
+prometheus_user: "prometheus"
+prometheus_group: "prometheus"
+prometheus_user_id: "65533"
+prometheus_group_id: "65533"
+prometheus_ports:
+  - "9090:9090"
+prometheus_volumes:
+  - "{{ prometheus_config_dir }}:/etc/prometheus"
+  - "{{ prometheus_data_dir }}/data:/prometheus"
+  - "{{ prometheus_rules_dir }}:/etc/prometheus/rules"
+  - "{{ prometheus_alerts_dir }}:/etc/prometheus/alerts"
+prometheus_command:
+  - '--config.file=/etc/prometheus/prometheus.yml'
+  - '--storage.tsdb.path=/prometheus'
+  - '--web.enable-lifecycle'
+  - '--storage.tsdb.retention.time={{ prometheus_retention.time }}'
+  - '--storage.tsdb.retention.size={{ prometheus_retention.size }}'
+  - '--storage.tsdb.wal-compression'
+  - '--storage.tsdb.min-block-duration={{ prometheus_retention.min_block_duration }}'
+  - '--storage.tsdb.max-block-duration={{ prometheus_retention.max_block_duration }}'
+  - '--web.enable-admin-api'
+  - '--web.enable-remote-write-receiver'
+
+# Blackbox monitoring targets (can be overridden by blackbox_exporter role)
+prometheus_blackbox_targets:
+  - "http://example.com"
+  - "https://google.com"
+  - "http://prometheus.io"
+
+# Enhanced cAdvisor scraping configuration
+prometheus_cadvisor_config:
+  scrape_interval: "30s"
+  scrape_timeout: "10s"
+  metrics_path: "/metrics"
+  honor_labels: true
+  # Enhanced metric collection for container monitoring
+  params:
+    collect[]:
+      - "container.cpu.usage_rate"
+      - "container.memory.usage_bytes"
+      - "container.network.usage_bytes"
+      - "container.filesystem.usage_bytes"
+      - "container.processes"
+      - "container.sockets"
+      - "container.last_seen"
+      - "container.start_time_seconds"
+  # Relabeling rules for better container identification
+  relabel_configs:
+    - source_labels: [__meta_docker_container_name]
+      target_label: container_name
+    - source_labels: [__meta_docker_container_id]
+      target_label: container_id
+    - source_labels: [__meta_docker_container_image]
+      target_label: container_image
+    - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+      target_label: compose_service
+    - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+      target_label: compose_project
+
+# Data retention configuration
+prometheus_retention:
+  # Time-based retention (30 days maximum)
+  time: "30d"
+  # Size-based retention (50GB maximum)
+  size: "50GB"
+  # WAL compression for better disk utilization
+  wal_compression: true
+  # Block duration settings for optimal performance
+  min_block_duration: "2h"
+  max_block_duration: "25h"
+  # Compaction settings
+  compaction:
+    enabled: true
+    # Blocks older than this will be compacted
+    compact_after: "1h"
+  # Cleanup settings
+  cleanup:
+    # Enable automated cleanup
+    enabled: true
+    # Cleanup interval
+    interval: "1h"
+    # Retention buffer (keep extra data for safety)
+    buffer_time: "1h"
+
+# Storage optimization settings
+prometheus_storage:
+  # Enable write-ahead log compression
+  wal_compression: true
+  # Chunk encoding for better compression
+  chunk_encoding: "XOR"
+  # Index cache size
+  index_cache_size: "1GB"
+  # Symbol table size
+  symbol_table_size: "512MB"
+  # Block cache size
+  block_cache_size: "256MB" 

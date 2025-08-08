@@ -1,0 +1,40 @@
+#!/bin/bash
+# Jenkins backup script
+# This script is managed by Ansible - do not edit manually
+
+set -euo pipefail
+
+JENKINS_HOME="{{ jenkins_home }}"
+BACKUP_DIR="{{ jenkins_backup_dir }}"
+RETENTION_DAYS="{{ jenkins_backup_retention_days }}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="jenkins_backup_${TIMESTAMP}.tar.gz"
+
+# Create backup directory if it doesn't exist
+mkdir -p "${BACKUP_DIR}"
+
+# Stop Jenkins container temporarily for consistent backup
+echo "Stopping Jenkins container for backup..."
+docker stop {{ jenkins_container_name }} || true
+
+# Create backup
+echo "Creating backup: ${BACKUP_FILE}"
+tar -czf "${BACKUP_DIR}/${BACKUP_FILE}" \
+    --exclude="${JENKINS_HOME}/workspace" \
+    --exclude="${JENKINS_HOME}/builds" \
+    --exclude="${JENKINS_HOME}/logs" \
+    --exclude="${JENKINS_HOME}/cache" \
+    --exclude="${JENKINS_HOME}/tmp" \
+    -C "$(dirname ${JENKINS_HOME})" \
+    "$(basename ${JENKINS_HOME})"
+
+# Start Jenkins container
+echo "Starting Jenkins container..."
+docker start {{ jenkins_container_name }}
+
+# Remove old backups
+echo "Cleaning up old backups (older than ${RETENTION_DAYS} days)..."
+find "${BACKUP_DIR}" -name "jenkins_backup_*.tar.gz" -mtime +${RETENTION_DAYS} -delete
+
+echo "Backup completed successfully: ${BACKUP_FILE}"
+echo "Backup size: $(du -h ${BACKUP_DIR}/${BACKUP_FILE} | cut -f1)"

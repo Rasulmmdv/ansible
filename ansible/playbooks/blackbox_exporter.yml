@@ -1,0 +1,6 @@
+---
+- name: Deploy Blackbox Exporter for website uptime monitoring
+  hosts: all
+  become: true
+  roles:
+    - blackbox_exporter 

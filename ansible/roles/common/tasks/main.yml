@@ -1,0 +1,86 @@
+---
+# Common packages installation tasks
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: true
+  tags:
+    - common
+    - packages
+
+- name: Install essential system utilities
+  ansible.builtin.apt:
+    name: "{{ common_system_utils_packages }}"
+    state: present
+  become: true
+  when: common_install_system_utils | default(true)
+  tags:
+    - common
+    - packages
+    - system-utils
+
+- name: Install bash completion and shell utilities
+  ansible.builtin.apt:
+    name: "{{ common_shell_utils_packages }}"
+    state: present
+  become: true
+  when: common_install_shell_utils | default(true)
+  tags:
+    - common
+    - packages
+    - shell-utils
+
+- name: Install network utilities
+  ansible.builtin.apt:
+    name: "{{ common_network_utils_packages }}"
+    state: present
+  become: true
+  when: common_install_network_utils | default(true)
+  tags:
+    - common
+    - packages
+    - network-utils
+
+- name: Install monitoring and debugging tools
+  ansible.builtin.apt:
+    name: "{{ common_monitoring_packages }}"
+    state: present
+  become: true
+  when: common_install_monitoring | default(true)
+  tags:
+    - common
+    - packages
+    - monitoring
+
+# - name: Ensure Docker is running
+#   systemd:
+#     name: docker
+#     state: started
+#     enabled: yes
+#   become: true
+#   tags:
+#     # - common
+#     - docker
+
+# - name: Create monitoring network
+#   docker_network:
+#     name: monitoring
+#     state: present
+#   become: true
+#   tags:
+#     # - common
+#     - monitoring
+
+# - name: Ensure monitoring parent directory exists
+#   file:
+#     path: "/opt/monitoring"
+#     state: directory
+#     owner: root
+#     group: root
+#     mode: '0755'
+#   become: true
+#   tags:
+#     # - common
+#     - monitoring 

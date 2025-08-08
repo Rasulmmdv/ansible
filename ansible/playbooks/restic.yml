@@ -1,0 +1,120 @@
+---
+- name: Deploy Restic Backup Solution for Selectel S3 Cloud Storage
+  hosts: all
+  become: yes
+  
+  vars:
+    # REQUIRED: Set your project name for backup naming
+    # project_name: myproject
+
+    # REQUIRED for S3: Set your S3 credentials
+    # restic_aws_access_key_id: ""
+    # restic_aws_secret_access_key: ""
+
+    # Optional: Notification settings
+    # restic_notification_email: ""
+    # restic_notification_webhook: ""
+
+    # If using a local repository, set this:
+    # restic_repository_path: "/backup/restic-repo"
+    
+    # Basic configuration
+    restic_instance_name: backup
+    
+    # REQUIRED: Set your Restic repository password
+    # restic_password: "supersecret"
+    
+    # Selectel S3 repository configuration
+    # Using Selectel cloud storage in ru-7 region
+    # Container name dynamically set based on hostname: {{ project_name }}-backups-{{ inventory_hostname }}
+    restic_repository: "s3:s3.ru-7.storage.selcloud.ru/{{ project_name }}-backups-{{ inventory_hostname }}"
+    restic_repository_type: "s3"
+    restic_password: "secure-password-change-me123"
+    
+    # Selectel S3 credentials
+    # Get these from your Selectel control panel under S3 keys
+    restic_aws_access_key_id: "" # TODO: add credentials
+    restic_aws_secret_access_key: "" # TODO: add credentials
+    restic_aws_region: "ru-7"
+    restic_aws_endpoint: "s3.ru-7.storage.selcloud.ru"
+    
+    # Selectel-specific S3 configuration
+    restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
+    restic_setup_selectel_ca: true
+    
+    # Backup paths (customize for your environment)
+    restic_backup_paths:
+      - "/data"
+      - "/opt"
+      - "/etc"
+      - "/home"
+    
+    # Exclusion patterns (files/directories to skip)
+    restic_exclude_patterns:
+      - "*.tmp"
+      - "*.log"
+      - "*.cache"
+      - "/tmp/*"
+      - "/var/tmp/*"
+      - "/var/cache/*"
+      - "node_modules"
+      - ".git"
+      - "/proc/*"
+      - "/sys/*"
+      - "/dev/*"
+      - "/run/*"
+      - "/var/run/*"
+      # Exclude sensitive system files
+      - "/etc/shadow*"
+      - "/etc/gshadow*"
+      - "/etc/ssh/*_key"
+      - "/etc/ssl/private/*"
+      - "/etc/wireguard/*"
+      - "/etc/credstore*"
+      - "/etc/sudoers*"
+      - "/etc/polkit-1/rules.d/*"
+      # Exclude Docker/container sensitive data
+      - "*/docker_config/*"
+      - "*/tls/*"
+      - "*/certs/*"
+      - "/opt/containerd/*"
+    
+    # Retention policy (adjust based on your storage costs and requirements)
+    restic_keep_last: 7      # Keep last 7 snapshots
+    restic_keep_daily: 14    # Keep daily snapshots for 14 days
+    restic_keep_weekly: 8    # Keep weekly snapshots for 8 weeks
+    restic_keep_monthly: 6   # Keep monthly snapshots for 6 months
+    restic_keep_yearly: 3    # Keep yearly snapshots for 3 years
+    
+    # Schedule (systemd calendar format)
+    restic_backup_schedule: "*-*-* 03:00:00"  # Daily at 3 AM
+    restic_prune_schedule: "Sun *-*-* 04:00:00"   # Weekly on Sunday at 4 AM
+    restic_check_schedule: "Sun *-*-* 05:00:00"   # Weekly on Sunday at 5 AM
+    
+    # Security and verification
+    restic_verify_backups: true
+    restic_encryption_enabled: true
+    
+    # Logging
+    restic_log_level: "info"
+    
+    # PostgreSQL backup configuration
+    restic_postgresql_backup_enabled: true
+    restic_postgresql_retention_days: 7
+    # Example for database user password in restic_postgresql_databases:
+    # restic_postgresql_databases:
+    #   - container_name: "myproject_postgres"
+    #     name: "postgres"
+    #     username: "postgres"
+    #     password: "supersecret"  # REQUIRED
+    #     port: 5432
+    restic_postgresql_databases:
+      - name: "postgres"  # Default database name in containers  
+        host: "localhost"
+        port: 5432
+        username: "postgres"
+        password: "" # TODO: add credentials
+        container_name: "{{ project_name }}_postgres"
+
+  roles:
+    - restic 

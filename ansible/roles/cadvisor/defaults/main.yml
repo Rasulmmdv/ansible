@@ -1,0 +1,85 @@
+---
+# defaults file for cadvisor
+
+cadvisor_image: "gcr.io/cadvisor/cadvisor:latest"
+cadvisor_container_name: "cadvisor"
+cadvisor_data_dir: "/opt/monitoring/cadvisor"
+cadvisor_user: "cadvisor"
+cadvisor_group: "cadvisor"
+cadvisor_system_packages:
+  - docker-compose
+cadvisor_ensure_docker_installed: true
+cadvisor_ports:
+  - "8080:8080"
+
+# Security options - configurable for different environments
+# Set to empty list for WSL2 or environments with AppArmor issues
+cadvisor_security_opts: []
+
+# Minimal essential volume mounts for container monitoring
+# Using proven working configuration that avoids AppArmor conflicts
+cadvisor_volumes:
+  - "/:/rootfs:ro"
+  - "/var/run:/var/run:rw"
+  - "/sys:/sys:ro"
+  - "/var/lib/docker/:/var/lib/docker:ro"
+  - "/sys/fs/cgroup:/sys/fs/cgroup:ro"
+
+# Enhanced command arguments for better resource monitoring
+cadvisor_command:
+  - "--docker_only=true"
+  - "--disable_metrics=percpu,sched,tcp,udp,advtcp,hugetlb,memory_numa,cpuset,referenced_memory"
+  - "--store_container_labels=false"
+  
+
+# Resource limits for cAdvisor container
+cadvisor_resources:
+  memory: "300M"  # Increased to handle more containers
+  memory_reservation: "150M"
+  cpus: "0.3"  # Reduced to be more conservative
+  cpu_reservation: "0.1"
+
+# Enhanced monitoring configuration
+cadvisor_monitoring:
+  # Enable detailed container monitoring
+  detailed_monitoring: true
+  
+  # Container resource thresholds for alerting
+  resource_thresholds:
+    cpu_warning: 80
+    cpu_critical: 95
+    memory_warning: 85
+    memory_critical: 95
+    disk_warning: 85
+    disk_critical: 95
+  
+  # Collection intervals
+  collection_interval: "30s"
+  retention_period: "2m"
+  
+  # Network monitoring settings
+  network_monitoring:
+    enabled: true
+    interfaces: ["eth0", "docker0"]
+  
+  # Filesystem monitoring
+  filesystem_monitoring:
+    enabled: true
+    ignored_mount_points:
+      - "/proc"
+      - "/sys"
+      - "/dev"
+      - "/run"
+      - "/tmp"
+
+# Service discovery configuration
+cadvisor_service_discovery_enabled: true
+cadvisor_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+cadvisor_prometheus_user_id: "65533"
+cadvisor_prometheus_group_id: "65533"
+
+# Labels for Prometheus metrics
+cadvisor_labels:
+  job: "cadvisor"
+  service: "container-monitoring"
+  environment: "{{ ansible_environment | default('production') }}" 

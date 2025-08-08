@@ -1,0 +1,19 @@
+---
+# Jenkins Master Configuration  
+jenkins_master_url: "http://jenkins:8080"
+
+# Agent-specific settings
+jenkins_agent_name: "docker"
+jenkins_agent_java_opts: "{{ jenkins_agent_java_opts_medium }}"
+
+# Network configuration
+jenkins_network_name: "jenkins-network"
+
+# Volume mounts - extend for specific needs
+jenkins_agent_volumes:
+  - "/var/run/docker.sock:/var/run/docker.sock"
+  - "/tmp:/tmp"
+  - "/opt/tools:/opt/tools:ro"  # For shared build tools
+
+jenkins_agent_memory_limit: "2g"
+jenkins_agent_cpu_limit: "1.0"

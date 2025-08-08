@@ -1,0 +1,96 @@
+---
+# tasks file for blackbox_exporter
+
+- name: Create blackbox_exporter group
+  group:
+    name: "{{ blackbox_exporter_group }}"
+  become: true
+
+- name: Create blackbox_exporter user
+  user:
+    name: "{{ blackbox_exporter_user }}"
+    group: "{{ blackbox_exporter_group }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+  become: true
+
+- name: Create blackbox_exporter data directory
+  file:
+    path: "{{ blackbox_exporter_data_dir }}"
+    state: directory
+    owner: "{{ blackbox_exporter_user }}"
+    group: "{{ blackbox_exporter_group }}"
+    mode: '0755'
+  become: true
+
+- name: Deploy blackbox_exporter config
+  template:
+    src: blackbox.yml.j2
+    dest: "{{ blackbox_exporter_data_dir }}/blackbox.yml"
+    owner: "{{ blackbox_exporter_user }}"
+    group: "{{ blackbox_exporter_group }}"
+    mode: '0644'
+  become: true
+
+- name: Deploy endpoints configuration
+  template:
+    src: endpoints.yml.j2
+    dest: "{{ blackbox_endpoints_config_file }}"
+    owner: "{{ blackbox_exporter_user }}"
+    group: "{{ blackbox_exporter_group }}"
+    mode: '0644'
+  become: true
+  when: blackbox_enable_website_monitoring | default(false)
+
+- name: Deploy docker-compose.yml for blackbox_exporter
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ blackbox_exporter_data_dir }}/docker-compose.yml"
+    owner: "{{ blackbox_exporter_user }}"
+    group: "{{ blackbox_exporter_group }}"
+    mode: '0644'
+  become: true
+
+- name: Start blackbox_exporter with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ blackbox_exporter_data_dir }}"
+  become: true
+  notify: restart blackbox_exporter
+
+# Register blackbox targets for prometheus configuration
+- name: Register blackbox targets
+  set_fact:
+    prometheus_blackbox_targets: "{{ blackbox_endpoints | map(attribute='url') | list }}"
+    monitoring_scrape_configs: "{{ monitoring_scrape_configs | default([]) + [blackbox_scrape_config] }}"
+  vars:
+    blackbox_scrape_config:
+      job_name: 'blackbox_targets'
+      metrics_path: /probe
+      params:
+        module: [http_2xx]
+      relabel_configs:
+        - source_labels: [__address__]
+          target_label: __param_target
+        - source_labels: [__param_target]
+          target_label: instance
+        - target_label: __address__
+          replacement: blackbox_exporter:9115
+        - source_labels: [__param_target]
+          regex: '(.*)'
+          target_label: target
+      static_configs:
+        - targets: "{{ blackbox_endpoints | map(attribute='url') | list }}"
+  when: blackbox_endpoints is defined and blackbox_endpoints | length > 0
+
+# Create service discovery file for Prometheus to pick up automatically
+- name: Create blackbox targets service discovery file
+  template:
+    src: blackbox_targets.yml.j2
+    dest: "{{ blackbox_exporter_prometheus_config_dir }}/targets/blackbox_targets.yml"
+    owner: "{{ blackbox_exporter_prometheus_user_id }}"
+    group: "{{ blackbox_exporter_prometheus_group_id }}"
+    mode: '0644'
+  become: true
+  when: blackbox_endpoints is defined and blackbox_endpoints | length > 0 

@@ -1,0 +1,44 @@
+---
+# defaults file for alertmanager
+
+alertmanager_image: "prom/alertmanager:latest"
+alertmanager_container_name: "alertmanager"
+alertmanager_data_dir: "/opt/monitoring/alertmanager"
+alertmanager_user: "alertmanager"
+alertmanager_group: "alertmanager"
+alertmanager_user_id: "65532"
+alertmanager_group_id: "65532"
+alertmanager_ports:
+  - "9093:9093"
+alertmanager_volumes:
+  - "{{ alertmanager_data_dir }}/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"
+  - "{{ alertmanager_data_dir }}/data:/alertmanager"
+
+# Email configuration
+alertmanager_email_smtp: "smtp.gmail.com:587"
+alertmanager_email_from: "alertmanager@example.com"
+alertmanager_email_to: "admin@example.com"
+alertmanager_email_auth_username: ""
+alertmanager_email_auth_password: ""
+
+# Telegram configuration
+alertmanager_telegram_bot_token: ""
+alertmanager_telegram_chat_id: 0
+alertmanager_telegram_api_url: "https://api.telegram.org"
+
+# Alert routing configuration
+alertmanager_route_group_by: ['alertname']
+alertmanager_route_group_wait: "30s"
+alertmanager_route_group_interval: "5m"
+alertmanager_route_repeat_interval: "4h"
+
+# Default alert severity levels
+alertmanager_default_severity: "warning"
+alertmanager_critical_severity: "critical"
+
+# Prometheus integration paths (referenced from prometheus role)
+alertmanager_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+alertmanager_prometheus_rules_dir: "/opt/monitoring/prometheus/rules"
+alertmanager_prometheus_data_dir: "/opt/monitoring/prometheus"
+alertmanager_prometheus_user_id: "65533"
+alertmanager_prometheus_group_id: "65533" 

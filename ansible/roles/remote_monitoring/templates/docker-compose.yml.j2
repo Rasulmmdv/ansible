@@ -1,0 +1,19 @@
+services:
+  nginx_exporter:
+    image: {{ nginx_exporter_image }}
+    container_name: {{ nginx_exporter_container_name }}
+    restart: unless-stopped
+    ports:
+      - "{{ nginx_exporter_port }}:9113"
+    environment:
+      - SCRAPE_URI={{ nginx_stub_status_url }}
+    networks:
+      - {{ docker_network_name }}
+      - {{ nginx_docker_network_name }}
+    user: "{{ nginx_exporter_user_id }}:{{ nginx_exporter_group_id }}"
+
+networks:
+  {{ docker_network_name }}:
+    external: true
+  {{ nginx_docker_network_name }}:
+    external: true 

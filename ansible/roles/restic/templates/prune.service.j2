@@ -1,0 +1,18 @@
+[Unit]
+Description={{ restic_service_description }} - Prune Operation
+After=network.target
+
+[Service]
+Type={{ restic_service_type }}
+User={{ restic_user }}
+Group={{ restic_group }}
+WorkingDirectory={{ restic_base_dir }}
+EnvironmentFile={{ restic_config_dir }}/restic.env
+ExecStart={{ restic_scripts_dir }}/prune.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ restic_service_name }}_prune
+Restart={{ restic_service_restart }}
+
+[Install]
+WantedBy=multi-user.target 

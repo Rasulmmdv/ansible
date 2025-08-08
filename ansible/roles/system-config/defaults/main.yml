@@ -1,0 +1,12 @@
+---
+# Default system locale
+system_locale: en_US.UTF-8
+
+# NTP servers configuration
+ntp_servers:
+  - pool.ntp.org
+  - time.google.com
+  - time.windows.com
+
+# System timezone (default to UTC)
+timezone: UTC 

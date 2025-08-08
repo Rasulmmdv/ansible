@@ -1,0 +1,11 @@
+---
+- name: Deploy Blackbox Exporter with Multiple Endpoints
+  hosts: monitoring_servers
+  become: true
+  vars:
+    blackbox_enable_website_monitoring: true
+    blackbox_endpoints:
+
+  roles:
+    - prometheus
+    - blackbox_exporter 

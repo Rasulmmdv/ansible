@@ -1,0 +1,32 @@
+# Start from the exact official SSH agent image
+FROM jenkins/ssh-agent:jdk21
+
+# Define an argument for the Docker GID
+ARG DOCKER_GID={{ jenkins_docker_gid }}
+
+# Switch to the root user to modify the system
+USER root
+
+# Create a new 'docker' group inside the container using the GID from the host.
+# Then, add the existing 'jenkins' user to this new group.
+RUN groupadd -g ${DOCKER_GID} docker && usermod -aG docker jenkins
+
+# Install Docker CLI and additional tools for registry cleanup
+RUN apt-get update && \
+    apt-get install -y apt-transport-https ca-certificates curl gnupg gettext-base jq unzip openssl && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y docker-ce-cli docker-compose-plugin
+
+# Install AWS CLI for S3 operations
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws/
+
+# Note: We don't switch back to jenkins user here because the container's
+# entrypoint script needs root privileges to set up SSH host keys and then
+# switches to jenkins user automatically

@@ -1,0 +1,48 @@
+# Blackbox Exporter targets configuration for Prometheus
+# This file is included in the main prometheus.yml configuration
+
+{% if blackbox_endpoints is defined and blackbox_endpoints | length > 0 %}
+{% for endpoint in blackbox_endpoints %}
+- job_name: 'blackbox-{{ endpoint.name }}'
+  metrics_path: /probe
+  params:
+    module: [{{ endpoint.module | default('http_2xx') }}]
+  scrape_interval: {{ endpoint.interval | default('30s') }}
+  static_configs:
+    - targets:
+        - "{{ endpoint.url }}"
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox_exporter:9115
+    - source_labels: [__param_target]
+      regex: '(.*)'
+      target_label: target
+    - target_label: endpoint_name
+      replacement: "{{ endpoint.name }}"
+{% endfor %}
+{% else %}
+# Legacy blackbox targets configuration (for backward compatibility)
+- job_name: 'blackbox_targets'
+  metrics_path: /probe
+  params:
+    module: [http_2xx]
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox_exporter:9115
+    - source_labels: [__param_target]
+      regex: '(.*)'
+      target_label: target
+  static_configs:
+    - targets:
+{% for target in prometheus_blackbox_targets %}
+      - {{ target }}
+{% endfor %}
+{% endif %} 

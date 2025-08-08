@@ -1,0 +1,22 @@
+services:
+  jenkins-ssh-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DOCKER_GID: {{ jenkins_docker_gid }}
+    container_name: "{{ jenkins_ssh_agent_container_name }}"
+    restart: "{{ jenkins_ssh_agent_restart_policy }}"
+    environment:
+      - JENKINS_AGENT_SSH_PUBKEY={{ jenkins_ssh_public_key }}
+    volumes:
+{% for volume in jenkins_ssh_agent_volumes %}
+      - {{ volume }}
+{% endfor %}
+    networks:
+      - jenkins-network
+
+networks:
+  jenkins-network:
+    name: "{{ jenkins_network_name }}"
+    external: true 

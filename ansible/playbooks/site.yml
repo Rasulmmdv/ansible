@@ -1,0 +1,16 @@
+---
+- name: Configure all servers
+  hosts: all
+  roles:
+    # - update
+    # - common
+    # - fail2ban
+    # - system-config
+    # - docker
+    # - iptables
+    # - traefik
+    # - portainer
+    # - common
+    # - portainer-agent
+    - tailscale
+

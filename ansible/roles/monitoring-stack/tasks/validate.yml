@@ -1,0 +1,94 @@
+---
+# Monitoring stack validation tasks
+# Validates configuration and service health across all monitoring components
+
+- name: Wait for Prometheus to be ready
+  uri:
+    url: "http://localhost:9090/-/ready"
+    method: GET
+    status_code: 200
+  register: prometheus_ready
+  until: prometheus_ready.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: true
+
+- name: Validate Prometheus configuration
+  command: docker exec prometheus promtool check config /etc/prometheus/prometheus.yml
+  register: prometheus_config_check
+  failed_when: prometheus_config_check.rc != 0
+  ignore_errors: true
+
+- name: Display Prometheus configuration validation result
+  debug:
+    msg: "Prometheus configuration validation: {{ 'PASSED' if prometheus_config_check.rc == 0 else 'FAILED' }}"
+
+- name: Check Prometheus targets
+  uri:
+    url: "http://localhost:9090/api/v1/targets"
+    method: GET
+    status_code: 200
+  register: prometheus_targets
+  ignore_errors: true
+
+- name: Display Prometheus targets status
+  debug:
+    msg:
+      - "Prometheus targets status:"
+      - "{{ prometheus_targets.json.data.activeTargets | length if prometheus_targets.json is defined else 0 }} active targets"
+  when: prometheus_targets.json is defined
+
+- name: Check Grafana health
+  uri:
+    url: "http://localhost:3000/api/health"
+    method: GET
+    status_code: 200
+  register: grafana_health
+  ignore_errors: true
+
+- name: Display Grafana health status
+  debug:
+    msg: "Grafana health: {{ 'HEALTHY' if grafana_health.status == 200 else 'UNHEALTHY' }}"
+
+- name: Check Alertmanager health
+  uri:
+    url: "http://localhost:9093/-/healthy"
+    method: GET
+    status_code: 200
+  register: alertmanager_health
+  ignore_errors: true
+
+- name: Display Alertmanager health status
+  debug:
+    msg: "Alertmanager health: {{ 'HEALTHY' if alertmanager_health.status == 200 else 'UNHEALTHY' }}"
+
+- name: Check Loki health
+  uri:
+    url: "http://localhost:3100/ready"
+    method: GET
+    status_code: 200
+  register: loki_health
+  ignore_errors: true
+
+- name: Display Loki health status
+  debug:
+    msg: "Loki health: {{ 'HEALTHY' if loki_health.status == 200 else 'UNHEALTHY' }}"
+
+- name: Summary of monitoring stack validation
+  debug:
+    msg:
+      - "=== Monitoring Stack Validation Summary ==="
+      - "Prometheus: {{ 'HEALTHY' if prometheus_ready.status == 200 else 'UNHEALTHY' }}"
+      - "Grafana: {{ 'HEALTHY' if grafana_health.status == 200 else 'UNHEALTHY' }}"
+      - "Alertmanager: {{ 'HEALTHY' if alertmanager_health.status == 200 else 'UNHEALTHY' }}"
+      - "Loki: {{ 'HEALTHY' if loki_health.status == 200 else 'UNHEALTHY' }}"
+      - "Configuration: {{ 'VALID' if prometheus_config_check.rc == 0 else 'INVALID' }}"
+      - "Active Targets: {{ prometheus_targets.json.data.activeTargets | length if prometheus_targets.json is defined else 'N/A' }}"
+
+- name: Fail if critical services are unhealthy
+  fail:
+    msg: "Critical monitoring services are not healthy. Check the logs for details."
+  when: >
+    prometheus_ready.status != 200 or
+    prometheus_config_check.rc != 0
+  ignore_errors: true

@@ -1,0 +1,26 @@
+---
+# Portainer Agent Configuration
+
+# Agent image and version
+portainer_agent_image: "portainer/agent:latest"
+
+# Data directory for agent
+portainer_agent_data_directory: "/opt/portainer-agent"
+
+# Docker compose configuration
+portainer_agent_compose_dir: "/etc/portainer-agent"
+portainer_agent_compose_path: "{{ portainer_agent_compose_dir }}/docker-compose.yml"
+
+# User and group for running the agent
+portainer_agent_user: "root"
+portainer_agent_group: "root"
+
+# Container configuration
+portainer_agent_restart_policy: "always"
+portainer_agent_port: "9001"
+
+# Agent configuration
+portainer_agent_log_level: "INFO"
+portainer_agent_edge: false
+portainer_agent_edge_key: ""
+portainer_agent_edge_id: "" 

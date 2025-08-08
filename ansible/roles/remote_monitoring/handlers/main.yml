@@ -1,0 +1,14 @@
+---
+# handlers file for remote_monitoring
+
+- name: reload nginx
+  command: docker exec {{ nginx_docker_container_name }} nginx -s reload
+  become: true
+
+- name: restart nginx_exporter
+  community.docker.docker_container:
+    name: "{{ nginx_exporter_container_name }}"
+    state: started
+    restart: true
+  become: true
+

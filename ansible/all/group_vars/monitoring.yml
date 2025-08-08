@@ -1,0 +1,78 @@
+---
+# Centralized monitoring stack configuration
+# This file contains shared variables for all monitoring components
+
+# Monitoring stack global configuration
+monitoring_stack:
+  network_name: "monitoring"
+  data_root: "/opt/monitoring"
+
+# cAdvisor configuration for monitoring servers
+# Disable AppArmor to avoid container startup issues
+cadvisor_security_opts: []
+
+# Prometheus configuration
+prometheus_config:
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  
+  # Alertmanager configuration (populated by alertmanager role)
+  alerting:
+    alertmanagers: "{{ monitoring_alertmanagers | default([]) }}"
+  
+  # Alert rules configuration
+  rule_files:
+    - "/etc/prometheus/rules/*.yml"
+  
+  # Base scrape configurations
+  scrape_configs:
+    - job_name: 'prometheus'
+      static_configs:
+        - targets: ['localhost:9090']
+    
+    - job_name: 'node_exporter'
+      static_configs:
+        - targets: ['host.docker.internal:9100']
+          labels:
+            instance: "{{ ansible_default_ipv4.address | default('host.docker.internal') }}"
+    
+    - job_name: 'cadvisor'
+      static_configs:
+        - targets: ['cadvisor:8080']
+    
+    - job_name: 'blackbox_exporter'
+      static_configs:
+        - targets: ['blackbox_exporter:9115']
+
+# Default blackbox monitoring targets
+prometheus_blackbox_targets:
+  - "http://example.com"
+  - "https://google.com"
+  - "http://prometheus.io"
+
+# Shared directories
+monitoring_shared_dirs:
+  prometheus_data: "{{ monitoring_stack.data_root }}/prometheus"
+  prometheus_config: "{{ monitoring_stack.data_root }}/prometheus/config"
+  prometheus_rules: "{{ monitoring_stack.data_root }}/prometheus/rules"
+  prometheus_targets: "{{ monitoring_stack.data_root }}/prometheus/targets"
+  grafana_data: "{{ monitoring_stack.data_root }}/grafana"
+  alertmanager_data: "{{ monitoring_stack.data_root }}/alertmanager"
+  loki_data: "{{ monitoring_stack.data_root }}/loki"
+  alloy_data: "{{ monitoring_stack.data_root }}/alloy"
+
+# Common user/group IDs for consistency
+monitoring_users:
+  prometheus:
+    uid: 65533
+    gid: 65533
+  alertmanager:
+    uid: 65532
+    gid: 65532
+  grafana:
+    uid: 472
+    gid: 472
+  loki:
+    uid: 10001
+    gid: 10001 

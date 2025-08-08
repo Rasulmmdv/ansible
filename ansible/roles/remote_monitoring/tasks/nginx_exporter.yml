@@ -1,0 +1,61 @@
+---
+# Deploy Nginx Exporter
+
+- name: Deploy docker-compose.yml for nginx_exporter
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ nginx_exporter_data_dir }}/docker-compose.yml"
+    owner: "{{ nginx_exporter_user }}"
+    group: "{{ nginx_exporter_group }}"
+    mode: '0644'
+  become: true
+  notify: restart nginx_exporter
+
+- name: Stop and remove existing nginx_exporter container
+  command: docker compose down
+  args:
+    chdir: "{{ nginx_exporter_data_dir }}"
+  become: true
+  failed_when: false
+  changed_when: false
+
+# - name: Force remove any existing nginx_exporter container
+#   command: docker rm -f {{ nginx_exporter_container_name }}
+#   become: true
+#   failed_when: false
+#   changed_when: false
+
+- name: Start nginx_exporter with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ nginx_exporter_data_dir }}"
+  become: true
+  notify: restart nginx_exporter
+
+- name: Wait for nginx_exporter to be ready
+  uri:
+    url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+    method: GET
+    status_code: [200]
+  register: nginx_exporter_ready
+  retries: 10
+  delay: 5
+  until: nginx_exporter_ready is succeeded
+
+- name: Verify nginx_exporter metrics endpoint
+  uri:
+    url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+    method: GET
+    status_code: [200]
+  register: nginx_exporter_metrics
+  changed_when: false
+
+- name: Verify nginx_exporter can scrape nginx stub_status
+  uri:
+    url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+    method: GET
+  register: nginx_exporter_scrape_check
+  retries: 3
+  delay: 5
+  until: nginx_exporter_scrape_check.status == 200
+  changed_when: false 

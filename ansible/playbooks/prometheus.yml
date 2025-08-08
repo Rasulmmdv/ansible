@@ -1,0 +1,6 @@
+---
+- name: Deploy Prometheus monitoring
+  hosts: all
+  become: true
+  roles:
+    - prometheus 

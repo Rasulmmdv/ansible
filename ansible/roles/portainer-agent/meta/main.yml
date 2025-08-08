@@ -1,0 +1,28 @@
+---
+galaxy_info:
+  author: your_name
+  description: Ansible role to install and configure Portainer Agent
+  company: your_company
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: CentOS
+      versions:
+        - all
+    - name: RHEL
+      versions:
+        - all
+  galaxy_tags:
+    - docker
+    - portainer
+    - agent
+    - monitoring
+
+dependencies:
+  - role: docker 

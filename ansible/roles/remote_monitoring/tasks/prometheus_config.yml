@@ -1,0 +1,71 @@
+---
+# Update Prometheus configuration using dynamic file-based service discovery
+
+- name: Ensure targets directory exists
+  file:
+    path: "{{ prometheus_config_dir }}/targets"
+    state: directory
+    mode: '0755'
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+
+- name: Ensure scrape_configs directory exists
+  file:
+    path: "{{ prometheus_config_dir }}/scrape_configs"
+    state: directory
+    mode: '0755'
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+
+- name: Ensure nginx_exporter is healthy before updating Prometheus
+  uri:
+    url: "http://{{ inventory_hostname }}:{{ nginx_exporter_port }}/metrics"
+    method: GET
+    status_code: [200]
+  register: nginx_exporter_health_check
+  retries: 5
+  delay: 3
+  until: nginx_exporter_health_check is succeeded
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+
+- name: Create individual target file for this host
+  template:
+    src: host_target.yml.j2
+    dest: "{{ prometheus_config_dir }}/targets/{{ inventory_hostname }}_nginx.yml"
+    backup: yes
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  when: nginx_exporter_health_check is succeeded
+
+- name: Verify target file syntax
+  command: cat "{{ prometheus_config_dir }}/targets/{{ inventory_hostname }}_nginx.yml"
+  register: target_file_check
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  changed_when: false
+
+- name: Ensure Prometheus scrape config includes file-based discovery
+  template:
+    src: prometheus_scrape_config.yml.j2
+    dest: "{{ prometheus_config_dir }}/scrape_configs/remote_nginx.yml"
+    backup: yes
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  when: prometheus_scrape_config_updated is not defined
+
+- name: Mark Prometheus scrape config as updated
+  set_fact:
+    prometheus_scrape_config_updated: true
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+
+- name: Reload Prometheus configuration
+  uri:
+    url: "http://localhost:9090/-/reload"
+    method: POST
+    status_code: [200]
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  failed_when: false
+  changed_when: false 

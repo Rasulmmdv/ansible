@@ -1,0 +1,40 @@
+# handlers file for iptables
+---
+# No handlers required for basic iptables role
+
+# Handler to reload iptables rules
+- name: Reload iptables rules
+  become: true
+  ansible.builtin.command: iptables-restore < /etc/iptables.rules
+
+# Handler to save iptables rules
+- name: Save iptables rules
+  listen: "commit iptables rules"
+  shell: |
+    mkdir -p /etc/iptables
+    iptables-save > /etc/iptables/rules.v4
+    ip6tables-save > /etc/iptables/rules.v6
+  become: true
+
+- name: Restart netfilter-persistent
+  listen: "commit iptables rules"
+  service:
+    name: netfilter-persistent
+    state: restarted
+  become: true
+  when: not ansible_check_mode
+
+- name: Debug Docker restart
+  listen: "commit iptables rules"
+  debug:
+    msg: "iptables rules changed. Notifying Docker to restart and recreate its firewall chains to avoid conflicts."
+  when: docker_installed
+
+- name: Restart docker to recreate its chains
+  listen: "commit iptables rules"
+  systemd:
+    name: docker
+    state: restarted
+    daemon_reload: yes
+  become: true
+  when: docker_installed

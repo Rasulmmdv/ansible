@@ -1,0 +1,48 @@
+jenkins:
+  systemMessage: "Jenkins configured automatically by Ansible"
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_username }}"
+          password: "{{ jenkins_admin_password }}"
+          
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:{{ jenkins_admin_username }}"
+        - "Overall/Read:authenticated"
+        
+  remotingSecurity:
+    enabled: true
+    
+  numExecutors: 2
+  
+  mode: NORMAL
+  
+  slaveAgentPort: {{ jenkins_agent_port }}
+  
+  disableRememberMe: false
+  
+  markupFormatter: "plainText"
+  
+tool:
+  git:
+    installations:
+      - name: "Default Git"
+        home: "/usr/bin/git"
+        
+unclassified:
+  location:
+    adminAddress: "admin@{{ ansible_fqdn | default(ansible_hostname) }}"
+    url: "http://{{ ansible_fqdn | default(ansible_hostname) }}:{{ jenkins_host_port }}/"
+    
+  globalLibraries:
+    libraries:
+      - name: "shared-library"
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "https://github.com/example/jenkins-shared-library.git"

@@ -1,0 +1,19 @@
+---
+# Monitoring stack handlers
+# Centralized handlers for coordinating monitoring stack operations
+
+- name: restart monitoring stack
+  debug:
+    msg: "Restarting monitoring stack services..."
+  notify:
+    - restart prometheus
+    - restart grafana
+    - restart alertmanager
+    - restart loki
+    - restart alloy
+    - restart cadvisor
+    - restart blackbox_exporter
+
+- name: validate monitoring stack
+  include_tasks: validate.yml
+  listen: validate monitoring stack

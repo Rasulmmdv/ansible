@@ -1,0 +1,41 @@
+---
+- name: "Deploy Docker Registry"
+  hosts: ci_infrastructure
+  become: true
+  vars:
+    # REQUIRED: Set your S3 credentials for Docker Registry
+    # docker_registry_s3_access_key: ""
+    # docker_registry_s3_secret_key: ""
+    # Registry-specific configuration
+    docker_registry_s3_region: "ru-1"
+    docker_registry_s3_region_endpoint: "https://s3.ru-1.storage.selcloud.ru"
+    docker_registry_s3_bucket: "{{ project_name }}-registry"
+
+  pre_tasks:
+    - name: Set base Docker daemon options (preserving existing configuration)
+      set_fact:
+        base_docker_options:
+          iptables: true
+          log-driver: "journald"
+          live-restore: true
+          "default-ulimits":
+            nproc:
+              Name: "nproc"
+              Hard: 1024
+              Soft: 1024
+            nofile:
+              Name: "nofile"
+              Hard: 65536
+              Soft: 65536
+
+    - name: Merge Docker daemon options with registry settings
+      set_fact:
+        docker_daemon_options: "{{ base_docker_options | combine({'insecure-registries': ['infra-01:5000', 'localhost:5000']}) }}"
+
+    - name: Configure docker daemon for registry
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: configure-daemon.yml
+
+  roles:
+    - role: docker-registry

@@ -1,0 +1,176 @@
+groups:
+  - name: prometheus_retention_alerts
+    rules:
+      # Storage Space Alerts
+      - alert: PrometheusStorageSpaceHigh
+        expr: (prometheus_tsdb_size_bytes / prometheus_config_prometheus_retention_size_bytes) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: prometheus-storage
+        annotations:
+          summary: "Prometheus storage space usage high"
+          description: "Prometheus storage is using {{ $value }}% of configured retention size limit"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/prometheus-storage-high"
+
+      - alert: PrometheusStorageSpaceCritical
+        expr: (prometheus_tsdb_size_bytes / prometheus_config_prometheus_retention_size_bytes) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: prometheus-storage
+        annotations:
+          summary: "Prometheus storage space critically high"
+          description: "Prometheus storage is using {{ $value }}% of configured retention size limit"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/prometheus-storage-critical"
+
+      # Retention Time Alerts
+      - alert: PrometheusRetentionTimeHigh
+        expr: prometheus_tsdb_lowest_timestamp_seconds < (time() - (30 * 24 * 3600))
+        for: 5m
+        labels:
+          severity: warning
+          service: prometheus-storage
+        annotations:
+          summary: "Prometheus data retention approaching limit"
+          description: "Prometheus has data older than 30 days, retention cleanup may be needed"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/prometheus-retention-high"
+
+      # WAL Alerts
+      - alert: PrometheusWALSizeHigh
+        expr: prometheus_tsdb_wal_fsync_duration_seconds > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: prometheus-storage
+        annotations:
+          summary: "Prometheus WAL fsync duration high"
+          description: "Prometheus WAL fsync is taking {{ $value }}s, may indicate storage issues"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/prometheus-wal-slow"
+
+      # Compaction Alerts
+      - alert: PrometheusCompactionFailed
+        expr: rate(prometheus_tsdb_compactions_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: prometheus-storage
+        annotations:
+          summary: "Prometheus compaction failures detected"
+          description: "Prometheus is experiencing compaction failures at {{ $value }} failures/sec"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/prometheus-compaction-failed"
+
+      # Block Loading Alerts
+      - alert: PrometheusBlockLoadingFailed
+        expr: rate(prometheus_tsdb_symbol_table_size_bytes[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: prometheus-storage
+        annotations:
+          summary: "Prometheus block loading may be failing"
+          description: "Prometheus symbol table size has not changed, may indicate block loading issues"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/prometheus-block-loading-failed"
+
+  - name: loki_retention_alerts
+    rules:
+      # Loki Storage Alerts
+      - alert: LokiIngesterFlushFailed
+        expr: rate(loki_ingester_flush_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: loki-storage
+        annotations:
+          summary: "Loki ingester flush failures detected"
+          description: "Loki ingester is experiencing flush failures at {{ $value }} failures/sec"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/loki-flush-failed"
+
+      - alert: LokiCompactorFailed
+        expr: rate(loki_compactor_runs_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: loki-storage
+        annotations:
+          summary: "Loki compactor failures detected"
+          description: "Loki compactor is experiencing failures at {{ $value }} failures/sec"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/loki-compactor-failed"
+
+      # Loki Retention Alerts
+      - alert: LokiRetentionNotWorking
+        expr: |
+          (
+            loki_chunk_store_index_entries_per_chunk > 0
+            and
+            absent(rate(loki_compactor_marked_for_deletion_total[1h]))
+          )
+        for: 30m
+        labels:
+          severity: warning
+          service: loki-storage
+        annotations:
+          summary: "Loki retention may not be working"
+          description: "Loki has chunks but no retention deletions detected in the last hour"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/loki-retention-not-working"
+
+      # Loki Query Performance
+      - alert: LokiQueryTimeout
+        expr: rate(loki_query_frontend_retries_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: loki-storage
+        annotations:
+          summary: "Loki query timeouts detected"
+          description: "Loki is experiencing query retries at {{ $value }} retries/sec"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/loki-query-timeout"
+
+      # Loki WAL Alerts
+      - alert: LokiWALReplayFailed
+        expr: rate(loki_ingester_wal_replay_duration_seconds[5m]) > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: loki-storage
+        annotations:
+          summary: "Loki WAL replay taking too long"
+          description: "Loki WAL replay is taking {{ $value }}s, may indicate storage issues"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/loki-wal-replay-slow"
+
+  - name: storage_disk_alerts
+    rules:
+      # Disk Space Alerts for Monitoring Data
+      - alert: MonitoringDiskSpaceHigh
+        expr: (node_filesystem_avail_bytes{mountpoint="/opt/monitoring"} / node_filesystem_size_bytes{mountpoint="/opt/monitoring"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring-storage
+        annotations:
+          summary: "Monitoring disk space low"
+          description: "Monitoring disk space is {{ $value }}% full, cleanup may be needed"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/monitoring-disk-space-low"
+
+      - alert: MonitoringDiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/opt/monitoring"} / node_filesystem_size_bytes{mountpoint="/opt/monitoring"}) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+          service: monitoring-storage
+        annotations:
+          summary: "Monitoring disk space critically low"
+          description: "Monitoring disk space is {{ $value }}% full, immediate action required"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/monitoring-disk-space-critical"
+
+      # Inodes Alerts
+      - alert: MonitoringInodesHigh
+        expr: (node_filesystem_files_free{mountpoint="/opt/monitoring"} / node_filesystem_files{mountpoint="/opt/monitoring"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring-storage
+        annotations:
+          summary: "Monitoring filesystem inodes low"
+          description: "Monitoring filesystem has {{ $value }}% free inodes remaining"
+          runbook_url: "https://docs.monitoring.example.com/runbooks/monitoring-inodes-low"

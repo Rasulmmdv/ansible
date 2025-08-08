@@ -1,0 +1,79 @@
+---
+# Jenkins servers inventory and configuration
+# Path: environments/all/group_vars/jenkins_servers.yml
+
+# Jenkins Docker Configuration
+jenkins_image: "jenkins/jenkins:lts-jdk21"
+jenkins_container_name: "jenkins"
+jenkins_host_port: 8080
+jenkins_agent_port: 50000
+
+# Plugin installation method
+jenkins_plugin_installation_method: "groovy"
+jenkins_use_groovy_plugin_install: true
+
+# Security Configuration
+jenkins_admin_username: "admin"
+jenkins_admin_password: "{{ vault_jenkins_admin_password | default('changeme') }}"
+
+# Performance Tuning
+jenkins_java_opts: "-Xmx4096m -Xms2048m -Djenkins.install.runSetupWizard=false -Djava.awt.headless=true"
+
+# Directories
+jenkins_home: "/var/lib/jenkins"
+jenkins_data_dir: "/opt/jenkins"
+
+
+# Custom Plugin List
+jenkins_plugins_list:
+  # Core plugins
+  - "ant"
+  - "build-timeout"
+  - "credentials-binding"
+  - "credentials"
+  - "email-ext"
+  - "git"
+  - "github-branch-source"
+  - "gitlab-branch-source"
+  - "gitlab-plugin"
+  - "gitlab-webhook"
+  - "gradle"
+  - "ldap"
+  - "mailer"
+  - "matrix-auth"
+  - "pam-auth"
+  - "ssh-slaves"
+  - "timestamper"
+  - "ws-cleanup"
+  
+  # Pipeline plugins
+  - "pipeline-build-step"
+  - "pipeline-github-lib"
+  - "pipeline-graph-analysis"
+  - "pipeline-input-step"
+  - "pipeline-milestone-step"
+  - "pipeline-model-api"
+  - "pipeline-model-definition"
+  - "pipeline-model-extensions"
+  - "pipeline-rest-api"
+  - "pipeline-stage-step"
+  - "pipeline-stage-tags-metadata"
+  - "pipeline-stage-view"
+  - "workflow-aggregator"
+  - "workflow-api"
+  - "workflow-basic-steps"
+  - "workflow-cps"
+  - "workflow-cps-global-lib"
+  - "workflow-durable-task-step"
+  - "workflow-job"
+  - "workflow-multibranch"
+  - "workflow-scm-step"
+  - "workflow-step-api"
+  - "workflow-support"
+  
+  # Additional useful plugins
+  - "blueocean"
+  - "docker-plugin"
+  - "prometheus"
+  - "slack"
+  - "sonar"

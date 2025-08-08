@@ -1,0 +1,68 @@
+#!groovy
+
+import jenkins.model.*
+import hudson.security.*
+import hudson.model.User
+import jenkins.install.InstallState
+
+def instance = Jenkins.getInstance()
+
+try {
+    println "Starting basic security configuration..."
+
+    // Skip setup wizard
+    if (!instance.isQuietingDown() && !instance.isTerminating()) {
+        instance.setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
+    }
+
+    // Configure security realm
+    def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+    
+    // Check if admin user already exists
+    def adminUsername = '{{ jenkins_admin_username }}'
+    def adminPassword = '{{ jenkins_admin_password }}'
+    
+    if (User.getById(adminUsername, false) == null) {
+        println "Creating admin user: ${adminUsername}"
+        hudsonRealm.createAccount(adminUsername, adminPassword)
+    } else {
+        println "Admin user ${adminUsername} already exists"
+    }
+    
+    instance.setSecurityRealm(hudsonRealm)
+
+    // Set authorization strategy
+    def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+    strategy.setAllowAnonymousRead(false)
+    instance.setAuthorizationStrategy(strategy)
+    println "Authorization strategy configured"
+
+    // Disable CLI remoting (with null check)
+    try {
+        def cliDescriptor = instance.getDescriptor("jenkins.CLI")
+        if (cliDescriptor != null) {
+            def cliInstance = cliDescriptor.get()
+            if (cliInstance != null && cliInstance.hasProperty('enabled')) {
+                cliInstance.setEnabled(false)
+                println "CLI remoting disabled"
+            }
+        }
+    } catch (Exception e) {
+        println "Warning: Could not disable CLI remoting: ${e.message}"
+    }
+
+    // Note: AdminWhitelistRule is deprecated and removed in newer Jenkins versions
+    // Agent to Master Access Control is now handled automatically by Jenkins
+    println "Agent to Master Access Control: Using Jenkins default security settings"
+
+    // Save configuration
+    instance.save()
+    println "Configuration saved successfully"
+
+    println "✅ Basic security configured successfully"
+    
+} catch (Exception e) {
+    println "❌ Error configuring basic security: ${e.message}"
+    e.printStackTrace()
+    // Don't throw the exception to avoid breaking Jenkins startup
+}

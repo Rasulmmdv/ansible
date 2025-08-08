@@ -1,0 +1,145 @@
+---
+# tasks file for prometheus
+
+- name: Create Prometheus group
+  group:
+    name: "{{ prometheus_group }}"
+    gid: "{{ prometheus_group_id }}"
+  become: true
+
+- name: Create Prometheus user
+  user:
+    name: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    uid: "{{ prometheus_user_id }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+  become: true
+
+- name: Create Prometheus directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0755'
+  loop:
+    - "{{ prometheus_data_dir }}"
+    - "{{ prometheus_data_dir }}/data"
+    - "{{ prometheus_config_dir }}"
+    - "{{ prometheus_rules_dir }}"
+    - "{{ prometheus_alerts_dir }}"
+    - "{{ prometheus_config_dir }}/targets"  # For file-based service discovery
+  become: true
+
+- name: Deploy docker-compose.yml for Prometheus
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ prometheus_data_dir }}/docker-compose.yml"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0644'
+  become: true
+
+- name: Deploy prometheus.yml config
+  template:
+    src: prometheus.yml.j2
+    dest: "{{ prometheus_config_dir }}/prometheus.yml"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0644'
+  become: true
+
+- name: Deploy Loki targets for file-based service discovery
+  template:
+    src: loki_targets.yml.j2
+    dest: "{{ prometheus_config_dir }}/targets/loki_targets.yml"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0644'
+  become: true
+  notify: reload prometheus
+
+- name: Ensure data directory has correct permissions
+  file:
+    path: "{{ prometheus_data_dir }}/data"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0755'
+    recurse: yes
+  become: true
+
+- name: Start Prometheus with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ prometheus_data_dir }}"
+  become: true
+  notify: restart prometheus
+
+# Deploy retention monitoring and management
+- name: Deploy retention alert rules
+  copy:
+    src: retention_alerts.yml
+    dest: "{{ prometheus_rules_dir }}/retention_alerts.yml"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0644'
+  become: true
+  notify: reload prometheus
+
+- name: Deploy retention cleanup script
+  copy:
+    src: cleanup_retention.sh
+    dest: "{{ prometheus_data_dir }}/cleanup_retention.sh"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0755'
+  become: true
+
+- name: Create retention cleanup symlink
+  file:
+    src: "{{ prometheus_data_dir }}/cleanup_retention.sh"
+    dest: "/usr/local/bin/cleanup-monitoring-retention"
+    state: link
+  become: true
+
+# Create retention monitoring cron job
+- name: Create retention monitoring cron job
+  cron:
+    name: "Monitor retention and cleanup"
+    minute: "0"
+    hour: "2"
+    job: "{{ prometheus_data_dir }}/cleanup_retention.sh --check >> /var/log/monitoring-retention.log 2>&1"
+    user: "{{ prometheus_user }}"
+  become: true
+  when: prometheus_retention.cleanup.enabled | default(true)
+
+# Verify retention configuration
+- name: Wait for Prometheus to be ready
+  uri:
+    url: "http://localhost:9090/-/ready"
+    method: GET
+    status_code: 200
+  register: prometheus_ready
+  until: prometheus_ready.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: true
+
+- name: Check Prometheus retention configuration
+  uri:
+    url: "http://localhost:9090/api/v1/status/runtimeinfo"
+    method: GET
+    status_code: 200
+  register: prometheus_runtime_info
+  ignore_errors: true
+
+- name: Display Prometheus retention settings
+  debug:
+    msg:
+      - "Prometheus retention configuration:"
+      - "Time retention: {{ prometheus_retention.time }}"
+      - "Size retention: {{ prometheus_retention.size }}"
+      - "Runtime retention: {{ prometheus_runtime_info.json.data.storageRetention | default('Not available') }}"
+  when: prometheus_runtime_info.json is defined 

@@ -1,0 +1,31 @@
+---
+# handlers file for traefik
+
+- name: restart traefik
+  command: docker compose restart
+  args:
+    chdir: "{{ traefik_data_dir }}"
+  become: true
+  listen: restart traefik
+
+- name: reload traefik
+  command: docker compose kill -s USR1 traefik
+  args:
+    chdir: "{{ traefik_data_dir }}"
+  become: true
+  ignore_errors: true
+  listen: reload traefik
+
+- name: stop traefik
+  command: docker compose down
+  args:
+    chdir: "{{ traefik_data_dir }}"
+  become: true
+  listen: stop traefik
+
+- name: start traefik
+  command: docker compose up -d
+  args:
+    chdir: "{{ traefik_data_dir }}"
+  become: true
+  listen: start traefik 

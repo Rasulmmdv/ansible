@@ -1,0 +1,83 @@
+# Default variables for WireGuard
+# NOTE: Some variables must be set in your playbook or inventory (see playbook example)
+
+# Directory to store WireGuard configuration
+wireguard_remote_directory: /etc/wireguard
+
+# The default port WireGuard will listen on
+wireguard_port: "51820"
+
+# The default interface name for WireGuard
+wireguard_interface: "wg0"
+
+# The default configuration filename
+wireguard_conf_filename: "{{ wireguard_interface }}.conf"
+
+# The default owner and group for the config file
+wireguard_conf_owner: root
+wireguard_conf_group: root
+wireguard_conf_mode: "0600"
+
+# Whether to backup the config file when changed
+wireguard_conf_backup: false
+
+# Package cache settings
+wireguard_update_cache: true
+wireguard_cache_valid_time: "3600"
+
+# Interface settings
+# wireguard_address: Must be defined in host_vars for each server
+wireguard_addresses: []  # List of additional addresses if needed
+# wireguard_private_key: ""  # Set in playbook or host_vars
+wireguard_mtu: ~  # Optional MTU setting
+wireguard_fwmark: ~  # Optional fwmark setting
+wireguard_table: ~  # Optional routing table setting
+
+# Site-to-site VPN configuration
+wireguard_site_to_site_enabled: false
+wireguard_peers: []  # List of peer configurations for site-to-site
+
+# Force regeneration of site-to-site keys (set to true to regenerate all keys)
+wireguard_force_key_regeneration: false
+
+# Failover configuration
+wireguard_failover_enabled: false
+wireguard_failover_peers: []  # List of failover peer configurations
+
+# Peer management:
+# Peers are managed by the create_wg_client.sh script deployed to /usr/local/bin/
+# Do not define peers in Ansible variables
+
+# Whether to restart the interface when config changes
+wireguard_interface_restart: true
+
+# DNS configuration
+dnsmasq_conf_file: "/etc/dnsmasq.conf"
+# dnsmasq_domain: "" # Set in playbook or host_vars
+# domain: "" # Set in playbook or host_vars
+dnsmasq_host_entries:
+  - name: "jenkins"
+    ip: "10.0.0.1"
+    # domain: "" # Set in playbook or host_vars
+
+# Services that should be accessible only through VPN
+# These ports will be blocked from external access but allowed from VPN network
+wireguard_manage_iptables: true
+wireguard_vpn_only_ports:
+  tcp:
+    - 5432  # PostgreSQL
+    - 3306  # MySQL
+    - 6379  # Redis
+    - 27017 # MongoDB
+    - 443   # HTTPS (for Jenkins and other services)
+  udp: []
+
+# Additional services you want to protect (add your custom ports here)
+# Example:
+# wireguard_vpn_only_ports:
+#   tcp:
+#     - 5432   # PostgreSQL
+#     - 8080   # Custom app
+#     - 9200   # Elasticsearch
+#   udp:
+#     - 1194   # OpenVPN

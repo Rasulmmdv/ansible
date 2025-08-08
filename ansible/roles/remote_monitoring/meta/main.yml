@@ -1,0 +1,30 @@
+---
+galaxy_info:
+  author: "Tesoro Infrastructure Team"
+  description: "Deploy Nginx Exporter on remote machines for Prometheus monitoring"
+  company: "Tesoro"
+  license: "MIT"
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: CentOS
+      versions:
+        - all
+    - name: RHEL
+      versions:
+        - all
+  galaxy_tags:
+    - monitoring
+    - prometheus
+    - nginx
+    - docker
+    - metrics
+
+dependencies:
+  - role: common
+    when: common_role_available | default(false) 

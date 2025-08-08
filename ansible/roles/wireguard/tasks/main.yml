@@ -1,0 +1,269 @@
+---
+# Tasks for WireGuard setup using traditional wg-quick
+
+- name: Clear any cached host errors
+  ansible.builtin.meta: clear_host_errors
+
+- name: Verify Ubuntu version
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "Ubuntu"
+      - ansible_distribution_version is version('17.10', '>=')
+    fail_msg: "This role requires Ubuntu 17.10 or later"
+    success_msg: "Ubuntu version requirements met"
+
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: "{{ wireguard_update_cache }}"
+    cache_valid_time: "{{ wireguard_cache_valid_time }}"
+  become: true
+
+- name: Install WireGuard
+  ansible.builtin.apt:
+    name: wireguard
+    state: present
+  become: true
+
+- name: Check if WireGuard config file exists
+  ansible.builtin.stat:
+    path: "/etc/wireguard/{{ wireguard_interface }}.conf"
+  register: existing_wg_config
+
+- name: Extract private key from existing config if it exists
+  ansible.builtin.shell: "grep -oP 'PrivateKey\\s*=\\s*\\K.*' \"/etc/wireguard/{{ wireguard_interface }}.conf\""
+  register: existing_private_key
+  when: existing_wg_config.stat.exists
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Use existing private key if found
+  ansible.builtin.set_fact:
+    wireguard_private_key: "{{ existing_private_key.stdout }}"
+  when:
+    - existing_wg_config.stat.exists
+    - existing_private_key.rc == 0
+    - existing_private_key.stdout | length > 0
+  no_log: true
+
+- name: Check if WireGuard private key is still needed
+  ansible.builtin.set_fact:
+    wireguard_private_key_needed: "{{ wireguard_private_key is not defined or wireguard_private_key | length == 0 }}"
+
+- name: Generate WireGuard private key if needed
+  ansible.builtin.command: wg genkey
+  register: wg_private_key_result
+  when: wireguard_private_key_needed
+  changed_when: false
+  no_log: true
+
+- name: Set WireGuard private key fact if generated
+  ansible.builtin.set_fact:
+    wireguard_private_key: "{{ wg_private_key_result.stdout }}"
+  when: wireguard_private_key_needed
+  no_log: true
+
+- name: Show whether using existing or new private key
+  ansible.builtin.debug:
+    msg: "{{ 'Using existing private key from config file' if not wireguard_private_key_needed else 'Generated new private key' }}"
+
+- name: Generate WireGuard public key
+  ansible.builtin.command: "wg pubkey"
+  args:
+    stdin: "{{ wireguard_private_key }}"
+  register: wg_public_key_result
+  changed_when: false
+  no_log: true
+
+- name: Set WireGuard public key fact
+  ansible.builtin.set_fact:
+    wireguard_public_key: "{{ wg_public_key_result.stdout }}"
+  no_log: true
+
+- name: Debug WireGuard address configuration
+  ansible.builtin.debug:
+    msg: 
+      - "Host: {{ inventory_hostname }}"
+      - "WireGuard Address: {{ wireguard_address | default('NOT DEFINED') }}"
+      - "Site-to-site enabled: {{ wireguard_site_to_site_enabled | default(false) }}"
+  when: wireguard_site_to_site_enabled | default(false)
+
+- name: Create WireGuard configuration directory
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    mode: "0700"
+    owner: root
+    group: root
+  become: true
+
+- name: Stop WireGuard service before configuration changes
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_interface }}"
+    state: stopped
+  become: true
+  failed_when: false
+
+- name: Remove existing WireGuard interface if it exists
+  ansible.builtin.command: ip link delete {{ wireguard_interface }}
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Deploy WireGuard PostUp script
+  ansible.builtin.template:
+    src: wireguard-postup.sh.j2
+    dest: /usr/local/bin/wireguard-postup.sh
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+
+- name: Deploy WireGuard PostDown script
+  ansible.builtin.template:
+    src: wireguard-postdown.sh.j2
+    dest: /usr/local/bin/wireguard-postdown.sh
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+
+- name: Ensure WireGuard configuration file exists
+  ansible.builtin.file:
+    path: "/etc/wireguard/{{ wireguard_interface }}.conf"
+    state: touch
+    owner: "{{ wireguard_conf_owner }}"
+    group: "{{ wireguard_conf_group }}"
+    mode: "{{ wireguard_conf_mode }}"
+  become: true
+
+- name: Configure WireGuard interface
+  ansible.builtin.lineinfile:
+    path: "/etc/wireguard/{{ wireguard_interface }}.conf"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    insertbefore: "^\\s*\\[Peer\\]"
+  loop:
+    - regexp: '^\\[Interface\\]'
+      line: '[Interface]'
+    - regexp: '^Address\\s*='
+      line: 'Address = {{ wireguard_address }}'
+    - regexp: '^PrivateKey\\s*='
+      line: 'PrivateKey = {{ wireguard_private_key }}'
+    - line: 'ListenPort = {{ wireguard_port }}'
+      regexp: '^ListenPort\\s*='
+    - regexp: '^PostUp\\s*='
+      line: 'PostUp = /usr/local/bin/wireguard-postup.sh'
+    - regexp: '^PostDown\\s*='
+      line: 'PostDown = /usr/local/bin/wireguard-postdown.sh'
+  become: true
+  notify: restart wireguard
+
+- name: Manage site-to-site peers in WireGuard configuration
+  ansible.builtin.blockinfile:
+    path: "/etc/wireguard/{{ wireguard_interface }}.conf"
+    marker: "# {mark} ANSIBLE MANAGED SITE-TO-SITE PEERS"
+    create: false
+    block: |
+      {% if wireguard_site_to_site_enabled | default(false) and groups['wireguard_servers'] is defined and groups['wireguard_servers'] | length > 1 %}
+      {% for host in groups['wireguard_servers'] %}
+      {% if host != inventory_hostname %}
+      
+      [Peer]
+      # {{ host }}
+      PublicKey = {{ hostvars[host]['wireguard_public_key'] }}
+      AllowedIPs = {{ hostvars[host]['wireguard_address'] | ipaddr('network/prefix') }}
+      Endpoint = {{ hostvars[host]['ansible_host'] }}:{{ wireguard_port }}
+      PersistentKeepalive = 25
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+  become: true
+  notify: restart wireguard
+
+- name: Enable and start WireGuard service
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_interface }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+
+- name: Configure DNS entries
+  template:
+    src: dnsmasq.d/dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/{{ project_name }}.conf
+    mode: '0644'
+  become: true
+  notify: restart dnsmasq
+
+- name: Deploy WireGuard client creation script
+  ansible.builtin.copy:
+    src: create_wg_client.sh
+    dest: /usr/local/bin/create_wg_client.sh
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+
+- name: Install qrencode for QR code generation
+  ansible.builtin.apt:
+    name: qrencode
+    state: present
+    update_cache: false
+  become: true
+
+- name: Verify WireGuard service is running
+  command: systemctl is-active wg-quick@{{ wireguard_interface }}
+  register: wireguard_service_status
+  changed_when: false
+  failed_when: wireguard_service_status.rc != 0
+
+- name: Verify WireGuard interface
+  command: ip a show {{ wireguard_interface }}
+  register: wireguard_interface_status
+  changed_when: false
+  failed_when: wireguard_interface_status.rc != 0
+
+- name: Verify WireGuard peers
+  command: wg show {{ wireguard_interface }}
+  register: wireguard_peers_status
+  changed_when: false
+  failed_when: wireguard_peers_status.rc != 0
+
+- name: Debug - Show routing table
+  command: ip route show
+  register: routing_table
+  changed_when: false
+
+- name: Debug - Show routing table
+  debug:
+    var: routing_table.stdout_lines
+
+- name: Configure iptables for WireGuard
+  include_role:
+    name: iptables
+  vars:
+    iptables_allowed_udp_ports:
+      - "{{ wireguard_port }}"
+    iptables_install_when_docker_present: "{{ iptables_install_when_docker_present | default(true) }}"
+  when: wireguard_manage_iptables | default(true)
+
+- name: Enable IP forwarding for WireGuard
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes
+  become: true
+
+- name: Show iptables rules
+  command: iptables -L -n -v
+  register: iptables_status
+  changed_when: false
+  when: wireguard_manage_iptables | default(true)
+
+- name: Debug - Show iptables rules
+  debug:
+    var: iptables_status.stdout_lines
+  when: wireguard_manage_iptables | default(true)

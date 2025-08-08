@@ -1,0 +1,30 @@
+---
+all:
+  hosts:
+    node-2-nl:
+      ansible_host: 143.47.189.82
+      ansible_user: ubuntu
+      ansible_become: true
+      ansible_become_method: sudo
+      tailscale_auth_key: "tskey-auth-kAdVxuTvEK11CNTRL-ksfDd4KPbX3zAeHx45YDX3agsP86JRuQG"
+      iptables_allowed_tcp_ports: [22, 80, 443, 41641]
+      iptables_install_when_docker_present: false
+      tailscale_enable_route_advertisement: true
+      tailscale_advertise_routes:
+        - "10.0.0.0/24"
+        - "169.254.169.254/32"
+      tailscale_advertise_exit_node: true
+    
+    node-1-us:
+      ansible_host: 129.80.215.99
+      ansible_user: ubuntu
+      ansible_become: true
+      ansible_become_method: sudo
+      vars:
+        # tailscale_auth_key: "tskey-auth-kTPFfCbD9p11CNTRL-YPKinjHyPjfAaZGCMw4sifvaBGkQ47HVD"
+  
+  vars:
+    # Common variables for all hosts
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_python_interpreter: /usr/bin/python3
+

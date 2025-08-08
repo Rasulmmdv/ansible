@@ -1,0 +1,41 @@
+---
+# Remote monitoring setup for Docker-based Nginx servers
+# This playbook deploys Nginx Exporter on remote machines and configures Prometheus on monitoring server
+
+- name: Deploy remote monitoring to all servers
+  hosts: all
+  become: true
+  
+  vars:
+    # Docker-based Nginx configuration
+    nginx_docker_container_name: "nginx_reverse_proxy"
+    nginx_docker_config_dir: "/data/nginx/nginx_conf"
+    
+    # Nginx Exporter settings
+    nginx_exporter_port: "9113"
+    
+    # Remote monitoring configuration
+    remote_monitoring_job_name: "nginx_remote"
+    remote_monitoring_scrape_interval: "15s"
+    
+    # Security settings - set per host in inventory
+    # nginx_status_allowed_ips:
+    #   - "127.0.0.1"
+    #   - "::1"
+    #   - "10.0.0.5"  # infra-01 on VPN network
+    #   - "192.168.1.16"  # dev monitoring server IP
+    
+    # Prometheus labels - set per host in inventory
+    # remote_monitoring_labels:
+    #   instance: "{{ ansible_host }}"
+    #   environment: "production"
+    #   service: "nginx"
+    #   datacenter: "primary"
+    #   team: "web"
+    #   deployment_type: "docker"
+    
+    # Monitoring server hostname - set per host in inventory
+    # monitoring_server_host: "infra-01"  # Set this in inventory per host
+  
+  roles:
+    - ../roles/remote_monitoring 

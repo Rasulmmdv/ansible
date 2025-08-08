@@ -1,0 +1,22 @@
+# Nginx stub_status configuration for Docker-based setups
+# This file is managed by Ansible - do not edit manually
+# This configuration adds location blocks to be included in the main server
+
+# Nginx stub_status endpoint for monitoring
+location = {{ nginx_stub_status_path }} {
+    stub_status on;
+    access_log off;
+    
+    # Security: only allow localhost and monitoring server
+{% for ip in nginx_status_allowed_ips %}
+    allow {{ ip }};
+{% endfor %}
+    deny all;
+}
+
+# Health check endpoint
+location = /health {
+    access_log off;
+    return 200 "healthy\n";
+    add_header Content-Type text/plain;
+} 

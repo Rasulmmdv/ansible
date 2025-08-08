@@ -1,0 +1,11 @@
+---
+# defaults file for portainer
+# NOTE: Some variables must be set in your playbook or inventory (see playbook example)
+
+# portainer_domain: "" # Set in playbook or inventory
+portainer_image: "portainer/portainer-ce:latest"
+portainer_restart_policy: always
+portainer_traefik_network: "traefik-network"
+portainer_traefik_entrypoint: "websecure"
+portainer_traefik_middleware: "vpn-whitelist@file"
+portainer_data_directory: "/opt/portainer" 

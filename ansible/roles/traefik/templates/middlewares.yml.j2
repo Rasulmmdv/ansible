@@ -1,0 +1,116 @@
+# Common middlewares configuration
+http:
+  middlewares:
+    # Compression middleware
+    gzip-compress:
+      compress: {}
+
+    # Security headers
+    secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+          - PATCH
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "same-origin"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+{% if traefik_hsts_enabled %}
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+{% endif %}
+
+    # Remove trailing slash
+    trailing-slash-redirect:
+      redirectRegex:
+        regex: "^(https?://[^/]+/.*)/+$$"
+        replacement: "$1"
+        permanent: true
+
+    # CORS middleware
+    cors-headers:
+      headers:
+        accessControlAllowOriginList:
+          - "*"
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+          - PATCH
+        accessControlAllowHeaders:
+          - "*"
+        accessControlExposeHeaders:
+          - "*"
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # Error pages middleware
+    error-pages:
+      errors:
+        status:
+          - "400-599"
+        service: "error-pages-service"
+        query: "/{status}.html"
+
+    # IP whitelist (example)
+    internal-whitelist:
+      ipAllowList:
+        sourceRange:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.1/32"
+
+    # Buffering middleware
+    buffering:
+      buffering:
+        maxRequestBodyBytes: 10000000
+        memRequestBodyBytes: 2000000
+        maxResponseBodyBytes: 10000000
+        memResponseBodyBytes: 2000000
+        retryExpression: "IsNetworkError() && Attempts() <= 2"
+
+{% if traefik_rate_limit_enabled %}
+    # Rate limiting
+    rate-limit:
+      rateLimit:
+        average: {{ traefik_rate_limit_average }}
+        period: "1m"
+        burst: {{ traefik_rate_limit_burst }}
+{% endif %}
+
+    # Middleware for redirecting HTTP to HTTPS
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        port: "443"
+        permanent: true
+
+    # VPN whitelist middleware
+    vpn-whitelist:
+      ipAllowList:
+        sourceRange:
+          - "{{ traefik_vpn_network | default('10.0.0.0/24') }}"
+          - "127.0.0.1/32"  # Allow localhost for health checks
+          - "172.16.0.0/12"  # Allow Docker internal networks
+          - "192.168.0.0/16"  # Allow local networks
+          - "10.0.0.0/16"   # Allow all WireGuard networks (test + prod) 
+
+    # WWW redirect middleware - redirects www to non-www for both dev and prod
+    www-redirect:
+      redirectRegex:
+        regex: "^https://www\\.(dev\\.)?{{ traefik_domain }}(.*)$"
+        replacement: "https://$1{{ traefik_domain }}$2"
+        permanent: true 

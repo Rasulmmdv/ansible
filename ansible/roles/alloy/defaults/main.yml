@@ -1,0 +1,22 @@
+---
+# defaults file for alloy
+
+alloy_image: "grafana/alloy:latest"
+alloy_container_name: "alloy"
+alloy_data_dir: "/opt/monitoring/alloy"
+alloy_user: "alloy"
+alloy_group: "alloy"
+alloy_system_packages:
+  - docker-compose
+alloy_ensure_docker_installed: true
+alloy_ports:
+  - "12345:12345"  # Example port, adjust as needed
+alloy_volumes:
+  - "{{ alloy_data_dir }}/config.alloy:/etc/alloy/config.alloy:ro"
+  - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
+  - "/var/run/docker.sock:/var/run/docker.sock:ro"
+alloy_command:
+  - 'run'
+  - '--server.http.listen-addr=0.0.0.0:12345'
+  - '--storage.path=/var/lib/alloy/data'
+  - '/etc/alloy/config.alloy' 

@@ -1,0 +1,14 @@
+---
+# Handlers for traditional WireGuard configuration
+
+- name: restart wireguard
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_interface }}"
+    state: restarted
+  become: true
+
+- name: restart dnsmasq
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: restarted
+  become: true

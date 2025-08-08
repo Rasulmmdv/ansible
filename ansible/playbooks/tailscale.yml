@@ -1,0 +1,6 @@
+---
+- name: Install Tailscale agent
+  hosts: all
+  become: yes
+  roles:
+    - tailscale 

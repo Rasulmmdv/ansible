@@ -1,0 +1,17 @@
+---
+# defaults file for grafana
+
+grafana_image: "grafana/grafana:latest"
+grafana_container_name: "grafana"
+grafana_data_dir: "/opt/monitoring/grafana"
+grafana_user: "grafana"
+grafana_group: "grafana"
+grafana_user_id: "472"
+grafana_group_id: "472"
+grafana_ports:
+  - "3000:3000"
+grafana_volumes:
+  - "{{ grafana_data_dir }}/data:/var/lib/grafana"
+grafana_env:
+  GF_SECURITY_ADMIN_USER: "admin"
+  GF_SECURITY_ADMIN_PASSWORD: "admin" 

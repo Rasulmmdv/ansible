@@ -1,0 +1,52 @@
+---
+# Test integration with existing monitoring infrastructure
+
+- name: Test Nginx stub_status endpoint
+  uri:
+    url: "{{ nginx_stub_status_url }}"
+    method: GET
+    status_code: [200]
+  register: nginx_status_test
+  retries: 3
+  delay: 5
+  until: nginx_status_test is succeeded
+
+- name: Test Nginx Exporter metrics endpoint
+  uri:
+    url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+    method: GET
+    status_code: [200]
+  register: nginx_exporter_test
+  retries: 3
+  delay: 5
+  until: nginx_exporter_test is succeeded
+
+- name: Verify Nginx Exporter metrics contain expected data
+  assert:
+    that:
+      - nginx_exporter_test.content is regex('nginx_requests_total')
+      - nginx_exporter_test.content is regex('nginx_connections_active')
+    fail_msg: "Nginx Exporter metrics do not contain expected data"
+    success_msg: "Nginx Exporter metrics contain expected data"
+
+- name: Test Prometheus configuration update (if monitoring server is accessible)
+  uri:
+    url: "http://{{ monitoring_server_host }}:9090/targets"
+    method: GET
+    status_code: [200]
+  register: prometheus_targets_test
+  retries: 3
+  delay: 5
+  until: prometheus_targets_test is succeeded
+  when: monitoring_server_host is defined
+  delegate_to: "{{ monitoring_server_host }}"
+  run_once: true
+  failed_when: false
+
+- name: Display test results
+  debug:
+    msg: |
+      Remote monitoring integration test completed:
+      - Nginx stub_status: {{ nginx_status_test.status }}
+      - Nginx Exporter: {{ nginx_exporter_test.status }}
+      - Prometheus targets: {{ prometheus_targets_test.status | default('skipped') }} 

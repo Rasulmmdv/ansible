@@ -1,0 +1,17 @@
+---
+# defaults file for docker-registry
+# NOTE: Some variables must be set in your playbook or inventory (see playbook example)
+
+docker_registry_data_dir: /opt/docker-registry
+
+docker_registry_image: "registry:3"
+docker_registry_port: 5000
+docker_registry_container_name: "docker-registry"
+
+# S3 storage configuration
+docker_registry_s3_region: "us-east-1"
+docker_registry_s3_bucket: "my-docker-registry-bucket"
+# docker_registry_s3_access_key: "" # Set in playbook
+# docker_registry_s3_secret_key: "" # Set in playbook
+
+# docker_registry_s3_region_endpoint: "" # for S3-compatible storage 

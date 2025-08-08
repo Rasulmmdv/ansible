@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# PostgreSQL Dump Script for Restic Backup
+# This script creates PostgreSQL database dumps before restic backup
+
+set -euo pipefail
+
+# Source environment file if it exists
+if [ -f "{{ restic_config_dir }}/restic.env" ]; then
+    source "{{ restic_config_dir }}/restic.env"
+fi
+
+# Configuration file path
+DB_CONFIG_FILE="{{ restic_config_dir }}/databases.conf"
+
+# Log function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a {{ restic_log_dir }}/backup.log
+}
+
+# Create dump directory if it doesn't exist
+mkdir -p "{{ restic_postgresql_backup_dir }}"
+
+{% if restic_postgresql_backup_enabled | bool %}
+log "Starting PostgreSQL database dumps"
+
+# Check if config file exists
+if [ ! -f "$DB_CONFIG_FILE" ]; then
+    log "WARNING: Database config file not found: $DB_CONFIG_FILE - skipping database backups"
+    exit 0
+fi
+
+# Set timestamp for dump files
+DUMP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Read database configurations from file
+while IFS='|' read -r CONTAINER_NAME DB_NAME DB_USER DB_PASSWORD DB_PORT; do
+    # Skip empty lines, lines with missing required fields, and comments
+    if [[ -z "$CONTAINER_NAME" || -z "$DB_NAME" || "$CONTAINER_NAME" =~ ^[[:space:]]*# ]]; then
+        continue
+    fi
+    
+    # Trim whitespace from variables
+    CONTAINER_NAME=$(echo "$CONTAINER_NAME" | xargs)
+    DB_NAME=$(echo "$DB_NAME" | xargs)
+    DB_USER=$(echo "$DB_USER" | xargs)
+    DB_PASSWORD=$(echo "$DB_PASSWORD" | xargs)
+    DB_PORT=$(echo "$DB_PORT" | xargs)
+    
+    # Validate required fields after trimming
+    if [[ -z "$CONTAINER_NAME" || -z "$DB_NAME" || -z "$DB_USER" ]]; then
+        log "WARNING: Skipping invalid configuration line - missing required fields"
+        continue
+    fi
+    
+    log "Processing database: $DB_NAME from container: $CONTAINER_NAME"
+    
+    # Check if container exists and is running FIRST
+    if ! docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+        log "WARNING: Container $CONTAINER_NAME not found or not accessible - skipping"
+        continue
+    fi
+    
+    if ! docker ps | grep -q "$CONTAINER_NAME"; then
+        log "WARNING: Container $CONTAINER_NAME is not running - skipping"
+        continue
+    fi
+    
+    log "Container $CONTAINER_NAME is available - starting backup"
+    
+    # Create temporary dump file first
+    TEMP_DUMP_FILE="/tmp/${CONTAINER_NAME}_${DB_NAME}_${DUMP_TIMESTAMP}.sql"
+    
+    # Perform the database dump using docker exec to temporary file
+    if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" pg_dump \
+        -h localhost \
+        -p "$DB_PORT" \
+        -U "$DB_USER" \
+        -d "$DB_NAME" \
+        --verbose \
+        --no-password \
+        --format=custom \
+        --blobs \
+        --no-owner \
+        --no-privileges > "$TEMP_DUMP_FILE"; then
+        log "pg_dump command completed for $CONTAINER_NAME"
+    else
+        log "ERROR: pg_dump command failed for $CONTAINER_NAME - skipping"
+        rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+        continue
+    fi
+    
+    # Verify dump file was created and has content
+    if [ -f "$TEMP_DUMP_FILE" ] && [ -s "$TEMP_DUMP_FILE" ]; then
+        DUMP_SIZE=$(du -h "$TEMP_DUMP_FILE" | cut -f1)
+        log "Database dump successful: ${DUMP_SIZE} - moving to final location"
+        
+        # Only NOW create the container-specific directory
+        CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/$CONTAINER_NAME"
+        mkdir -p "$CONTAINER_DIR"
+        
+        # Move the successful dump to final location
+        FINAL_DUMP_FILE="${CONTAINER_DIR}/${DB_NAME}_${DUMP_TIMESTAMP}.sql"
+        mv "$TEMP_DUMP_FILE" "$FINAL_DUMP_FILE"
+        
+        log "Database dump completed: $FINAL_DUMP_FILE (${DUMP_SIZE})"
+    else
+        log "ERROR: Database dump failed or file is empty for $CONTAINER_NAME - cleaning up"
+        rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+        continue
+    fi
+    
+done < "$DB_CONFIG_FILE"
+
+# Clean up old dump files (keep only last N days)
+log "Cleaning up old database dumps (keeping {{ restic_postgresql_retention_days }} days)"
+find "{{ restic_postgresql_backup_dir }}" -name "*.sql" -type f -mtime +{{ restic_postgresql_retention_days }} -delete 2>/dev/null || true
+
+# Clean up empty dump files and empty directories
+log "Cleaning up empty dump files and directories"
+find "{{ restic_postgresql_backup_dir }}" -name "*.sql" -type f -size 0 -delete 2>/dev/null || true
+find "{{ restic_postgresql_backup_dir }}" -type d -empty -delete 2>/dev/null || true
+
+log "PostgreSQL database dumps completed successfully"
+
+{% else %}
+log "PostgreSQL backup is disabled (restic_postgresql_backup_enabled: false)"
+{% endif %} 

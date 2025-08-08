@@ -1,0 +1,18 @@
+---
+# Playbook: root_ssh_access.yml
+# Description: Configures SSH access for root user
+# Usage: ansible-playbook -i inventory.yml playbooks/root_ssh_access.yml
+
+- name: Ensure root SSH access is configured
+  hosts: all
+  become: true
+  vars:
+    root_authorized_keys: []  # List of SSH public keys
+  roles:
+    - root_ssh_access
+  post_tasks:
+    - name: Verify root SSH access
+      stat:
+        path: /root/.ssh/authorized_keys
+      register: authorized_keys_file
+      changed_when: false

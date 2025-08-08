@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  loki:
+    image: "{{ loki_image }}"
+    container_name: "{{ loki_container_name }}"
+    restart: unless-stopped
+    ports:
+{% for port in loki_ports %}
+      - "{{ port }}"
+{% endfor %}
+    volumes:
+{% for volume in loki_volumes %}
+      - {{ volume }}
+{% endfor %}
+    command:
+{% for arg in loki_command %}
+      - {{ arg }}
+{% endfor %}
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true 

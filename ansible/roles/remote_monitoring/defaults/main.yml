@@ -1,0 +1,58 @@
+---
+# defaults file for remote_monitoring
+# This role orchestrates remote monitoring by setting up Nginx Exporter on remote machines
+# and updating Prometheus configuration on the monitoring server
+
+# Nginx Exporter settings
+nginx_exporter_image: "nginx/nginx-prometheus-exporter:latest"
+nginx_exporter_container_name: "nginx_exporter"
+nginx_exporter_data_dir: "/opt/monitoring/nginx_exporter"
+nginx_exporter_user: "nginx_exporter"
+nginx_exporter_group: "nginx_exporter"
+nginx_exporter_user_id: "65531"
+nginx_exporter_group_id: "65531"
+nginx_exporter_port: "9113"
+nginx_exporter_ports:
+  - "{{ nginx_exporter_port }}:9113"
+
+# Nginx stub status configuration
+nginx_stub_status_url: "http://127.0.0.1:80{{ nginx_stub_status_path }}"
+nginx_stub_status_path: "/nginx_status"
+
+# Docker-based Nginx configuration
+nginx_docker_compose_dir: "/data/nginx"
+nginx_docker_config_dir: "/data/nginx/nginx_conf"
+nginx_docker_container_name: "nginx_reverse_proxy"
+
+# Prometheus integration settings (on monitoring server)
+prometheus_config_dir: "/opt/monitoring/prometheus/config"
+prometheus_data_dir: "/opt/monitoring/prometheus"
+prometheus_user_id: "65533"
+prometheus_group_id: "65533"
+
+# Remote monitoring configuration
+remote_monitoring_enabled: true
+remote_monitoring_job_name: "nginx_remote"
+remote_monitoring_scrape_interval: "15s"
+
+# Docker network configuration
+docker_network_name: "monitoring"
+nginx_docker_network_name: "root_default"
+
+# Security settings - configurable per host
+nginx_status_allowed_ips:
+  - "127.0.0.1"
+  - "::1"
+  # Add monitoring server IPs per host
+  # - "10.0.0.5"  # Example: infra-01 on VPN network
+  # - "192.168.1.16"  # Example: dev monitoring server IP
+
+# Labels for Prometheus metrics - configurable per host
+remote_monitoring_labels:
+  instance: "{{ ansible_host | default(ansible_default_ipv4.address) }}"
+  environment: "production"
+  service: "nginx"
+  # Add more labels per host as needed
+  # datacenter: "primary"
+  # team: "web"
+  # deployment_type: "docker" 

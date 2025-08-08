@@ -1,0 +1,73 @@
+---
+# Group variables for Jenkins servers
+
+# Jenkins Docker configuration
+jenkins_image: "jenkins/jenkins:lts-jdk21"
+jenkins_container_name: "jenkins"
+jenkins_host_port: 8080
+jenkins_agent_port: 50000
+
+# Jenkins directories
+jenkins_home: "/var/lib/jenkins"
+jenkins_data_dir: "/opt/jenkins"
+
+# Jenkins user configuration
+jenkins_user: "jenkins"
+jenkins_group: "jenkins"
+
+# Docker network
+jenkins_network_name: "jenkins-network"
+
+# Security configuration
+jenkins_admin_username: "admin"
+jenkins_admin_password: "changeme"  # Change this in production!
+jenkins_disable_setup_wizard: true
+
+# Plugin management
+jenkins_install_plugins: true
+jenkins_plugins_list:
+  # SSH-related plugins (required for SSH agent)
+  - "ssh-agent"
+  - "plain-credentials"
+  - "ssh-credentials"
+  - "ssh-slaves"
+  # Core plugins
+  - "ant"
+  - "build-timeout"
+  - "credentials-binding"
+  - "email-ext"
+  - "git"
+  - "github-branch-source"
+  - "gitlab-branch-source"
+  - "gitlab-plugin"
+  - "gitlab-webhook"
+  - "gradle"
+  - "ldap"
+  - "mailer"
+  - "matrix-auth"
+  - "pam-auth"
+  - "pipeline-build-step"
+  - "pipeline-github-lib"
+  - "pipeline-graph-analysis"
+  - "pipeline-input-step"
+  - "pipeline-milestone-step"
+  - "pipeline-model-api"
+  - "pipeline-model-definition"
+  - "pipeline-model-extensions"
+  - "pipeline-rest-api"
+  - "pipeline-stage-step"
+  - "pipeline-stage-tags-metadata"
+  - "pipeline-stage-view"
+  - "timestamper"
+  - "workflow-aggregator"
+  - "workflow-api"
+  - "workflow-basic-steps"
+  - "workflow-cps"
+  - "workflow-cps-global-lib"
+  - "workflow-durable-task-step"
+  - "workflow-job"
+  - "workflow-multibranch"
+  - "workflow-scm-step"
+  - "workflow-step-api"
+  - "workflow-support"
+  - "ws-cleanup"

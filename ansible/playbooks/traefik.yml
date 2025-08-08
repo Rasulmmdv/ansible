@@ -1,0 +1,65 @@
+---
+# Example playbook for deploying Traefik reverse proxy
+- name: Deploy Traefik Reverse Proxy
+  hosts: prod-01
+  become: true
+  vars:
+    # REQUIRED: Set your Traefik domain
+    # traefik_domain: "example.com"
+
+    # If using DNS challenge for ACME, set your DNS provider
+    # traefik_acme_dns_provider: "cloudflare"
+
+    # Basic Traefik configuration
+    traefik_dashboard_domain: "" # TODO: add domain name
+    # REQUIRED: Set your Traefik dashboard password
+    # traefik_dashboard_password: "supersecret"
+    
+    # Certificate configuration - choose one:
+    # Option 1: Use ACME (Let's Encrypt) certificates (default)
+    # traefik_certificate_type: "acme"
+    # traefik_acme_email: "example@example.com"
+    # traefik_acme_use_staging: false  # Set to true for testing
+    
+    # Option 2: Use custom certificates (uncomment and configure)
+    traefik_certificate_type: "custom"
+    traefik_certificate_files:
+      - cert: "/opt/traefik/certs/cert.pem"
+        key: "/opt/traefik/certs/key.pem"
+        stores:
+          - default
+    
+    # Security settings
+    traefik_hsts_enabled: true
+    traefik_frame_deny: true
+    traefik_content_type_nosniff: true
+    traefik_browser_xss_filter: true
+    
+    # Logging configuration
+    traefik_log_level: "INFO"
+    traefik_access_logs_enabled: true
+    
+    # SSL configuration
+    traefik_ssl_enabled: true
+    traefik_acme_challenge_type: "http"
+    
+    # Prerequisites and firewall management
+    traefik_ensure_docker_installed: true
+    traefik_configure_firewall: true
+    
+  roles:
+    - traefik   # Deploy Traefik (includes docker and iptables roles)
+
+  post_tasks:
+    - name: Display Traefik deployment information
+      debug:
+        msg:
+          - "Traefik has been successfully deployed!"
+          - "Dashboard URL: https://{{ traefik_dashboard_domain }}/dashboard/"
+          - "Username: {{ traefik_dashboard_username }}"
+          - "Password: {{ traefik_dashboard_password }}"
+          - "Network: {{ traefik_network_name }}"
+          - "Certificate Type: {{ traefik_certificate_type | upper }}"
+          - ""
+          - "To add services to Traefik, connect them to the '{{ traefik_network_name }}' network"
+          - "and add appropriate labels to your docker-compose.yml files." 

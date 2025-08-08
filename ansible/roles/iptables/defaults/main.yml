@@ -1,0 +1,36 @@
+# defaults file for iptables
+
+# Control whether to install iptables when Docker is detected
+# Set to false in inventory to skip iptables installation
+iptables_install_when_docker_present: true
+
+iptables_allowed_tcp_ports:
+  - 22   # SSH
+  - 80   # HTTP
+  - 443  # HTTPS
+iptables_allowed_udp_ports:
+  - 51820  # WireGuard default port
+
+# Essential iptables rules that are always applied
+iptables_essential_rules:
+  - { chain: 'INPUT', ctstate: 'ESTABLISHED,RELATED', comment: 'Allow established and related connections' }
+  - { chain: 'INPUT', in_interface: 'lo', comment: 'Allow all loopback traffic' }
+  - { chain: 'INPUT', protocol: 'icmp', comment: 'Allow essential ICMP traffic' }
+  - { chain: 'INPUT', protocol: 'tcp', destination_port: '22', comment: 'Allow SSH traffic' }
+
+# Ansible port rules (only added if ansible_port is different from default SSH port)
+iptables_ansible_port_rules: []
+
+# CIDR notation for sources allowed to access Docker containers
+# It's recommended to keep this as restrictive as possible
+iptables_docker_allowed_sources:
+  - "127.0.0.1"      # Localhost
+  - "172.17.0.0/16"  # Default Docker bridge network
+  - "10.0.0.0/8"       # Private network
+  - "172.16.0.0/12"    # Private network
+  - "192.168.0.0/16"   # Private network
+
+# TCP ports for Docker containers to be exposed to the world
+iptables_docker_public_tcp_ports:
+  - 80
+  - 443

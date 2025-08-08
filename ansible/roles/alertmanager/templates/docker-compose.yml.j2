@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  alertmanager:
+    image: "{{ alertmanager_image }}"
+    container_name: "{{ alertmanager_container_name }}"
+    restart: unless-stopped
+    ports:
+{% for port in alertmanager_ports %}
+      - "{{ port }}"
+{% endfor %}
+    volumes:
+{% for volume in alertmanager_volumes %}
+      - {{ volume }}
+{% endfor %}
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=:9093'
+    user: "{{ alertmanager_user_id }}:{{ alertmanager_group_id }}"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true 
