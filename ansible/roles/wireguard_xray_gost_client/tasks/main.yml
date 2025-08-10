@@ -36,12 +36,14 @@
     enabled: yes
     state: started
     daemon_reload: yes
+  when: not ansible_check_mode
 
 - name: Download Gost
   get_url:
     url: "https://github.com/go-gost/gost/releases/download/v{{ gost_version }}/gost_{{ gost_version }}_linux_amd64.tar.gz"
     dest: "/tmp/gost_{{ gost_version }}.tar.gz"
     mode: '0644'
+  when: not ansible_check_mode
 
 - name: Extract Gost binary
   unarchive:
@@ -49,6 +51,7 @@
     dest: /tmp/
     remote_src: yes
     creates: /tmp/gost
+  when: not ansible_check_mode
 
 - name: Move Gost binary to /usr/local/bin
   copy:
@@ -56,16 +59,19 @@
     dest: /usr/local/bin/gost
     mode: '0755'
     remote_src: yes
+  when: not ansible_check_mode
 
 - name: Deploy Gost systemd service
   copy:
     src: gost.service
     dest: /etc/systemd/system/gost.service
     mode: '0644'
+  when: not ansible_check_mode
 
 - name: Reload systemd for gost
   systemd:
     daemon_reload: yes
+  when: not ansible_check_mode
 
 - name: Enable and start gost service
   systemd:
@@ -83,6 +89,7 @@
     to_ports: 51821
     state: present
   notify: commit iptables rules
+  when: not ansible_check_mode
 
 - name: Create WireGuard config directory
   file:
@@ -103,3 +110,4 @@
     name: wg-quick@wg0
     enabled: yes
     state: started
+  when: not ansible_check_mode

@@ -9,7 +9,7 @@ dnsmasq_user: "root"
 dnsmasq_group: "root"
 
 # DNS settings
-# dnsmasq_domain: "" # Set in playbook or inventory
+dnsmasq_domain: "local"  # Default domain if not overridden
 dnsmasq_server_ip: "10.0.0.1"
 dnsmasq_upstream_dns:
   - "1.1.1.1"
@@ -19,3 +19,6 @@ dnsmasq_upstream_dns:
 
 # Host entries - for non-VPN related entries
 dnsmasq_host_entries: [] 
+
+# Optional WireGuard address (used by additional dnsmasq snippets). Leave empty if WireGuard role not applied.
+wireguard_address: "" 

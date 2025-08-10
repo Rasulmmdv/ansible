@@ -26,7 +26,7 @@ common_shell_utils_packages:
   - command-not-found
   - fzf
   - bat
-  - eza
+  # Removed eza (not in Ubuntu repo)
   - fd-find
 
 # Network utilities

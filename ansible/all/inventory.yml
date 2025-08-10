@@ -14,14 +14,6 @@ all:
         - "10.0.0.0/24"
         - "169.254.169.254/32"
       tailscale_advertise_exit_node: true
-    
-    node-1-us:
-      ansible_host: 129.80.215.99
-      ansible_user: ubuntu
-      ansible_become: true
-      ansible_become_method: sudo
-      vars:
-        # tailscale_auth_key: "tskey-auth-kTPFfCbD9p11CNTRL-YPKinjHyPjfAaZGCMw4sifvaBGkQ47HVD"
   
   vars:
     # Common variables for all hosts

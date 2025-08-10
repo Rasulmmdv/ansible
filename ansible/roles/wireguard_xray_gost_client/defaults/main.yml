@@ -2,7 +2,7 @@
 # Default variables for wireguard_xray_gost_client role
 
 # Gost version to install
-gost_version: "3.0.1"
+gost_version: "3.2.3"
 
 # Xray configuration
 xray_config_file: "xray_config.json"
