@@ -101,11 +101,13 @@
 #     - tailscale_up_cmd is defined
 #     - tailscale_auth is defined
 
-- name: Wait for Tailscale to be ready
+- name: Wait for Tailscale to be ready (after authentication)
   ansible.builtin.wait_for:
     path: "/var/lib/tailscale/tailscaled.state"
     timeout: 30
-  when: tailscale_auth is changed
+  when:
+    - tailscale_auth is defined
+    - tailscale_auth is changed
 
 - name: Show Tailscale status
   ansible.builtin.command: "tailscale status"

@@ -1,0 +1,76 @@
+# Central configuration for role orchestration
+# -------------------------------------------------
+# roles_all: Ordered master list of every role that can be applied.
+#            The sequence defines the default execution order when
+#            run_all_roles=true. Place core/system roles first, then
+#            application/service roles so that prerequisites are met.
+#
+# role_dependencies: A mapping of role ➜ list of prerequisite roles.
+#                    When a role is requested, its dependencies are
+#                    automatically added so that they run first.
+#                    Keep this lightweight—only specify what is strictly
+#                    required for the role to succeed.
+# -------------------------------------------------
+
+roles_all:
+  # Core & baseline configuration
+  - update               # Ensure the OS packages are up-to-date
+  - common               # Common users, packages and baseline configs
+  - system-config        # Kernel/sysctl/limits basics
+  - root_ssh_access      # Hardened root SSH configuration
+  - fail2ban             # Brute-force protection
+  - tailscale            # Private mesh VPN
+  - docker               # Container runtime (prerequisite for most services)
+  - iptables             # Firewall rules (must run after docker for DOCKER-USER chain)
+  - dnsmasq              # Lightweight DNS/DHCP service
+  - wireguard            # WireGuard VPN server
+  - wireguard_xray_gost_client  # Client wrapper that depends on wireguard
+
+  # Containerised infrastructure & services
+  - docker-registry      # Private Docker registry (needs docker)
+  - traefik              # Edge reverse-proxy / load balancer
+  - portainer            # Portainer UI (needs docker & traefik certs)
+  - portainer-agent      # Portainer agent side-car
+  - prometheus           # Metric collection (needs docker)
+  - alertmanager         # Prometheus alerting (needs prometheus)
+  - loki                 # Log aggregation (needs docker)
+  - grafana              # Dashboards (needs prometheus & loki)
+  - node_exporter        # Node metrics Exporter
+  - blackbox_exporter    # Black-box probing exporter
+
+  - cadvisor             # Container metrics exporter
+  - monitoring-stack     # Opinionated bundle (depends on above exporters)
+  - remote_monitoring    # Remote probes (depends on blackbox / node exporter)
+  - alloy                # Lightweight OTEL collector
+  - postgres             # PostgreSQL in docker
+  - jenkins-docker       # Jenkins in docker
+  - jenkins-ssh-agent-docker  # SSH agent for Jenkins builds
+  - restic               # Backups
+
+role_dependencies:
+  # Format: <role>: [list, of, dependencies]
+  wireguard_xray_gost_client: [wireguard]
+
+  docker-registry: [docker]
+  traefik: [docker]
+  portainer: [docker, traefik]
+  portainer-agent: [docker, portainer]
+
+  prometheus: [docker]
+  alertmanager: [prometheus]
+  loki: [docker]
+  grafana: [prometheus, loki]
+  node_exporter: [docker]
+  blackbox_exporter: [docker]
+
+  cadvisor: [docker]
+  monitoring-stack: [prometheus, grafana, loki, node_exporter, cadvisor, alertmanager]
+  remote_monitoring: [blackbox_exporter, node_exporter]
+  alloy: [docker]
+
+  postgres: [docker]
+  jenkins-docker: [docker]
+  jenkins-ssh-agent-docker: [jenkins-docker]
+
+  restic: [docker]
+

@@ -20,7 +20,9 @@
 
 - name: Install WireGuard
   ansible.builtin.apt:
-    name: wireguard
+    name:
+      - wireguard
+      - wireguard-tools
     state: present
   become: true
 
@@ -143,6 +145,7 @@
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
     insertbefore: "^\\s*\\[Peer\\]"
+  when: not ansible_check_mode
   loop:
     - regexp: '^\\[Interface\\]'
       line: '[Interface]'
@@ -180,6 +183,7 @@
       {% endif %}
   become: true
   notify: restart wireguard
+  when: not ansible_check_mode
 
 - name: Enable and start WireGuard service
   ansible.builtin.systemd:
@@ -188,6 +192,7 @@
     state: started
     daemon_reload: true
   become: true
+  when: not ansible_check_mode
 
 - name: Configure DNS entries
   template:
@@ -196,6 +201,7 @@
     mode: '0644'
   become: true
   notify: restart dnsmasq
+  when: not ansible_check_mode
 
 - name: Deploy WireGuard client creation script
   ansible.builtin.copy:
@@ -246,7 +252,7 @@
   vars:
     iptables_allowed_udp_ports:
       - "{{ wireguard_port }}"
-    iptables_install_when_docker_present: "{{ iptables_install_when_docker_present | default(true) }}"
+    iptables_install_when_docker_present: true
   when: wireguard_manage_iptables | default(true)
 
 - name: Enable IP forwarding for WireGuard
