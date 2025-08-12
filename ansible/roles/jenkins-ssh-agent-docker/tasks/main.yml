@@ -1,62 +1,82 @@
 ---
 # tasks file for jenkins-ssh-agent-docker
 
-- name: Ensure Docker is available
-  command: docker --version
-  register: docker_version
-  failed_when: docker_version.rc != 0
-  changed_when: false
+- name: Setup Jenkins SSH Agent
+  block:
+    - name: Ensure Docker is available
+      command: docker --version
+      register: docker_version
+      failed_when: docker_version.rc != 0
+      changed_when: false
 
-- name: Ensure Docker Compose is available
-  command: docker compose version
-  register: docker_compose_version
-  failed_when: docker_compose_version.rc != 0
-  changed_when: false
+    - name: Ensure Docker Compose is available
+      command: docker compose version
+      register: docker_compose_version
+      failed_when: docker_compose_version.rc != 0
+      changed_when: false
 
-- name: Create SSH key directory
-  file:
-    path: "{{ jenkins_ssh_key_path }}"
-    state: directory
-    mode: '0700'
-  become: true
+    - name: Create SSH key directory
+      file:
+        path: "{{ jenkins_ssh_key_path }}"
+        state: directory
+        mode: '0700'
+      become: true
 
-- name: Generate SSH key pair if not exists
-  command: >
-    ssh-keygen -t {{ jenkins_ssh_key_type }} -b {{ jenkins_ssh_key_bits }}
-    -C "{{ jenkins_ssh_key_comment }}" -f {{ jenkins_ssh_key_path }}/{{ jenkins_ssh_key_name }}
-    -N ""
-  args:
-    creates: "{{ jenkins_ssh_key_path }}/{{ jenkins_ssh_key_name }}"
-  become: true
+    - name: Generate SSH key pair if not exists
+      command: >
+        ssh-keygen -t {{ jenkins_ssh_key_type }} -b {{ jenkins_ssh_key_bits }}
+        -C "{{ jenkins_ssh_key_comment }}" -f {{ jenkins_ssh_key_path }}/{{ jenkins_ssh_key_name }}
+        -N ""
+      args:
+        creates: "{{ jenkins_ssh_key_path }}/{{ jenkins_ssh_key_name }}"
+      become: true
 
-- name: Read SSH public key
-  slurp:
-    src: "{{ jenkins_ssh_key_path }}/{{ jenkins_ssh_key_name }}.pub"
-  register: ssh_public_key
-  become: true
+    - name: Read SSH public key
+      slurp:
+        src: "{{ jenkins_ssh_key_path }}/{{ jenkins_ssh_key_name }}.pub"
+      register: ssh_public_key
+      become: true
 
-- name: Set SSH public key content
+    - name: Set SSH public key content
+      set_fact:
+        jenkins_ssh_public_key: "{{ ssh_public_key['content'] | b64decode }}"
+
+    - name: Check if Jenkins network exists
+      community.docker.docker_network_info:
+        name: "{{ jenkins_network_name }}"
+      register: jenkins_network_info
+      ignore_errors: true
+
+    - name: Create Docker network for Jenkins (if not exists)
+      community.docker.docker_network:
+        name: "{{ jenkins_network_name }}"
+        state: present
+      when: jenkins_network_info.exists is false
+
+    - name: Create Docker Compose directory
+      file:
+        path: "{{ jenkins_compose_path }}"
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Stop and remove existing Jenkins SSH agent container
+      community.docker.docker_container:
+        name: "{{ jenkins_ssh_agent_container_name }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Build and start Jenkins SSH agent with Docker Compose
+      command: docker compose up -d --build
+      args:
+        chdir: "{{ jenkins_compose_path }}"
+      become: true
+  when: not ansible_check_mode
+
+- name: Ensure SSH public key is defined for check mode
   set_fact:
-    jenkins_ssh_public_key: "{{ ssh_public_key['content'] | b64decode }}"
-
-- name: Check if Jenkins network exists
-  community.docker.docker_network_info:
-    name: "{{ jenkins_network_name }}"
-  register: jenkins_network_info
-  ignore_errors: true
-
-- name: Create Docker network for Jenkins (if not exists)
-  community.docker.docker_network:
-    name: "{{ jenkins_network_name }}"
-    state: present
-  when: jenkins_network_info.exists is false
-
-- name: Create Docker Compose directory
-  file:
-    path: "{{ jenkins_compose_path }}"
-    state: directory
-    mode: '0755'
-  become: true
+    jenkins_ssh_public_key: "{{ jenkins_ssh_public_key | default('CHECK_MODE_PLACEHOLDER') }}"
+  when: ansible_check_mode
 
 - name: Copy Dockerfile
   template:
@@ -72,18 +92,6 @@
     mode: '0644'
   become: true
 
-- name: Stop and remove existing Jenkins SSH agent container
-  community.docker.docker_container:
-    name: "{{ jenkins_ssh_agent_container_name }}"
-    state: absent
-  ignore_errors: true
-
-- name: Build and start Jenkins SSH agent with Docker Compose
-  command: docker compose up -d --build
-  args:
-    chdir: "{{ jenkins_compose_path }}"
-  become: true
-
 - name: Display Jenkins SSH agent information
   debug:
     msg:
@@ -91,7 +99,7 @@
       - "Container Name: {{ jenkins_ssh_agent_container_name }}"
       - "Docker GID: {{ jenkins_docker_gid }}"
       - "Agent Name: {{ jenkins_ssh_agent_name }}"
-      - "SSH Public Key: {{ jenkins_ssh_public_key }}"
+      - "SSH Public Key: {{ jenkins_ssh_public_key | default('Not available in check mode') }}"
       - "Network: {{ jenkins_network_name }}"
       - "Docker Compose File: {{ jenkins_compose_path }}/docker-compose.yml"
       - "Note: Add the SSH public key to Jenkins credentials and configure the agent in Jenkins master"

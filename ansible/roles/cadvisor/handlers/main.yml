@@ -7,6 +7,7 @@
     chdir: "{{ cadvisor_data_dir }}"
   become: true
   listen: restart cadvisor
+  when: not ansible_check_mode
 
 - name: stop cadvisor
   command: docker compose down
@@ -14,6 +15,7 @@
     chdir: "{{ cadvisor_data_dir }}"
   become: true
   listen: stop cadvisor
+  when: not ansible_check_mode
 
 - name: start cadvisor
   command: docker compose up -d
@@ -21,6 +23,7 @@
     chdir: "{{ cadvisor_data_dir }}"
   become: true
   listen: start cadvisor
+  when: not ansible_check_mode
 
 - name: reload prometheus
   uri:

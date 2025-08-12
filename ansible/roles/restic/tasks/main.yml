@@ -1,5 +1,10 @@
 ---
 # Install system packages
+- name: Check mode notice for restic
+  debug:
+    msg: "Running in check mode - restic repository operations and systemd tasks will be skipped. These tasks require actual execution."
+  when: ansible_check_mode
+
 - name: Install system packages
   apt:
     name: "{{ restic_system_packages }}"
@@ -82,13 +87,17 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_group }}"
     mode: "0644"
-  when: restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
+  when: 
+    - not ansible_check_mode
+    - restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
 
 - name: Convert Selectel CA certificate to PEM format
   command: openssl x509 -inform der -in "{{ restic_config_dir }}/selectel-ca-raw.crt" -out "{{ restic_s3_ca_bundle }}"
   become: yes
   become_user: "{{ restic_user }}"
-  when: restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
+  when: 
+    - not ansible_check_mode
+    - restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
 
 - name: Set proper permissions for Selectel CA certificate
   file:
@@ -96,13 +105,17 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_group }}"
     mode: "0600"
-  when: restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
+  when: 
+    - not ansible_check_mode
+    - restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
 
 - name: Remove temporary raw certificate file
   file:
     path: "{{ restic_config_dir }}/selectel-ca-raw.crt"
     state: absent
-  when: restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
+  when: 
+    - not ansible_check_mode
+    - restic_setup_selectel_ca | bool and restic_repository_type == "s3" and "selcloud.ru" in restic_aws_endpoint
 
 # Create environment file for restic configuration
 - name: Create restic environment file
@@ -260,6 +273,7 @@
   register: restic_init_check
   failed_when: false
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Initialize restic repository
   become: yes
@@ -281,7 +295,9 @@
         combine({'AWS_S3_ENDPOINT': restic_s3_endpoint_url} if (restic_s3_endpoint_url is defined and restic_s3_endpoint_url) else {}) |
         combine({'AWS_CA_BUNDLE': restic_s3_ca_bundle} if (restic_s3_ca_bundle is defined and restic_s3_ca_bundle and restic_setup_selectel_ca | bool) else {})
       }}
-  when: restic_init_check.rc != 0
+  when: 
+    - not ansible_check_mode
+    - restic_init_check.rc != 0
 
 # Enable and start timers
 - name: Enable and start backup timer
@@ -290,6 +306,7 @@
     enabled: yes
     state: started
     daemon_reload: yes
+  when: not ansible_check_mode
 
 - name: Enable and start prune timer
   systemd:
@@ -297,6 +314,7 @@
     enabled: yes
     state: started
     daemon_reload: yes
+  when: not ansible_check_mode
 
 - name: Enable and start check timer
   systemd:
@@ -304,6 +322,7 @@
     enabled: yes
     state: started
     daemon_reload: yes
+  when: not ansible_check_mode
 
 # Verify restic is working
 - name: Test restic connectivity
@@ -327,4 +346,5 @@
         combine({'AWS_CA_BUNDLE': restic_s3_ca_bundle} if (restic_s3_ca_bundle is defined and restic_s3_ca_bundle and restic_setup_selectel_ca | bool) else {})
       }}
   register: restic_test
-  changed_when: false 
+  changed_when: false
+  when: not ansible_check_mode 

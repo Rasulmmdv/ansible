@@ -8,6 +8,7 @@
     state: present
     update_cache: yes
   become: true
+  when: not ansible_check_mode
 
 - name: Try to install Python dependencies via system packages
   package:
@@ -17,6 +18,7 @@
   become: true
   register: system_packages_result
   ignore_errors: true
+  when: not ansible_check_mode
 
 - name: Install Python dependencies via pip (fallback if system packages failed)
   pip:
@@ -28,7 +30,7 @@
     - bcrypt
     - docker
   become: true
-  when: system_packages_result is failed
+  when: system_packages_result is failed and not ansible_check_mode
 
 - name: Install additional Python dependencies via pip (if configured)
   pip:
@@ -38,7 +40,7 @@
     break_system_packages: yes
   loop: "{{ traefik_pip_packages }}"
   become: true
-  when: traefik_pip_packages is defined and traefik_pip_packages | length > 0
+  when: traefik_pip_packages is defined and traefik_pip_packages | length > 0 and not ansible_check_mode
 
 - name: Verify Python bcrypt installation
   command: python3 -c "import bcrypt; print('bcrypt is available')"
@@ -52,25 +54,28 @@
   changed_when: false
   ignore_errors: true
 
-- name: Ensure Docker is installed (include docker role)
-  include_role:
-    name: docker
-  when: traefik_ensure_docker_installed | default(true)
+- name: Setup Docker and verify services
+  block:
+    - name: Ensure Docker is installed (include docker role)
+      include_role:
+        name: docker
+      when: traefik_ensure_docker_installed | default(true)
 
-- name: Verify Docker is running
-  systemd:
-    name: docker
-    state: started
-    enabled: yes
-  become: true
-  when: traefik_ensure_docker_installed | default(true)
+    - name: Verify Docker is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      become: true
+      when: traefik_ensure_docker_installed | default(true)
 
-- name: Verify Docker Compose is available
-  command: docker compose version
-  register: docker_compose_check
-  changed_when: false
-  ignore_errors: true
-  when: traefik_ensure_docker_installed | default(true)
+    - name: Verify Docker Compose is available
+      command: docker compose version
+      register: docker_compose_check
+      changed_when: false
+      ignore_errors: true
+      when: traefik_ensure_docker_installed | default(true)
+  when: not ansible_check_mode
 
 # Build the list of TCP ports that must remain open (existing + Traefik-specific)
 - name: Determine firewall TCP ports for Traefik
@@ -84,273 +89,234 @@
     apply:
       vars:
         iptables_allowed_tcp_ports: "{{ traefik_firewall_tcp_ports }}"
-        iptables_install_when_docker_present: "{{ iptables_install_when_docker_present | default(true) }}"
+        # iptables_install_when_docker_present: "{{ iptables_install_when_docker_present | default(true) }}"  # Removed due to recursive templating issues
   when: traefik_configure_firewall | default(true)
 
 - name: Display prerequisite check results
   debug:
     msg:
       - "Prerequisites verification completed:"
-      - "  - bcrypt: {{ 'OK' if bcrypt_check is defined and bcrypt_check.rc == 0 else 'FAILED' }}"
-      - "  - docker (Python): {{ 'OK' if docker_python_check is defined and docker_python_check.rc == 0 else 'FAILED'  }}"
-      - "  - Docker Compose: {{ 'OK' if docker_compose_check is defined and docker_compose_check.rc == 0 else 'SKIPPED' if not traefik_ensure_docker_installed | default(true) else 'FAILED' }}"
+      - "  - bcrypt: {{ 'OK' if bcrypt_check.json is defined and bcrypt_check.rc == 0 else 'FAILED' }}"
+      - "  - docker (Python): {{ 'OK' if docker_python_check.json is defined and docker_python_check.rc == 0 else 'FAILED'  }}"
+      - "  - Docker Compose: {{ 'OK' if docker_compose_check.json is defined and docker_compose_check.rc == 0 else 'SKIPPED' if not traefik_ensure_docker_installed | default(true) else 'FAILED' }}"
       - "  - Required ports configured: {{ traefik_web_port }}, {{ traefik_websecure_port }}, {{ traefik_dashboard_port }}"
 
-- name: Create Traefik group
-  group:
-    name: "{{ traefik_group }}"
+- name: Setup Traefik user and directories
+  block:
+    - name: Create Traefik group
+      group:
+        name: "{{ traefik_group }}"
+        state: present
+        system: true
+      become: true
+
+    - name: Create Traefik user
+      user:
+        name: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        system: true
+        shell: /bin/bash
+        home: "{{ traefik_data_dir }}"
+        create_home: false
+        state: present
+      become: true
+
+    - name: Ensure Traefik directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0755'
+      loop:
+        - "{{ traefik_data_dir }}"
+        - "{{ traefik_config_dir }}"
+        - "{{ traefik_certs_dir }}"
+        - "{{ traefik_logs_dir }}"
+      become: true
+
+    - name: Add Traefik user to docker group
+      user:
+        name: "{{ traefik_user }}"
+        groups: docker
+        append: true
+      become: true
+
+    - name: Get Traefik user UID and GID
+      shell: "id -u {{ traefik_user }}"
+      register: traefik_uid_result
+      changed_when: false
+      become: true
+
+    - name: Get Traefik user GID
+      shell: "id -g {{ traefik_user }}"
+      register: traefik_gid_result
+      changed_when: false
+      become: true
+
+    - name: Set Traefik UID and GID variables
+      set_fact:
+        traefik_uid: "{{ traefik_uid_result.stdout | int }}"
+        traefik_gid: "{{ traefik_gid_result.stdout | int }}"
+
+    - name: Set ownership of Traefik directories
+      file:
+        path: "{{ item }}"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        recurse: true
+      loop:
+        - "{{ traefik_data_dir }}"
+        - "{{ traefik_config_dir }}"
+        - "{{ traefik_certs_dir }}"
+        - "{{ traefik_logs_dir }}"
+      become: true
+
+    - name: Set special permissions for certificates directory
+      file:
+        path: "{{ traefik_certs_dir }}"
+        mode: '0600'
+        state: directory
+      become: true
+
+    - name: Create Docker network for Traefik
+      community.docker.docker_network:
+        name: "{{ traefik_network_name }}"
+        state: present
+
+    - name: Generate bcrypt password hash for dashboard authentication
+      shell: |
+        python3 -c "import bcrypt; print(bcrypt.hashpw('{{ traefik_dashboard_password | default('changeme') }}'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))"
+      register: traefik_password_bcrypt
+      when: traefik_dashboard_auth_enabled and traefik_dashboard_password is defined
+      changed_when: false
+      no_log: true
+      ignore_errors: true
+
+    - name: Create Traefik static configuration file
+      template:
+        src: traefik.yml.j2
+        dest: "{{ traefik_data_dir }}/traefik.yml"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0644'
+      become: true
+      notify: restart traefik
+
+    - name: Create dynamic configuration file
+      template:
+        src: dynamic.yml.j2
+        dest: "{{ traefik_config_dir }}/dynamic.yml"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0644'
+      become: true
+      notify: restart traefik
+
+    - name: Create middlewares configuration file
+      template:
+        src: middlewares.yml.j2
+        dest: "{{ traefik_config_dir }}/middlewares.yml"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0644'
+      become: true
+      notify: restart traefik
+
+    - name: Create ACME certificates file with correct permissions
+      file:
+        path: "{{ traefik_certs_dir }}/acme.json"
+        state: touch
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0600'
+      become: true
+      when: traefik_certificate_type == 'acme' and traefik_acme_enabled
+
+    - name: Check if custom certificate files exist
+      stat:
+        path: "{{ item.cert }}"
+      register: custom_cert_check
+      loop: "{{ traefik_certificate_files }}"
+      loop_control:
+        loop_var: cert_item
+      when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
+
+    - name: Warn about missing custom certificate files
+      debug:
+        msg: "Warning: Custom certificate file {{ cert_item.cert }} does not exist"
+      loop: "{{ custom_cert_check.results }}"
+      loop_control:
+        loop_var: result_item
+      when: 
+        - traefik_certificate_type == 'custom' 
+        - traefik_certificates_enabled
+        - result_item.stat.exists == false
+
+    - name: Copy custom certificate files
+      copy:
+        src: "{{ cert_file.cert }}"
+        dest: "{{ traefik_certs_dir }}/{{ cert_file.cert | basename }}"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0644'
+      loop: "{{ traefik_certificate_files }}"
+      loop_control:
+        loop_var: cert_file
+      become: true
+      when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
+
+    - name: Copy custom private key files
+      copy:
+        src: "{{ key_file.key }}"
+        dest: "{{ traefik_certs_dir }}/{{ key_file.key | basename }}"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0600'
+      loop: "{{ traefik_certificate_files }}"
+      loop_control:
+        loop_var: key_file
+      become: true
+      when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
+
+    - name: Create Traefik docker-compose file
+      template:
+        src: docker-compose.yml.j2
+        dest: "{{ traefik_data_dir }}/docker-compose.yml"
+        owner: "{{ traefik_user }}"
+        group: "{{ traefik_group }}"
+        mode: '0644'
+      become: true
+      notify: restart traefik
+  when: not ansible_check_mode
+
+- name: Start Traefik service
+  community.docker.docker_compose_v2:
+    project_src: "{{ traefik_data_dir }}"
     state: present
-    system: true
-  become: true
+  register: traefik_service
+  when: not ansible_check_mode
 
-- name: Create Traefik user
-  user:
-    name: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    system: true
-    shell: /bin/bash
-    home: "{{ traefik_data_dir }}"
-    create_home: false
-    state: present
-  become: true
-
-- name: Ensure Traefik directories exist
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0755'
-  loop:
-    - "{{ traefik_data_dir }}"
-    - "{{ traefik_config_dir }}"
-    - "{{ traefik_certs_dir }}"
-    - "{{ traefik_logs_dir }}"
-  become: true
-
-- name: Add Traefik user to docker group
-  user:
-    name: "{{ traefik_user }}"
-    groups: docker
-    append: true
-  become: true
-
-- name: Get Traefik user UID and GID
-  user:
-    name: "{{ traefik_user }}"
-  register: traefik_user_info
-  become: true
-
-- name: Set Traefik UID and GID variables
-  set_fact:
-    traefik_uid: "{{ traefik_user_info.uid }}"
-    traefik_gid: "{{ traefik_user_info.group }}"
-
-- name: Set ownership of Traefik directories
-  file:
-    path: "{{ item }}"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    recurse: true
-  loop:
-    - "{{ traefik_data_dir }}"
-    - "{{ traefik_config_dir }}"
-    - "{{ traefik_certs_dir }}"
-    - "{{ traefik_logs_dir }}"
-  become: true
-
-- name: Set special permissions for certificates directory
-  file:
-    path: "{{ traefik_certs_dir }}"
-    mode: '0600'
-    state: directory
-  become: true
-
-- name: Create Docker network for Traefik
-  community.docker.docker_network:
-    name: "{{ traefik_network_name }}"
-    state: present
-
-- name: Generate bcrypt password hash for dashboard authentication
-  shell: |
-    python3 -c "import bcrypt; print(bcrypt.hashpw('{{ traefik_dashboard_password }}'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))"
-  register: traefik_password_bcrypt
-  when: traefik_dashboard_auth_enabled
-  changed_when: false
-  no_log: true
-
-- name: Create Traefik static configuration file
-  template:
-    src: traefik.yml.j2
-    dest: "{{ traefik_data_dir }}/traefik.yml"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0644'
-  become: true
-  notify: restart traefik
-
-- name: Create dynamic configuration file
-  template:
-    src: dynamic.yml.j2
-    dest: "{{ traefik_config_dir }}/dynamic.yml"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0644'
-  become: true
-  notify: restart traefik
-
-- name: Create middlewares configuration file
-  template:
-    src: middlewares.yml.j2
-    dest: "{{ traefik_config_dir }}/middlewares.yml"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0644'
-  become: true
-  notify: restart traefik
-
-- name: Create ACME certificates file with correct permissions
-  file:
-    path: "{{ traefik_certs_dir }}/acme.json"
-    state: touch
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0600'
-  become: true
-  when: traefik_certificate_type == 'acme' and traefik_acme_enabled
-
-- name: Check if custom certificate files exist
-  stat:
-    path: "{{ item.cert }}"
-  register: custom_cert_check
-  loop: "{{ traefik_certificate_files }}"
-  when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
-
-- name: Warn about missing custom certificate files
-  debug:
-    msg: 
-      - "WARNING: Custom certificate file {{ item.item.cert }} not found!"
-      - "Please ensure certificate files are placed in the correct location before starting Traefik."
-      - "Expected locations:"
-      - "  Certificate: {{ item.item.cert }}"
-      - "  Key: {{ item.item.key }}"
-  loop: "{{ custom_cert_check.results | default([]) }}"
-  when: 
-    - traefik_certificate_type == 'custom'
-    - traefik_certificates_enabled
-    - item.stat is defined
-    - not item.stat.exists
-
-- name: Verify custom certificate files permissions
-  file:
-    path: "{{ item.cert }}"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0600'
-  loop: "{{ traefik_certificate_files }}"
-  become: true
-  when: 
-    - traefik_certificate_type == 'custom'
-    - traefik_certificates_enabled
-  ignore_errors: true
-
-- name: Verify custom key files permissions
-  file:
-    path: "{{ item.key }}"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0600'
-  loop: "{{ traefik_certificate_files }}"
-  become: true
-  when: 
-    - traefik_certificate_type == 'custom'
-    - traefik_certificates_enabled
-  ignore_errors: true
-
-- name: Pull Traefik Docker image
-  community.docker.docker_image:
-    name: "{{ traefik_image }}"
-    source: pull
-    force_source: true
-
-- name: Stop and remove existing Traefik container
-  community.docker.docker_container:
-    name: "{{ traefik_container_name }}"
-    state: absent
-  ignore_errors: true
-
-- name: Create Docker Compose configuration
-  template:
-    src: docker-compose.yml.j2
-    dest: "{{ traefik_data_dir }}/docker-compose.yml"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: '0644'
-  become: true
-  notify: restart traefik
-
-- name: Start Traefik with Docker Compose
-  become: true
-  ansible.builtin.command:
-    cmd: docker compose up -d
-    chdir: "{{ traefik_data_dir }}"
-
-- name: Wait for Traefik to be ready (ping endpoint)
+- name: Wait for Traefik to be ready
   uri:
-    url: "http://localhost:{{ traefik_dashboard_port }}/ping"
+    url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"
     method: GET
     status_code: 200
-  register: traefik_ping_result
-  until: traefik_ping_result.status == 200
-  retries: 10
-  delay: 5
-  ignore_errors: true
+  register: traefik_ready_check
+  retries: 30
+  delay: 10
+  until: traefik_ready_check.status == 200
+  when: not ansible_check_mode
 
-- name: Verify Traefik dashboard accessibility
-  uri:
-    url: "http{% if traefik_ssl_enabled %}s{% endif %}://{{ traefik_dashboard_domain }}/dashboard/"
-    method: GET
-    validate_certs: false
-    status_code: [200, 301, 302, 307, 308, 401, 403]
-  register: traefik_dashboard_result
-  until: traefik_dashboard_result.status in [200, 301, 302, 307, 308, 401, 403]
-  retries: 5
-  delay: 3
-  when: traefik_dashboard_enabled
-
-- name: Display Traefik deployment information
+- name: Display Traefik status
   debug:
-    msg:
-      - "Traefik has been successfully deployed!"
-      - "Dashboard URL: http{% if traefik_ssl_enabled %}s{% endif %}://{{ traefik_dashboard_domain }}/dashboard/"
-      - "Username: {{ traefik_dashboard_username }}"
-      - "Password: {{ traefik_dashboard_password }}"
-      - "Network: {{ traefik_network_name }}"
-      - "Certificate Type: {{ traefik_certificate_type | upper }}{% if traefik_certificate_type == 'acme' %} (Let's Encrypt){% elif traefik_certificate_type == 'custom' %} (Custom Certificates){% endif %}"
-      - ""
-      - "To add services to Traefik, connect them to the 'traefik-network' network"
-      - "and add appropriate labels to your docker-compose.yml files."
-  when: traefik_dashboard_enabled
-
-- name: Display ACME configuration
-  debug:
-    msg:
-      - "ACME Email: {{ traefik_acme_email }}"
-      - "ACME Staging: {{ traefik_acme_use_staging | ternary('Yes', 'No') }}"
-  when: traefik_dashboard_enabled and traefik_certificate_type == 'acme'
-
-- name: Display custom certificate configuration
-  debug:
-    msg:
-      - "Custom certificate files:"
-      - "  - Cert: {{ item.cert }}, Key: {{ item.key }}"
-  loop: "{{ traefik_certificate_files }}"
-  when: traefik_dashboard_enabled and traefik_certificate_type == 'custom'
-
-- name: Verify firewall configuration
-  shell: |
-    iptables -L -n | grep -E "({{ traefik_web_port }}|{{ traefik_websecure_port }}{% if traefik_dashboard_expose_port | default(false) %}|{{ traefik_dashboard_port }}{% endif %})" || echo "No specific rules found"
-  register: firewall_check
-  changed_when: false
-  become: true
-  when: traefik_configure_firewall | default(true) 
+    msg: |
+      Traefik deployment completed successfully!
+      
+      Dashboard: http://localhost:{{ traefik_dashboard_port }}
+      Web port: {{ traefik_web_port }}
+      Web secure port: {{ traefik_websecure_port }}
+      
+      Service status: {{ traefik_service.changed | ternary('Started', 'Already running') }}
+      Ready check: {{ traefik_ready_check.status | default('N/A') }}
+  when: not ansible_check_mode 

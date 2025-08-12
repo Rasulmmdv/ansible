@@ -7,6 +7,7 @@
     chdir: "{{ alertmanager_data_dir }}"
   become: true
   listen: restart alertmanager
+  when: not ansible_check_mode
 
 - name: stop alertmanager
   command: docker compose down
@@ -14,6 +15,7 @@
     chdir: "{{ alertmanager_data_dir }}"
   become: true
   listen: stop alertmanager
+  when: not ansible_check_mode
 
 - name: start alertmanager
   command: docker compose up -d
@@ -21,4 +23,5 @@
     chdir: "{{ alertmanager_data_dir }}"
   become: true
   listen: start alertmanager
+  when: not ansible_check_mode
 

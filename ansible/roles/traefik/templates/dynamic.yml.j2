@@ -12,6 +12,7 @@ http:
       service: "noop@internal" # A dummy service, as it's just a redirect
       priority: 1 # Low priority to not interfere with other routers
 
+{% if traefik_domain != "localhost" %}
     # Router to redirect www to non-www
     www-redirect:
       entryPoints:
@@ -22,6 +23,7 @@ http:
       service: "noop@internal"
       priority: 100 # High priority to catch www requests first
       tls: true
+{% endif %}
 
   # Services
   services:

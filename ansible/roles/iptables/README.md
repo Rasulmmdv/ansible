@@ -28,9 +28,7 @@ The role implements the following default rules:
 The following variables can be set to customize the firewall configuration:
 
 ```yaml
-# Control whether to install iptables when Docker is detected
-# Set to false in inventory to skip iptables installation
-iptables_install_when_docker_present: true
+# Note: iptables_install_when_docker_present variable has been removed due to recursive templating issues
 
 # List of allowed TCP ports
 iptables_allowed_tcp_ports:
@@ -70,14 +68,8 @@ Customizing allowed ports:
           - 500    # Custom UDP port
 ```
 
-Skipping iptables installation when Docker is present:
-
-```yaml
-# In your inventory file (ansible/all/inventory.yml)
-all:
-  vars:
-    iptables_install_when_docker_present: false
-```
+# Note: The iptables_install_when_docker_present variable has been removed due to recursive templating issues.
+# The role now runs based on the check-mode condition and Docker detection logic.
 
 ## Requirements
 

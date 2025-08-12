@@ -108,9 +108,11 @@ http:
           - "192.168.0.0/16"  # Allow local networks
           - "10.0.0.0/16"   # Allow all WireGuard networks (test + prod) 
 
+{% if traefik_domain != "localhost" %}
     # WWW redirect middleware - redirects www to non-www for both dev and prod
     www-redirect:
       redirectRegex:
         regex: "^https://www\\.(dev\\.)?{{ traefik_domain }}(.*)$"
         replacement: "https://$1{{ traefik_domain }}$2"
-        permanent: true 
+        permanent: true
+{% endif %} 

@@ -1,41 +1,59 @@
 ---
-- name: Download Tailscale install script
-  ansible.builtin.get_url:
-    url: "{{ tailscale_install_url }}"
-    dest: "{{ tailscale_install_script_path }}"
-    mode: "0755"
-    timeout: 60
+- name: Setup Tailscale
+  block:
+    - name: Download Tailscale install script
+      ansible.builtin.get_url:
+        url: "{{ tailscale_install_url }}"
+        dest: "{{ tailscale_install_script_path }}"
+        mode: "0755"
+        timeout: 60
 
-- name: Install Tailscale
-  ansible.builtin.command: "{{ tailscale_install_script_path }}"
-  args:
-    creates: "/usr/bin/tailscale"
-  register: tailscale_install
+    - name: Install Tailscale
+      ansible.builtin.command: "{{ tailscale_install_script_path }}"
+      args:
+        creates: "/usr/bin/tailscale"
+      register: tailscale_install
 
-- name: Clean up install script
-  ansible.builtin.file:
-    path: "{{ tailscale_install_script_path }}"
-    state: absent
+    - name: Clean up install script
+      ansible.builtin.file:
+        path: "{{ tailscale_install_script_path }}"
+        state: absent
 
-- name: Start and enable Tailscale service
-  ansible.builtin.systemd:
-    name: "{{ tailscale_service_name }}"
-    state: "{{ tailscale_service_state }}"
-    enabled: "{{ tailscale_service_enabled }}"
-    daemon_reload: yes
+    - name: Start and enable Tailscale service
+      ansible.builtin.systemd:
+        name: "tailscaled"
+        state: "{{ tailscale_service_state }}"
+        enabled: "{{ tailscale_service_enabled }}"
+        daemon_reload: yes
 
-- name: Check current Tailscale status
-  ansible.builtin.command: "tailscale status"
-  register: tailscale_current_status
-  changed_when: false
-  failed_when: false
+    - name: Check current Tailscale status
+      ansible.builtin.command: "tailscale status"
+      register: tailscale_current_status
+      changed_when: false
+      failed_when: false
+
+    - name: Wait for Tailscale to be ready (after authentication)
+      ansible.builtin.wait_for:
+        path: "/var/lib/tailscale/tailscaled.state"
+        timeout: 30
+      when:
+        - tailscale_auth is defined
+        - tailscale_auth is changed
+  when: not ansible_check_mode
+
+- name: Set default Tailscale status for check mode
+  set_fact:
+    tailscale_current_status:
+      rc: 1
+      stdout: "Not available in check mode"
+  when: ansible_check_mode
 
 - name: Debug - Show current Tailscale status
   ansible.builtin.debug:
     msg: |
       Current Tailscale status:
-      {{ tailscale_current_status.stdout_lines }}
-      Return code: {{ tailscale_current_status.rc }}
+      {{ tailscale_current_status.stdout_lines | default(['Not available in check mode']) }}
+      Return code: {{ tailscale_current_status.rc | default('Not available in check mode') }}
 
 - name: Build complete Tailscale up command
   ansible.builtin.set_fact:
@@ -71,7 +89,7 @@
   ansible.builtin.debug:
     msg: |
       Complete Tailscale up command:
-      {{ tailscale_up_cmd }}
+      {{ tailscale_up_cmd | default('Not available in check mode') }}
       
       Configuration:
       - Auth key: {{ tailscale_auth_key | default('NOT_SET') }}
@@ -101,14 +119,6 @@
 #     - tailscale_up_cmd is defined
 #     - tailscale_auth is defined
 
-- name: Wait for Tailscale to be ready (after authentication)
-  ansible.builtin.wait_for:
-    path: "/var/lib/tailscale/tailscaled.state"
-    timeout: 30
-  when:
-    - tailscale_auth is defined
-    - tailscale_auth is changed
-
 - name: Show Tailscale status
   ansible.builtin.command: "tailscale status"
   register: tailscale_status
@@ -118,5 +128,5 @@
   ansible.builtin.debug:
     msg: |
       Tailscale status:
-      {{ tailscale_status.stdout_lines }}
+      {{ tailscale_status.stdout_lines | default(['Not available in check mode']) }}
   when: tailscale_status is defined 

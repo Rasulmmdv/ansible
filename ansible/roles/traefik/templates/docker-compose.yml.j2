@@ -21,7 +21,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     environment:
       - TRAEFIK_LOG_LEVEL={{ traefik_log_level }}
-{% if traefik_acme_enabled and traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider %}
+{% if traefik_acme_enabled and traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider is defined and traefik_acme_dns_provider %}
       # DNS provider specific environment variables can be added here
 {% endif %}
     networks:
@@ -36,13 +36,16 @@ services:
       - "traefik.http.routers.traefik.tls.certresolver={{ traefik_ssl_certificate_resolver }}"
 {% endif %}
 {% endif %}
-{% if traefik_dashboard_auth_enabled %}
+{% if traefik_dashboard_auth_enabled and traefik_password_bcrypt is defined and traefik_password_bcrypt.stdout is defined %}
 {% if traefik_certificate_type == 'acme' and traefik_acme_enabled %}
       - "traefik.http.routers.traefik.middlewares=traefik-auth,vpn-whitelist@file"
 {% else %}
       - "traefik.http.routers.traefik.middlewares=traefik-auth"
 {% endif %}
       - "traefik.http.middlewares.traefik-auth.basicauth.users={{ traefik_dashboard_username }}:{{ traefik_password_bcrypt.stdout | replace('$', '$$') }}"
+{% elif traefik_dashboard_auth_enabled %}
+      # Authentication disabled - password not generated (likely in check mode or password not set)
+      # - "traefik.http.routers.traefik.middlewares=traefik-auth"
 {% endif %}
       - "traefik.http.services.traefik.loadbalancer.server.port=8080"
 

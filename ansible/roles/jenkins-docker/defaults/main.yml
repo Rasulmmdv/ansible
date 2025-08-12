@@ -13,8 +13,13 @@ jenkins_home: "/var/lib/jenkins"
 jenkins_data_dir: "/opt/jenkins"
 
 
+# User and group
 jenkins_user: "jenkins"
 jenkins_group: "jenkins"
+
+# Default UID/GID for check mode - will be overridden by actual user creation
+jenkins_uid: "1000"
+jenkins_gid: "1001"
 
 # Docker network
 jenkins_network_name: "jenkins-network"
@@ -33,6 +38,7 @@ jenkins_opts: ""
 jenkins_install_plugins: true
 jenkins_force_plugin_reinstall: false  # Set to true to clear plugins directory and force reinstall
 jenkins_use_groovy_plugin_install: true
+jenkins_plugin_installation_method: "groovy"  # Options: groovy, cli, or none
 jenkins_plugins_list:
   - "ant"
   - "build-timeout"
@@ -77,7 +83,8 @@ jenkins_plugins_list:
 
 # Security configuration
 jenkins_admin_username: "admin"
-# jenkins_admin_password: ""  # Set in playbook or inventory (REQUIRED)
+# Default password - should be overridden in production for security
+jenkins_admin_password: "changeme"
 jenkins_disable_setup_wizard: true
 
 
@@ -95,6 +102,10 @@ jenkins_authorization_strategy: "FullControlOnceLoggedInAuthorizationStrategy"
 
 # Plugin update center
 jenkins_update_center_url: "https://updates.jenkins.io/update-center.json"
+
+# Backup configuration
+jenkins_backup_dir: "/opt/jenkins/backups"
+jenkins_backup_retention_days: 7
 
 # Traefik labels for Jenkins
 jenkins_traefik_labels:

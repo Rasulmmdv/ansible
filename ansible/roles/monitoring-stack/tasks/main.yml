@@ -2,20 +2,23 @@
 # Monitoring stack orchestration tasks
 # This role coordinates configuration and validation across all monitoring components
 
-- name: Create monitoring network
-  community.docker.docker_network:
-    name: "{{ monitoring_stack.network_name }}"
-    state: present
-  become: true
+- name: Setup monitoring stack
+  block:
+    - name: Create monitoring network
+      community.docker.docker_network:
+        name: "{{ monitoring_stack.network_name }}"
+        state: present
+      become: true
 
-- name: Create monitoring data root directory
-  file:
-    path: "{{ monitoring_stack.data_root }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  become: true
+    - name: Create monitoring data root directory
+      file:
+        path: "{{ monitoring_stack.data_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      become: true
+  when: not ansible_check_mode
 
 - name: Initialize monitoring configuration variables
   set_fact:

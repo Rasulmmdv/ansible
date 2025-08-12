@@ -1,6 +1,11 @@
 ---
 # Update Prometheus configuration using dynamic file-based service discovery
 
+- name: Check mode notice for Prometheus configuration
+  debug:
+    msg: "Running in check mode - Prometheus health checks and reloads will be skipped. These tasks require actual execution."
+  when: ansible_check_mode
+
 - name: Ensure targets directory exists
   file:
     path: "{{ prometheus_config_dir }}/targets"
@@ -28,6 +33,7 @@
   until: nginx_exporter_health_check is succeeded
   delegate_to: "{{ monitoring_server_host }}"
   run_once: true
+  when: not ansible_check_mode
 
 - name: Create individual target file for this host
   template:
@@ -36,7 +42,7 @@
     backup: yes
   delegate_to: "{{ monitoring_server_host }}"
   run_once: true
-  when: nginx_exporter_health_check is succeeded
+  when: (nginx_exporter_health_check is succeeded) or ansible_check_mode
 
 - name: Verify target file syntax
   command: cat "{{ prometheus_config_dir }}/targets/{{ inventory_hostname }}_nginx.yml"
@@ -44,6 +50,7 @@
   delegate_to: "{{ monitoring_server_host }}"
   run_once: true
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Ensure Prometheus scrape config includes file-based discovery
   template:
@@ -68,4 +75,5 @@
   delegate_to: "{{ monitoring_server_host }}"
   run_once: true
   failed_when: false
-  changed_when: false 
+  changed_when: false
+  when: not ansible_check_mode 

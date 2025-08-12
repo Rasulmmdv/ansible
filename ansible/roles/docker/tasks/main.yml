@@ -1,121 +1,124 @@
 ---
-- name: Ensure apt key is not present in trusted.gpg.d
-  ansible.builtin.file:
-    path: /etc/apt/trusted.gpg.d/docker.asc
-    state: absent
-  tags:
-    - docker
+- name: Setup Docker
+  block:
+    - name: Ensure apt key is not present in trusted.gpg.d
+      ansible.builtin.file:
+        path: /etc/apt/trusted.gpg.d/docker.asc
+        state: absent
+      tags:
+        - docker
 
-- name: Ensure old apt source list is not present in /etc/apt/sources.list.d
-  ansible.builtin.file:
-    path: "/etc/apt/sources.list.d/download_docker_com_linux_{{ docker_apt_ansible_distribution | lower }}.list"
-    state: absent
-  tags:
-    - docker
+    - name: Ensure old apt source list is not present in /etc/apt/sources.list.d
+      ansible.builtin.file:
+        path: "/etc/apt/sources.list.d/download_docker_com_linux_{{ docker_apt_ansible_distribution | lower }}.list"
+        state: absent
+      tags:
+        - docker
 
-- name: Ensure the repo referencing the previous trusted.gpg.d key is not present
-  apt_repository:
-    repo: "deb [arch={{ docker_apt_arch }} signed-by=/etc/apt/trusted.gpg.d/docker.asc] {{ docker_repo_url }}/{{ docker_apt_ansible_distribution | lower }} {{ ansible_distribution_release }} {{ docker_apt_release_channel }}"
-    state: absent
-    filename: "{{ docker_apt_filename }}"
-    update_cache: true
-  when: docker_add_repo | bool
-  tags:
-    - docker
+    - name: Ensure the repo referencing the previous trusted.gpg.d key is not present
+      apt_repository:
+        repo: "deb [arch={{ docker_apt_arch }} signed-by=/etc/apt/trusted.gpg.d/docker.asc] {{ docker_repo_url }}/{{ docker_apt_ansible_distribution | lower }} {{ ansible_distribution_release }} {{ docker_apt_release_channel }}"
+        state: absent
+        filename: "{{ docker_apt_filename }}"
+        update_cache: true
+      when: docker_add_repo | bool
+      tags:
+        - docker
 
-- name: Ensure old versions of Docker are not installed.
-  package:
-    name: "{{ docker_obsolete_packages }}"
-    state: absent
-  tags:
-    - docker
+    - name: Ensure old versions of Docker are not installed.
+      package:
+        name: "{{ docker_obsolete_packages }}"
+        state: absent
+      tags:
+        - docker
 
-- name: Ensure dependencies are installed.
-  apt:
-    name:
-      - apt-transport-https
-      - ca-certificates
-    state: present
-  when: docker_add_repo | bool
-  tags:
-    - docker
+    - name: Ensure dependencies are installed.
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+        state: present
+      when: docker_add_repo | bool
+      tags:
+        - docker
 
-- name: Ensure directory exists for /etc/apt/keyrings
-  file:
-    path: /etc/apt/keyrings
-    state: directory
-    mode: "0755"
-  tags:
-    - docker
+    - name: Ensure directory exists for /etc/apt/keyrings
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      tags:
+        - docker
 
-- name: Add Docker apt key.
-  ansible.builtin.get_url:
-    url: "{{ docker_apt_gpg_key }}"
-    dest: /etc/apt/keyrings/docker.asc
-    mode: "0644"
-    force: false
-    checksum: "{{ docker_apt_gpg_key_checksum | default(omit) }}"
-  register: add_repository_key
-  ignore_errors: "{{ docker_apt_ignore_key_error }}"
-  when: docker_add_repo | bool
-  tags:
-    - docker
+    - name: Add Docker apt key.
+      ansible.builtin.get_url:
+        url: "{{ docker_apt_gpg_key }}"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+        force: false
+        checksum: "{{ docker_apt_gpg_key_checksum | default(omit) }}"
+      register: add_repository_key
+      ignore_errors: "{{ docker_apt_ignore_key_error }}"
+      when: docker_add_repo | bool
+      tags:
+        - docker
 
-- name: Ensure curl is present (on older systems without SNI).
-  package: name=curl state=present
-  when: add_repository_key is failed and docker_add_repo | bool
-  tags:
-    - docker
+    - name: Ensure curl is present (on older systems without SNI).
+      package: name=curl state=present
+      when: add_repository_key is failed and docker_add_repo | bool
+      tags:
+        - docker
 
-- name: Add Docker apt key (alternative for older systems without SNI).
-  shell: >
-    curl -sSL {{ docker_apt_gpg_key }} | apt-key add -
-  when: add_repository_key is failed and docker_add_repo | bool
-  tags:
-    - docker
+    - name: Add Docker apt key (alternative for older systems without SNI).
+      shell: >
+        curl -sSL {{ docker_apt_gpg_key }} | apt-key add -
+      when: add_repository_key is failed and docker_add_repo | bool
+      tags:
+        - docker
 
-- name: Add Docker repository.
-  apt_repository:
-    repo: "{{ docker_apt_repository }}"
-    state: present
-    filename: "{{ docker_apt_filename }}"
-    update_cache: true
-  when: docker_add_repo | bool
-  tags:
-    - docker
+    - name: Add Docker repository.
+      apt_repository:
+        repo: "{{ docker_apt_repository }}"
+        state: present
+        filename: "{{ docker_apt_filename }}"
+        update_cache: true
+      when: docker_add_repo | bool
+      tags:
+        - docker
 
-- name: Install Docker packages
-  apt:
-    name: "{{ docker_packages }}"
-    state: "{{ docker_packages_state }}"
-    update_cache: yes
-  notify: restart docker
-  tags:
-    - docker
+    - name: Install Docker packages
+      apt:
+        name: "{{ docker_packages }}"
+        state: "{{ docker_packages_state }}"
+        update_cache: yes
+      notify: restart docker
+      tags:
+        - docker
+
+    - name: Install docker-compose plugin
+      apt:
+        name: "{{ docker_compose_package }}"
+        state: "{{ docker_compose_package_state }}"
+      notify: restart docker
+      when: docker_install_compose_plugin | bool
+      tags:
+        - docker
+
+    - name: Install Docker Compose (standalone) if configured
+      include_tasks: docker-compose.yml
+      when: docker_install_compose | bool
+      tags:
+        - docker
+
+    - name: Add users to docker group
+      include_tasks: docker-users.yml
+      when: docker_users | length > 0
+      tags:
+        - docker
+  when: not ansible_check_mode
 
 - name: Configure Docker daemon
   include_tasks: configure-daemon.yml
   when: docker_daemon_options is defined and docker_daemon_options != {}
-  tags:
-    - docker
-
-- name: Install docker-compose plugin
-  apt:
-    name: "{{ docker_compose_package }}"
-    state: "{{ docker_compose_package_state }}"
-  notify: restart docker
-  when: docker_install_compose_plugin | bool
-  tags:
-    - docker
-
-- name: Install Docker Compose (standalone) if configured
-  include_tasks: docker-compose.yml
-  when: docker_install_compose | bool
-  tags:
-    - docker
-
-- name: Add users to docker group
-  include_tasks: docker-users.yml
-  when: docker_users | length > 0
   tags:
     - docker

@@ -1,21 +1,33 @@
 ---
 # tasks file for fail2ban
-- name: Install fail2ban
-  apt:
-    name: fail2ban
-    state: present
-  become: true
-  tags:
-    - fail2ban
 
-- name: Ensure fail2ban is running and enabled
-  service:
-    name: fail2ban
-    state: started
-    enabled: true
-  become: true
-  tags:
-    - fail2ban
+- name: Setup fail2ban
+  block:
+    - name: Install fail2ban
+      apt:
+        name: fail2ban
+        state: present
+      become: true
+      tags:
+        - fail2ban
+
+    - name: Ensure fail2ban is running and enabled
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: true
+      become: true
+      tags:
+        - fail2ban
+
+    - name: Restart fail2ban
+      systemd:
+        name: fail2ban
+        state: restarted
+      become: true
+      tags:
+        - fail2ban
+  when: not ansible_check_mode
 
 - name: Deploy fail2ban jail.local configuration
   template:
@@ -25,14 +37,6 @@
     group: root
     mode: '0644'
   notify: restart fail2ban
-  become: true
-  tags:
-    - fail2ban
-
-- name: Restart fail2ban
-  service:
-    name: fail2ban
-    state: restarted
   become: true
   tags:
     - fail2ban

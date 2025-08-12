@@ -1,35 +1,45 @@
 ---
 # tasks file for alloy
 
-- name: Ensure Docker is running
-  systemd:
-    name: docker
-    state: started
-    enabled: yes
-  become: true
+- name: Setup Alloy
+  block:
+    - name: Ensure Docker is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      become: true
 
-- name: Create alloy group
-  group:
-    name: "{{ alloy_group }}"
-  become: true
+    - name: Create alloy group
+      group:
+        name: "{{ alloy_group }}"
+      become: true
 
-- name: Create alloy user
-  user:
-    name: "{{ alloy_user }}"
-    group: "{{ alloy_group }}"
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
-  become: true
+    - name: Create alloy user
+      user:
+        name: "{{ alloy_user }}"
+        group: "{{ alloy_group }}"
+        system: yes
+        shell: /usr/sbin/nologin
+        create_home: no
+      become: true
 
-- name: Create alloy data directory
-  file:
-    path: "{{ alloy_data_dir }}"
-    state: directory
-    owner: "{{ alloy_user }}"
-    group: "{{ alloy_group }}"
-    mode: '0755'
-  become: true
+    - name: Create alloy data directory
+      file:
+        path: "{{ alloy_data_dir }}"
+        state: directory
+        owner: "{{ alloy_user }}"
+        group: "{{ alloy_group }}"
+        mode: '0755'
+      become: true
+
+    - name: Start alloy with Docker Compose
+      command: docker compose up -d
+      args:
+        chdir: "{{ alloy_data_dir }}"
+      become: true
+      notify: restart alloy
+  when: not ansible_check_mode
 
 - name: Deploy alloy config
   template:
@@ -47,11 +57,4 @@
     owner: "{{ alloy_user }}"
     group: "{{ alloy_group }}"
     mode: '0644'
-  become: true
-
-- name: Start alloy with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ alloy_data_dir }}"
-  become: true
-  notify: restart alloy 
+  become: true 

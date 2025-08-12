@@ -1,42 +1,52 @@
 ---
 # tasks file for grafana
 
-- name: Create grafana group
-  group:
-    name: "{{ grafana_group }}"
-    gid: "{{ grafana_group_id }}"
-  become: true
+- name: Setup Grafana
+  block:
+    - name: Create grafana group
+      group:
+        name: "{{ grafana_group }}"
+        gid: "{{ grafana_group_id }}"
+      become: true
 
-- name: Create grafana user
-  user:
-    name: "{{ grafana_user }}"
-    group: "{{ grafana_group }}"
-    uid: "{{ grafana_user_id }}"
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
-  become: true
+    - name: Create grafana user
+      user:
+        name: "{{ grafana_user }}"
+        group: "{{ grafana_group }}"
+        uid: "{{ grafana_user_id }}"
+        system: yes
+        shell: /usr/sbin/nologin
+        create_home: no
+      become: true
 
-- name: Create grafana data directory
-  file:
-    path: "{{ grafana_data_dir }}"
-    state: directory
-    owner: "0"
-    group: "0"
-    mode: '0755'
-  become: true
+    - name: Create grafana data directory
+      file:
+        path: "{{ grafana_data_dir }}"
+        state: directory
+        owner: "0"
+        group: "0"
+        mode: '0755'
+      become: true
 
-- name: Create grafana provisioning directories
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: "0"
-    group: "0"
-    mode: '0755'
-  loop:
-    - "{{ grafana_data_dir }}/provisioning"
-    - "{{ grafana_data_dir }}/provisioning/datasources"
-  become: true
+    - name: Create grafana provisioning directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "0"
+        group: "0"
+        mode: '0755'
+      loop:
+        - "{{ grafana_data_dir }}/provisioning"
+        - "{{ grafana_data_dir }}/provisioning/datasources"
+      become: true
+
+    - name: Start grafana with Docker Compose
+      command: docker compose up -d
+      args:
+        chdir: "{{ grafana_data_dir }}"
+      become: true
+      notify: restart grafana
+  when: not ansible_check_mode
 
 - name: Deploy docker-compose.yml for grafana
   template:
@@ -54,12 +64,5 @@
     owner: "0"
     group: "0"
     mode: '0644'
-  become: true
-  notify: restart grafana
-
-- name: Start grafana with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ grafana_data_dir }}"
   become: true
   notify: restart grafana 

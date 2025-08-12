@@ -7,6 +7,7 @@
     chdir: "{{ prometheus_data_dir }}"
   become: true
   listen: restart prometheus
+  when: not ansible_check_mode
 
 - name: stop prometheus
   command: docker compose down
@@ -14,6 +15,7 @@
     chdir: "{{ prometheus_data_dir }}"
   become: true
   listen: stop prometheus
+  when: not ansible_check_mode
 
 - name: start prometheus
   command: docker compose up -d
@@ -21,11 +23,12 @@
     chdir: "{{ prometheus_data_dir }}"
   become: true
   listen: start prometheus
+  when: not ansible_check_mode
 
 - name: reload prometheus
   uri:
     url: "http://localhost:9090/-/reload"
     method: POST
-    status_code: 200
-  become: true
-  listen: reload prometheus 
+    status_code: [200]
+  listen: reload prometheus
+  when: not ansible_check_mode 

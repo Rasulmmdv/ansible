@@ -1,14 +1,14 @@
 ---
 all:
   hosts:
-    node-2-nl:
-      ansible_host: 143.47.189.82
-      ansible_user: ubuntu
+    test-server:
+      ansible_host: 192.168.1.10
+      ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
       tailscale_auth_key: "tskey-auth-kAdVxuTvEK11CNTRL-ksfDd4KPbX3zAeHx45YDX3agsP86JRuQG"
       iptables_allowed_tcp_ports: [22, 80, 443, 41641]
-      iptables_install_when_docker_present: false
+      # iptables_install_when_docker_present: false  # Removed due to recursive templating issues
       tailscale_enable_route_advertisement: true
       tailscale_advertise_routes:
         - "10.0.0.0/24"

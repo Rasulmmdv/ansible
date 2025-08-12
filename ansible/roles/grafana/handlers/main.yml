@@ -7,6 +7,7 @@
     chdir: "{{ grafana_data_dir }}"
   become: true
   listen: restart grafana
+  when: not ansible_check_mode
 
 - name: stop grafana
   command: docker compose down
@@ -14,10 +15,12 @@
     chdir: "{{ grafana_data_dir }}"
   become: true
   listen: stop grafana
+  when: not ansible_check_mode
 
 - name: start grafana
   command: docker compose up -d
   args:
     chdir: "{{ grafana_data_dir }}"
   become: true
-  listen: start grafana 
+  listen: start grafana
+  when: not ansible_check_mode 

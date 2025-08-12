@@ -2,6 +2,11 @@
 # Jenkins deployment verification tasks
 # These tasks verify that Jenkins is properly deployed and functioning
 
+- name: Check mode notice for verification
+  debug:
+    msg: "Running in check mode - verification tasks will be skipped. Health checks require actual execution."
+  when: ansible_check_mode
+
 - name: Verify Jenkins container health
   community.docker.docker_container_info:
     name: "{{ jenkins_container_name }}"
@@ -9,6 +14,7 @@
   failed_when: 
     - not jenkins_health_info.exists
     - jenkins_health_info.container.State.Status != "running"
+  when: not ansible_check_mode
 
 - name: Check Jenkins login page accessibility
   uri:
@@ -19,6 +25,7 @@
   register: jenkins_login_check
   retries: 5
   delay: 10
+  when: not ansible_check_mode
 
 - name: Wait for Jenkins to be fully ready
   uri:
@@ -34,6 +41,7 @@
   delay: 15
   until: jenkins_readiness_check.status == 200
   ignore_errors: true
+  when: not ansible_check_mode
 
 - name: Verify Jenkins API with authentication
   uri:
@@ -45,7 +53,9 @@
     status_code: 200
     validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
   register: jenkins_api_check
-  when: jenkins_readiness_check.status is defined and jenkins_readiness_check.status == 200
+  when: 
+    - not ansible_check_mode
+    - jenkins_readiness_check.status is defined and jenkins_readiness_check.status == 200
 
 - name: Verify no critical errors in recent logs
   command: docker logs {{ jenkins_container_name }} --tail 20
@@ -54,6 +64,7 @@
   failed_when: 
     - "'SEVERE' in jenkins_recent_logs.stdout"
     - "'Permission denied' in jenkins_recent_logs.stdout"
+  when: not ansible_check_mode
 
 - name: Display verification success
   debug:
@@ -63,4 +74,6 @@
       - "Login Page: Accessible ({{ jenkins_login_check.status }})"
       - "API: {{ 'Authenticated access working (' + (jenkins_api_check.status|string) + ')' if jenkins_api_check.status is defined else 'Not yet ready - may need more time' }}"
       - "Logs: No critical errors detected"
-  when: jenkins_verification_enabled | default(false)
+  when: 
+    - not ansible_check_mode
+    - jenkins_verification_enabled | default(false)

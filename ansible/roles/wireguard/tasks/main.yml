@@ -252,7 +252,7 @@
   vars:
     iptables_allowed_udp_ports:
       - "{{ wireguard_port }}"
-    iptables_install_when_docker_present: true
+    # iptables_install_when_docker_present: true  # Removed due to recursive templating issues
   when: wireguard_manage_iptables | default(true)
 
 - name: Enable IP forwarding for WireGuard
