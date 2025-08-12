@@ -2,6 +2,9 @@
 # defaults file for restic
 # NOTE: Some variables must be set in your playbook or inventory (see playbook example)
 
+# Default project name - can be overridden in playbook or inventory
+project_name: "monitoring"
+
 # Base directories
 restic_instance_name: backup
 restic_base_dir: "/opt/{{ project_name }}/{{ restic_instance_name }}"
@@ -20,8 +23,9 @@ restic_repository_type: "s3"  # Options: s3, local, sftp, rest, azure, gs, swift
 # restic_repository_path: ""  # For local repositories (set in playbook if needed)
 
 # AWS S3 configuration (when using S3 backend)
-# restic_aws_access_key_id: ""  # Set in playbook
-# restic_aws_secret_access_key: ""  # Set in playbook
+# Default credentials for check mode - should be overridden in production
+restic_aws_access_key_id: "changeme"
+restic_aws_secret_access_key: "changeme"
 restic_aws_region: "ru-7"
 restic_aws_endpoint: "s3.ru-7.storage.selcloud.ru"
 
@@ -31,7 +35,8 @@ restic_s3_ca_bundle: "{{ restic_config_dir }}/selectel-ca.crt"
 restic_setup_selectel_ca: true
 
 # Repository password (required for all repository types)
-# restic_password: ""  # Set in playbook or inventory (REQUIRED)
+# Default password - should be overridden in production for security
+restic_password: "changeme"
 
 # Backup configuration
 restic_backup_paths:

@@ -2,7 +2,7 @@
 # defaults file for portainer
 # NOTE: Some variables must be set in your playbook or inventory (see playbook example)
 
-# portainer_domain: "" # Set in playbook or inventory
+portainer_domain: "localhost" # Default domain for local development/testing
 portainer_image: "portainer/portainer-ce:latest"
 portainer_restart_policy: always
 portainer_traefik_network: "traefik-network"

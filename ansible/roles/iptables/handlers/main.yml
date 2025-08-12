@@ -18,11 +18,12 @@
 
 - name: Restart netfilter-persistent
   listen: "commit iptables rules"
-  service:
+  systemd:
     name: netfilter-persistent
     state: restarted
   become: true
-  when: not ansible_check_mode
+  when: not ansible_check_mode and ansible_service_mgr is defined and ansible_service_mgr == "systemd"
+  ignore_errors: true
 
 - name: Debug Docker restart
   listen: "commit iptables rules"

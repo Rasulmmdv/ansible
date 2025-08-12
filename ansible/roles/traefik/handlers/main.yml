@@ -7,14 +7,15 @@
     chdir: "{{ traefik_data_dir }}"
   become: true
   listen: restart traefik
+  when: not ansible_check_mode
 
 - name: reload traefik
   command: docker compose kill -s USR1 traefik
   args:
     chdir: "{{ traefik_data_dir }}"
   become: true
-  ignore_errors: true
   listen: reload traefik
+  when: not ansible_check_mode
 
 - name: stop traefik
   command: docker compose down
@@ -22,10 +23,12 @@
     chdir: "{{ traefik_data_dir }}"
   become: true
   listen: stop traefik
+  when: not ansible_check_mode
 
 - name: start traefik
   command: docker compose up -d
   args:
     chdir: "{{ traefik_data_dir }}"
   become: true
-  listen: start traefik 
+  listen: start traefik
+  when: not ansible_check_mode 

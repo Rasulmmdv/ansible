@@ -1,5 +1,5 @@
 ---
-- name: Ensure dependencies are installed
+- name: Install dependencies
   apt:
     name:
       - curl
@@ -30,67 +30,6 @@
     mode: '0644'
   notify: Restart xray
 
-- name: Ensure Xray service is enabled and started
-  systemd:
-    name: xray
-    enabled: yes
-    state: started
-    daemon_reload: yes
-  when: not ansible_check_mode
-
-- name: Download Gost
-  get_url:
-    url: "https://github.com/go-gost/gost/releases/download/v{{ gost_version }}/gost_{{ gost_version }}_linux_amd64.tar.gz"
-    dest: "/tmp/gost_{{ gost_version }}.tar.gz"
-    mode: '0644'
-  when: not ansible_check_mode
-
-- name: Extract Gost binary
-  unarchive:
-    src: "/tmp/gost_{{ gost_version }}.tar.gz"
-    dest: /tmp/
-    remote_src: yes
-    creates: /tmp/gost
-  when: not ansible_check_mode
-
-- name: Move Gost binary to /usr/local/bin
-  copy:
-    src: /tmp/gost
-    dest: /usr/local/bin/gost
-    mode: '0755'
-    remote_src: yes
-  when: not ansible_check_mode
-
-- name: Deploy Gost systemd service
-  copy:
-    src: gost.service
-    dest: /etc/systemd/system/gost.service
-    mode: '0644'
-  when: not ansible_check_mode
-
-- name: Reload systemd for gost
-  systemd:
-    daemon_reload: yes
-  when: not ansible_check_mode
-
-- name: Enable and start gost service
-  systemd:
-    name: gost
-    enabled: yes
-    state: started
-
-- name: Add iptables rule for UDP port 51820 to 51821
-  iptables:
-    table: nat
-    chain: PREROUTING
-    protocol: udp
-    destination_port: 51820
-    jump: REDIRECT
-    to_ports: 51821
-    state: present
-  notify: commit iptables rules
-  when: not ansible_check_mode
-
 - name: Create WireGuard config directory
   file:
     path: /etc/wireguard
@@ -105,9 +44,65 @@
     group: root
     mode: '0600'
 
-- name: Ensure WireGuard (wg-quick@wg0) service is enabled and started
-  systemd:
-    name: wg-quick@wg0
-    enabled: yes
-    state: started
+- name: Download, install, and configure services
+  block:
+    - name: Download Gost
+      get_url:
+        url: "https://github.com/go-gost/gost/releases/download/v{{ gost_version }}/gost_{{ gost_version }}_linux_amd64.tar.gz"
+        dest: "/tmp/gost_{{ gost_version }}.tar.gz"
+        mode: '0644'
+
+    - name: Extract Gost binary
+      unarchive:
+        src: "/tmp/gost_{{ gost_version }}.tar.gz"
+        dest: /tmp/
+        remote_src: yes
+        creates: /tmp/gost
+
+    - name: Move Gost binary to /usr/local/bin
+      copy:
+        src: /tmp/gost
+        dest: /usr/local/bin/gost
+        mode: '0755'
+        remote_src: yes
+
+    - name: Deploy Gost systemd service
+      copy:
+        src: gost.service
+        dest: /etc/systemd/system/gost.service
+        mode: '0644'
+
+    - name: Ensure Xray service is enabled and started
+      systemd:
+        name: xray
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Reload systemd for gost
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start gost service
+      systemd:
+        name: gost
+        enabled: yes
+        state: started
+
+    - name: Add iptables rule for UDP port 51820 to 51821
+      iptables:
+        table: nat
+        chain: PREROUTING
+        protocol: udp
+        destination_port: 51820
+        jump: REDIRECT
+        to_ports: 51821
+        state: present
+      notify: commit iptables rules
+
+    - name: Ensure WireGuard (wg-quick@wg0) service is enabled and started
+      systemd:
+        name: wg-quick@wg0
+        enabled: yes
+        state: started
   when: not ansible_check_mode

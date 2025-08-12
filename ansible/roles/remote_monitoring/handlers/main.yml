@@ -4,11 +4,11 @@
 - name: reload nginx
   command: docker exec {{ nginx_docker_container_name }} nginx -s reload
   become: true
+  when: not ansible_check_mode
 
 - name: restart nginx_exporter
-  community.docker.docker_container:
-    name: "{{ nginx_exporter_container_name }}"
-    state: started
-    restart: true
+  command: docker restart {{ nginx_exporter_container_name }}
   become: true
+  when: not ansible_check_mode
+  ignore_errors: true
 

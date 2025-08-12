@@ -8,7 +8,7 @@ traefik_container_name: "traefik"
 traefik_dashboard_port: 8080
 traefik_web_port: 80
 traefik_websecure_port: 443
-# traefik_domain: "" # Set in playbook or inventory
+traefik_domain: "localhost" # Default domain for local development/testing
 
 # Traefik directories
 traefik_data_dir: "/opt/traefik"
@@ -29,7 +29,8 @@ traefik_dashboard_insecure: false
 traefik_dashboard_domain: "traefik.local"
 traefik_dashboard_auth_enabled: true
 traefik_dashboard_username: "admin"
-# traefik_dashboard_password: ""  # Set in playbook or inventory (REQUIRED)
+# Default password - should be overridden in production for security
+traefik_dashboard_password: "changeme"
 
 # Whether to publish Traefik's internal port 8080 (dashboard/API) to the host.
 # If set to true the dashboard will be reachable at http://<host>:8080/.

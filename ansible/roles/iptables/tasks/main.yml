@@ -248,4 +248,4 @@
           {{ cancel_result.stdout }}
           
           Your iptables configuration has been applied successfully without triggering emergency recovery.
-  when: not (docker_installed and not (iptables_install_when_docker_present | bool))
+  when: not ansible_check_mode

@@ -1,35 +1,116 @@
 ---
 # tasks file for cadvisor
 
-- name: Ensure Docker is running
-  systemd:
-    name: docker
-    state: started
-    enabled: yes
-  become: true
+- name: Setup cAdvisor
+  block:
+    - name: Ensure Docker is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      become: true
 
-- name: Create cadvisor group
-  group:
-    name: "{{ cadvisor_group }}"
-  become: true
+    - name: Create cadvisor group
+      group:
+        name: "{{ cadvisor_group }}"
+      become: true
 
-- name: Create cadvisor user
-  user:
-    name: "{{ cadvisor_user }}"
-    group: "{{ cadvisor_group }}"
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
-  become: true
+    - name: Create cadvisor user
+      user:
+        name: "{{ cadvisor_user }}"
+        group: "{{ cadvisor_group }}"
+        system: yes
+        shell: /usr/sbin/nologin
+        create_home: no
+      become: true
 
-- name: Create cadvisor data directory
-  file:
-    path: "{{ cadvisor_data_dir }}"
-    state: directory
-    owner: "{{ cadvisor_user }}"
-    group: "{{ cadvisor_group }}"
-    mode: '0755'
-  become: true
+    - name: Create cadvisor data directory
+      file:
+        path: "{{ cadvisor_data_dir }}"
+        state: directory
+        owner: "{{ cadvisor_user }}"
+        group: "{{ cadvisor_group }}"
+        mode: '0755'
+      become: true
+
+    - name: Start cadvisor with Docker Compose
+      command: docker compose up -d
+      args:
+        chdir: "{{ cadvisor_data_dir }}"
+      become: true
+      notify: restart cadvisor
+
+    # Create prometheus targets directory
+    - name: Create prometheus targets directory
+      file:
+        path: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets"
+        state: directory
+        owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        mode: '0755'
+      become: true
+      when: cadvisor_service_discovery_enabled | default(false)
+
+    # Create prometheus rules directory
+    - name: Create prometheus rules directory
+      file:
+        path: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/../rules"
+        state: directory
+        owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        mode: '0755'
+      become: true
+      when: cadvisor_service_discovery_enabled | default(false)
+
+    # Deploy service discovery file
+    - name: Create cadvisor targets service discovery file
+      template:
+        src: cadvisor_targets.yml.j2
+        dest: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets/cadvisor.yml"
+        owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        mode: '0644'
+      become: true
+      when: cadvisor_service_discovery_enabled | default(false)
+
+    # Deploy container monitoring alert rules
+    - name: Deploy container monitoring alert rules
+      copy:
+        src: container_alerts.yml
+        dest: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/../rules/container_alerts.yml"
+        owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
+        mode: '0644'
+      become: true
+      when: cadvisor_service_discovery_enabled | default(false)
+      notify: reload prometheus
+
+    # Verify cAdvisor health
+    - name: Wait for cAdvisor to be ready
+      uri:
+        url: "http://localhost:8080/healthz"
+        method: GET
+        status_code: 200
+      register: cadvisor_health_check
+      until: cadvisor_health_check.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: true
+
+    # Validate cAdvisor metrics endpoint
+    - name: Check cAdvisor metrics endpoint
+      uri:
+        url: "http://localhost:8080/metrics"
+        method: GET
+        status_code: 200
+      register: cadvisor_metrics_check
+      ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check mode notice for cAdvisor
+  debug:
+    msg: "Running in check mode - cAdvisor health checks will be skipped. Health checks require actual execution."
+  when: ansible_check_mode
 
 - name: Deploy docker-compose.yml for cadvisor
   template:
@@ -40,83 +121,10 @@
     mode: '0644'
   become: true
 
-- name: Start cadvisor with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ cadvisor_data_dir }}"
-  become: true
-  notify: restart cadvisor
-
-# Create prometheus targets directory
-- name: Create prometheus targets directory
-  file:
-    path: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets"
-    state: directory
-    owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    group: "{{ cadvisor_prometheus_group_id | default('65533') }}"
-    mode: '0755'
-  become: true
-  when: cadvisor_service_discovery_enabled | default(false)
-
-# Create prometheus rules directory
-- name: Create prometheus rules directory
-  file:
-    path: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/../rules"
-    state: directory
-    owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    group: "{{ cadvisor_prometheus_group_id | default('65533') }}"
-    mode: '0755'
-  become: true
-  when: cadvisor_service_discovery_enabled | default(false)
-
-# Deploy service discovery file
-- name: Create cadvisor targets service discovery file
-  template:
-    src: cadvisor_targets.yml.j2
-    dest: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets/cadvisor.yml"
-    owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    group: "{{ cadvisor_prometheus_group_id | default('65533') }}"
-    mode: '0644'
-  become: true
-  when: cadvisor_service_discovery_enabled | default(false)
-
-# Deploy container monitoring alert rules
-- name: Deploy container monitoring alert rules
-  copy:
-    src: container_alerts.yml
-    dest: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/../rules/container_alerts.yml"
-    owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    group: "{{ cadvisor_prometheus_group_id | default('65533') }}"
-    mode: '0644'
-  become: true
-  when: cadvisor_service_discovery_enabled | default(false)
-  notify: reload prometheus
-
-# Verify cAdvisor health
-- name: Wait for cAdvisor to be ready
-  uri:
-    url: "http://localhost:8080/healthz"
-    method: GET
-    status_code: 200
-  register: cadvisor_health_check
-  until: cadvisor_health_check.status == 200
-  retries: 30
-  delay: 10
-  ignore_errors: true
-
 - name: Display cAdvisor health status
   debug:
-    msg: "cAdvisor health: {{ 'HEALTHY' if cadvisor_health_check.status == 200 else 'UNHEALTHY' }}"
-
-# Validate cAdvisor metrics endpoint
-- name: Check cAdvisor metrics endpoint
-  uri:
-    url: "http://localhost:8080/metrics"
-    method: GET
-    status_code: 200
-  register: cadvisor_metrics_check
-  ignore_errors: true
+    msg: "cAdvisor health: {{ 'HEALTHY' if (cadvisor_health_check.json is defined and not ansible_check_mode) else 'UNHEALTHY' }}"
 
 - name: Display cAdvisor metrics status
   debug:
-    msg: "cAdvisor metrics: {{ 'AVAILABLE' if cadvisor_metrics_check.status == 200 else 'UNAVAILABLE' }}" 
+    msg: "cAdvisor metrics: {{ 'AVAILABLE' if (cadvisor_metrics_check.json is defined and not ansible_check_mode) else 'UNAVAILABLE' }}" 

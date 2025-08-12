@@ -7,6 +7,7 @@
     chdir: "{{ blackbox_exporter_data_dir }}"
   become: true
   listen: restart blackbox_exporter
+  when: not ansible_check_mode
 
 - name: stop blackbox_exporter
   command: docker compose down
@@ -14,6 +15,7 @@
     chdir: "{{ blackbox_exporter_data_dir }}"
   become: true
   listen: stop blackbox_exporter
+  when: not ansible_check_mode
 
 - name: start blackbox_exporter
   command: docker compose up -d
@@ -21,4 +23,5 @@
     chdir: "{{ blackbox_exporter_data_dir }}"
   become: true
   listen: start blackbox_exporter
+  when: not ansible_check_mode
 

@@ -23,36 +23,39 @@
   become: true
   notify: restart chronyd
 
-# Enable and start chronyd service
-- name: Enable and start chronyd service
-  service:
-    name: chronyd
-    state: started
-    enabled: yes
-  become: true
-  when: not ansible_check_mode
+# Setup system configuration
+- name: Setup system configuration
+  block:
+    # Enable and start chronyd service
+    - name: Enable and start chronyd service
+      systemd:
+        name: chronyd
+        state: started
+        enabled: yes
+      become: true
 
-# Install locales package
-- name: Install locales package
-  package:
-    name: locales
-    state: present
-  become: true
+    # Install locales package
+    - name: Install locales package
+      package:
+        name: locales
+        state: present
+      become: true
 
-# Set system locale
-- name: Set system locale
-  locale_gen:
-    name: "{{ system_locale }}"
-    state: present
-  become: true
+    # Set system locale
+    - name: Set system locale
+      locale_gen:
+        name: "{{ system_locale }}"
+        state: present
+      become: true
 
-# Update system locale
-- name: Update system locale
-  command: update-locale LANG={{ system_locale }}
-  become: true
+    # Update system locale
+    - name: Update system locale
+      command: update-locale LANG={{ system_locale }}
+      become: true
 
-# Set system hostname
-- name: Set system hostname
-  hostname:
-    name: "{{ inventory_hostname }}"
-  become: true 
+    # Set system hostname
+    - name: Set system hostname
+      hostname:
+        name: "{{ inventory_hostname }}"
+      become: true
+  when: not ansible_check_mode 

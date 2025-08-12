@@ -1,6 +1,11 @@
 ---
 # Prerequisites for remote monitoring
 
+- name: Check mode notice for prerequisites
+  debug:
+    msg: "Running in check mode - Docker service checks and network creation will be skipped. These tasks require actual execution."
+  when: ansible_check_mode
+
 - name: Create nginx_exporter group
   group:
     name: "{{ nginx_exporter_group }}"
@@ -32,10 +37,11 @@
     state: started
     enabled: yes
   become: true
+  when: not ansible_check_mode
 
 - name: Create monitoring network if it doesn't exist
-  docker_network:
-    name: "{{ docker_network_name }}"
-    state: present
+  command: docker network create {{ docker_network_name }}
   become: true
-  ignore_errors: yes  # Network might already exist 
+  ignore_errors: yes  # Network might already exist
+  when: not ansible_check_mode
+  changed_when: false 

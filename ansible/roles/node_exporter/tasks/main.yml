@@ -1,87 +1,90 @@
 ---
 # tasks file for node_exporter (systemd version)
 
-- name: Ensure node_exporter user exists
-  user:
-    name: "{{ node_exporter_user }}"
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
-  become: true
+- name: Setup Node Exporter
+  block:
+    - name: Ensure node_exporter user exists
+      user:
+        name: "{{ node_exporter_user }}"
+        system: yes
+        shell: /usr/sbin/nologin
+        create_home: no
+      become: true
 
-- name: Download node_exporter binary
-  get_url:
-    url: "{{ node_exporter_download_url }}"
-    dest: "/tmp/node_exporter.tar.gz"
-    mode: '0644'
-    owner: root
-    group: root
-  become: true
+    - name: Download node_exporter binary
+      get_url:
+        url: "{{ node_exporter_download_url }}"
+        dest: "/tmp/node_exporter.tar.gz"
+        mode: '0644'
+        owner: root
+        group: root
+      become: true
 
-- name: Extract node_exporter binary
-  unarchive:
-    src: "/tmp/node_exporter.tar.gz"
-    dest: "/tmp/"
-    remote_src: yes
-  become: true
+    - name: Extract node_exporter binary
+      unarchive:
+        src: "/tmp/node_exporter.tar.gz"
+        dest: "/tmp/"
+        remote_src: yes
+      become: true
 
-- name: Find and move node_exporter binary
-  shell: |
-    find /tmp -name "node_exporter" -type f -executable | head -1
-  register: node_exporter_path
-  become: true
+    - name: Find and move node_exporter binary
+      shell: |
+        find /tmp -name "node_exporter" -type f -executable | head -1
+      register: node_exporter_path
+      become: true
 
-- name: Move node_exporter binary to /usr/local/bin
-  copy:
-    src: "{{ node_exporter_path.stdout }}"
-    dest: "/usr/local/bin/node_exporter"
-    mode: '0755'
-    owner: root
-    group: root
-    remote_src: yes
-  become: true
+    - name: Move node_exporter binary to /usr/local/bin
+      copy:
+        src: "{{ node_exporter_path.stdout }}"
+        dest: "/usr/local/bin/node_exporter"
+        mode: '0755'
+        owner: root
+        group: root
+        remote_src: yes
+      become: true
 
-- name: Clean up temporary files
-  file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - "/tmp/node_exporter.tar.gz"
-    - "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}"
-  become: true
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/node_exporter.tar.gz"
+        - "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}"
+      become: true
 
-- name: Create systemd service file for node_exporter
-  copy:
-    dest: /etc/systemd/system/node_exporter.service
-    content: |
-      [Unit]
-      Description=Prometheus Node Exporter
-      Wants=network-online.target
-      After=network-online.target
+    - name: Create systemd service file for node_exporter
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Prometheus Node Exporter
+          Wants=network-online.target
+          After=network-online.target
 
-      [Service]
-      User={{ node_exporter_user }}
-      Group={{ node_exporter_user }}
-      Type=simple
-      ExecStart=/usr/local/bin/node_exporter {{ node_exporter_extra_args | default('') }}
-      Restart=on-failure
+          [Service]
+          User={{ node_exporter_user }}
+          Group={{ node_exporter_user }}
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter {{ node_exporter_extra_args | default('') }}
+          Restart=on-failure
 
-      [Install]
-      WantedBy=multi-user.target
-    mode: '0644'
-  become: true
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+      become: true
 
-- name: Reload systemd
-  systemd:
-    daemon_reload: yes
-  become: true
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+      become: true
 
-- name: Enable and start node_exporter
-  systemd:
-    name: node_exporter
-    state: started
-    enabled: yes
-  become: true
+    - name: Enable and start node_exporter
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+      become: true
+  when: not ansible_check_mode
 
 # Optional: Create service discovery file for consistency
 - name: Create node_exporter targets service discovery file

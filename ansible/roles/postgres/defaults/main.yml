@@ -2,6 +2,9 @@
 # defaults file for postgres
 # NOTE: Some variables must be set in your playbook or inventory (see playbook example)
 
+# Default project name - can be overridden in playbook or inventory
+project_name: "data"
+
 postgres_instance_name: test
 
 postgres_base_dir: "/data/{{ project_name }}/{{ postgres_instance_name }}"
@@ -10,7 +13,8 @@ postgres_config_dir: "{{ postgres_base_dir }}/config"
 postgres_log_dir: "{{ postgres_base_dir }}/log"
 
 postgres_user: postgres
-# postgres_password: ""  # Set in playbook or inventory (REQUIRED)
+# Default password - should be overridden in production for security
+postgres_password: "changeme"
 postgres_db: postgres
 postgres_port: 5432
 postgres_cpu_limit: "1"

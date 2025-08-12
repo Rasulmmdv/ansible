@@ -60,7 +60,7 @@ certificatesResolvers:
         entryPoint: web
 {% elif traefik_acme_challenge_type == "tls" %}
       tlsChallenge: {}
-{% elif traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider %}
+{% elif traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider is defined and traefik_acme_dns_provider %}
       dnsChallenge:
         provider: "{{ traefik_acme_dns_provider }}"
         delayBeforeCheck: 0
