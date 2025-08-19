@@ -28,19 +28,8 @@
   when: not ansible_check_mode
   tags: [configure]
 
-- name: Allow monitoring containers to access host node_exporter
-  iptables:
-    chain: FORWARD
-    source: "172.19.0.0/16"
-    destination: "{{ docker_gateway_ip.stdout | default('172.19.0.1') }}"
-    destination_port: "9100"
-    protocol: tcp
-    jump: ACCEPT
-    action: insert
-    rule_num: 1
-  become: true
-  when: not ansible_check_mode
-  tags: [configure]
+# Note: Firewall configuration is handled centrally by the monitoring-stack role
+# to ensure proper iptables rules and avoid conflicts between individual roles.
 
 - name: Setup Prometheus user and directories
   block:

@@ -66,15 +66,6 @@ monitoring_stack:
   network_name: "monitoring"
   data_root: "/opt/monitoring"
   validation_enabled: true
-
-prometheus_config:
-  global:
-    scrape_interval: 15s
-    evaluation_interval: 15s
-  scrape_configs:
-    - job_name: 'prometheus'
-      static_configs:
-        - targets: ['localhost:9090']
 ```
 
 ### Service Discovery
@@ -95,6 +86,10 @@ Uses file-based service discovery for extensibility:
 alertmanager ──┐
                ├─► prometheus.yml (conflicts)
 blackbox ──────┘
+
+node_exporter ──┐
+               ├─► iptables rules (conflicts)
+prometheus ─────┘
 ```
 
 ### After (Fixed)
@@ -102,6 +97,43 @@ blackbox ──────┘
 alertmanager ──┐
                ├─► monitoring_facts ──► prometheus.yml
 blackbox ──────┘
+
+node_exporter ──┐
+               ├─► No firewall configuration (handled by iptables role)
+prometheus ─────┘
+```
+
+## Firewall Configuration
+
+The monitoring-stack role **does NOT handle firewall configuration** - this is properly managed by the existing `iptables` role:
+
+### ✅ **Simple and Clean**
+- **No duplicate firewall logic** - uses existing iptables role
+- **No conflicts** - individual monitoring roles don't configure iptables
+- **Proper separation of concerns** - each role does what it's designed for
+
+### 🔒 **Security Features**
+- **node_exporter binds to localhost only** (127.0.0.1:9100)
+- **No internet exposure** of monitoring endpoints
+- **Docker network integration** - Prometheus containers use `host.docker.internal:9100`
+- **iptables role handles all firewall rules** consistently
+
+### 🌐 **Network Architecture**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Host Server                              │
+│                                                             │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐│
+│  │   Prometheus    │    │        node_exporter            ││
+│  │   Container     │────│     (127.0.0.1:9100)           ││
+│  │                 │    │                                 ││
+│  └─────────────────┘    └─────────────────────────────────┘│
+│           │                        ▲                        │
+│           │                        │                        │
+│           └────────────────────────┘                        │
+│                    Docker Network                           │
+│                    (172.17.0.0/16)                         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Validation
