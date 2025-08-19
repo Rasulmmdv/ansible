@@ -1,0 +1,11 @@
+---
+- name: Test Node Exporter Role
+  hosts: test-server
+  gather_facts: true
+  become: true
+  
+  tasks:
+    - name: Include node_exporter role
+      include_role:
+        name: node_exporter
+      tags: [configure, firewall]

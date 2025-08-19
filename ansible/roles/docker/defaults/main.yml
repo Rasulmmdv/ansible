@@ -28,8 +28,9 @@ docker_compose_package: docker-compose-plugin
 docker_compose_package_state: present
 
 docker_install_compose: true
-docker_compose_version: "v2.36.2"
-docker_compose_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+docker_compose_version: "v2.39.2"
+# Enhanced architecture detection for Docker Compose
+docker_compose_arch: "{{ 'aarch64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
 docker_compose_url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-linux-{{ docker_compose_arch }}"
 docker_compose_path: /usr/local/bin/docker-compose
 

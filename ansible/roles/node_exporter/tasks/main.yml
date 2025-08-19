@@ -10,6 +10,7 @@
         shell: /usr/sbin/nologin
         create_home: no
       become: true
+      tags: [install]
 
     - name: Download node_exporter binary
       get_url:
@@ -19,6 +20,7 @@
         owner: root
         group: root
       become: true
+      tags: [install]
 
     - name: Extract node_exporter binary
       unarchive:
@@ -26,12 +28,14 @@
         dest: "/tmp/"
         remote_src: yes
       become: true
+      tags: [install]
 
     - name: Find and move node_exporter binary
       shell: |
         find /tmp -name "node_exporter" -type f -executable | head -1
       register: node_exporter_path
       become: true
+      tags: [install]
 
     - name: Move node_exporter binary to /usr/local/bin
       copy:
@@ -42,6 +46,7 @@
         group: root
         remote_src: yes
       become: true
+      tags: [install]
 
     - name: Clean up temporary files
       file:
@@ -51,6 +56,7 @@
         - "/tmp/node_exporter.tar.gz"
         - "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}"
       become: true
+      tags: [install]
 
     - name: Create systemd service file for node_exporter
       copy:
@@ -65,18 +71,20 @@
           User={{ node_exporter_user }}
           Group={{ node_exporter_user }}
           Type=simple
-          ExecStart=/usr/local/bin/node_exporter {{ node_exporter_extra_args | default('') }}
+          ExecStart=/usr/local/bin/node_exporter --web.listen-address=0.0.0.0:9100 {{ node_exporter_extra_args | default('') }}
           Restart=on-failure
 
           [Install]
           WantedBy=multi-user.target
         mode: '0644'
       become: true
+      tags: [install, configure]
 
     - name: Reload systemd
       systemd:
         daemon_reload: yes
       become: true
+      tags: [install, configure]
 
     - name: Enable and start node_exporter
       systemd:
@@ -84,9 +92,41 @@
         state: started
         enabled: yes
       become: true
+      tags: [install, configure]
   when: not ansible_check_mode
 
-# Optional: Create service discovery file for consistency
+# Debug: Show current variable values
+- name: Debug node_exporter variables
+  debug:
+    msg:
+      - "node_exporter_service_discovery_enabled: {{ node_exporter_service_discovery_enabled }}"
+      - "node_exporter_prometheus_config_dir: {{ node_exporter_prometheus_config_dir }}"
+      - "node_exporter_prometheus_user_id: {{ node_exporter_prometheus_user_id }}"
+      - "node_exporter_prometheus_group_id: {{ node_exporter_prometheus_group_id }}"
+  tags: [configure]
+
+# Detect Docker gateway IP for Prometheus connectivity
+- name: Detect Docker gateway IP for Prometheus connectivity
+  shell: |
+    # Try to get the gateway IP of the monitoring network
+    docker network inspect monitoring --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
+    # Fallback to default bridge network gateway
+    docker network inspect bridge --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
+    # Final fallback
+    echo "172.17.0.1"
+  register: docker_gateway_ip
+  become: true
+  when: node_exporter_service_discovery_enabled and not ansible_check_mode
+  tags: [configure]
+
+# Set node_exporter target IP for Prometheus
+- name: Set node_exporter target IP for Prometheus
+  set_fact:
+    prometheus_node_exporter_target: "host.docker.internal:9100"
+  when: node_exporter_service_discovery_enabled and not ansible_check_mode
+  tags: [configure]
+
+# Create service discovery file for consistency
 - name: Create node_exporter targets service discovery file
   template:
     src: node_exporter_targets.yml.j2
@@ -95,4 +135,35 @@
     group: "{{ node_exporter_prometheus_group_id | default('65533') }}"
     mode: '0644'
   become: true
-  when: node_exporter_service_discovery_enabled | default(false) 
+  when: node_exporter_service_discovery_enabled
+  tags: [configure]
+
+# Configure iptables to allow monitoring containers to reach host node_exporter
+- name: Allow monitoring containers to access host node_exporter (DOCKER-USER chain)
+  iptables:
+    chain: DOCKER-USER
+    source: "172.19.0.0/16"
+    destination: "{{ ansible_default_ipv4.address | default('192.168.1.10') }}"
+    destination_port: "9100"
+    protocol: tcp
+    jump: RETURN
+    action: insert
+    rule_num: 1
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, firewall]
+
+# Also add a rule to the FORWARD chain for compatibility
+- name: Allow monitoring containers to access host node_exporter (FORWARD chain)
+  iptables:
+    chain: FORWARD
+    source: "172.19.0.0/16"
+    destination: "{{ ansible_default_ipv4.address | default('192.168.1.10') }}"
+    destination_port: "9100"
+    protocol: tcp
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, firewall] 

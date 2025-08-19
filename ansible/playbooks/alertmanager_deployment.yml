@@ -22,5 +22,6 @@
   
   roles:
     - common
-    - prometheus
-    - alertmanager 
+    - monitoring-stack  # Create monitoring network first
+    - prometheus        # Then prometheus
+    - alertmanager      # Finally alertmanager 

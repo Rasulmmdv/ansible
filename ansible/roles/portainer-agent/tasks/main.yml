@@ -16,11 +16,6 @@
         mode: "0755"
         owner: "{{ portainer_agent_user }}"
         group: "{{ portainer_agent_group }}"
-
-    - name: Start portainer agent container
-      community.docker.docker_compose_v2:
-        project_src: "{{ portainer_agent_compose_dir }}"
-        state: present
   when: not ansible_check_mode
 
 - name: Create portainer agent docker-compose file
@@ -30,3 +25,9 @@
     mode: "0644"
     owner: "{{ portainer_agent_user }}"
     group: "{{ portainer_agent_group }}" 
+
+- name: Start portainer agent container
+  community.docker.docker_compose_v2:
+    project_src: "{{ portainer_agent_compose_dir }}"
+    state: present
+  when: not ansible_check_mode

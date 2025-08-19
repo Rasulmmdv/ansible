@@ -3,4 +3,5 @@
   hosts: all
   become: true
   roles:
-    - cadvisor 
+    - monitoring-stack  # Create monitoring network first
+    - cadvisor         # Then deploy cadvisor 

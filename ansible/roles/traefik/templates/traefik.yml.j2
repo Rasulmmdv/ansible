@@ -7,12 +7,14 @@ global:
 entryPoints:
   web:
     address: ":80"
+{% if traefik_ssl_enabled %}
   websecure:
     address: ":443"
 {% if traefik_hsts_enabled %}
     http:
       tls:
         options: default
+{% endif %}
 {% endif %}
 {% if traefik_dashboard_enabled %}
   traefik:

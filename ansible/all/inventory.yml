@@ -6,14 +6,21 @@ all:
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-      tailscale_auth_key: "tskey-auth-kAdVxuTvEK11CNTRL-ksfDd4KPbX3zAeHx45YDX3agsP86JRuQG"
-      iptables_allowed_tcp_ports: [22, 80, 443, 41641]
+      tailscale_auth_key: "tskey-auth-kpQnKjDD9p11CNTRL-vdPxgHjfN5AtnmEQEAXk5AhinEiEyfQr"
+      iptables_allowed_tcp_ports: [22, 80, 443, 41641, 8080, 9443]
       # iptables_install_when_docker_present: false  # Removed due to recursive templating issues
       tailscale_enable_route_advertisement: true
       tailscale_advertise_routes:
         - "10.0.0.0/24"
         - "169.254.169.254/32"
       tailscale_advertise_exit_node: true
+      
+      # Traefik configuration for test environment
+      traefik_ssl_enabled: false
+      traefik_certificate_type: "none"
+      traefik_dashboard_domain: "localhost"
+      traefik_dashboard_insecure: true
+
   
   vars:
     # Common variables for all hosts

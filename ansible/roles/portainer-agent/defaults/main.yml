@@ -2,7 +2,7 @@
 # Portainer Agent Configuration
 
 # Agent image and version
-portainer_agent_image: "portainer/agent:latest"
+portainer_agent_image: "portainer/agent:2.27.6"
 
 # Data directory for agent
 portainer_agent_data_directory: "/opt/portainer-agent"
@@ -23,4 +23,4 @@ portainer_agent_port: "9001"
 portainer_agent_log_level: "INFO"
 portainer_agent_edge: false
 portainer_agent_edge_key: ""
-portainer_agent_edge_id: "" 
+portainer_agent_edge_id: ""

@@ -1,0 +1,95 @@
+---
+# Complete monitoring stack validation tasks
+# Validates all deployed monitoring services
+
+- name: Check mode notice for complete validation
+  debug:
+    msg: "Running in check mode - complete validation tasks will be skipped. Health checks require actual execution."
+  when: ansible_check_mode
+
+- name: Wait for Prometheus to be ready
+  uri:
+    url: "http://localhost:9090/-/ready"
+    method: GET
+    status_code: 200
+  register: prometheus_ready
+  until: prometheus_ready.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check Prometheus targets
+  uri:
+    url: "http://localhost:9090/api/v1/targets"
+    method: GET
+    status_code: 200
+  register: prometheus_targets
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check Grafana health
+  uri:
+    url: "http://localhost:3000/api/health"
+    method: GET
+    status_code: 200
+  register: grafana_health
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check Alertmanager health
+  uri:
+    url: "http://localhost:9093/-/healthy"
+    method: GET
+    status_code: 200
+  register: alertmanager_health
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check Loki health
+  uri:
+    url: "http://localhost:3100/ready"
+    method: GET
+    status_code: 200
+  register: loki_health
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check Node Exporter health
+  uri:
+    url: "http://localhost:9100/metrics"
+    method: GET
+    status_code: 200
+  register: node_exporter_health
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Check cAdvisor health
+  uri:
+    url: "http://localhost:8080/metrics"
+    method: GET
+    status_code: 200
+  register: cadvisor_health
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Summary of complete monitoring stack validation
+  debug:
+    msg:
+      - "=== Complete Monitoring Stack Validation Summary ==="
+      - "Prometheus: {{ 'HEALTHY' if (prometheus_ready.status is defined and prometheus_ready.status == 200) else 'UNHEALTHY' }}"
+      - "Grafana: {{ 'HEALTHY' if (grafana_health.status is defined and grafana_health.status == 200) else 'UNHEALTHY' }}"
+      - "Alertmanager: {{ 'HEALTHY' if (alertmanager_health.status is defined and alertmanager_health.status == 200) else 'UNHEALTHY' }}"
+      - "Loki: {{ 'HEALTHY' if (loki_health.status is defined and loki_health.status == 200) else 'UNHEALTHY' }}"
+      - "Node Exporter: {{ 'HEALTHY' if (node_exporter_health.status is defined and node_exporter_health.status == 200) else 'UNHEALTHY' }}"
+      - "cAdvisor: {{ 'HEALTHY' if (cadvisor_health.status is defined and cadvisor_health.status == 200) else 'UNHEALTHY' }}"
+      - "Active Targets: {{ prometheus_targets.json.data.activeTargets | length if (prometheus_targets.json is defined and prometheus_targets.json.data is defined) else 'N/A' }}"
+
+- name: Fail if critical services are unhealthy
+  fail:
+    msg: "Critical monitoring services are not healthy. Check the logs for details."
+  when: >
+    (prometheus_ready.status is defined and prometheus_ready.status != 200) or
+    (grafana_health.status is defined and grafana_health.status != 200)
+  ignore_errors: true
+

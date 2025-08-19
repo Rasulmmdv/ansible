@@ -41,7 +41,7 @@ traefik_dashboard_expose_port: true
 
 # SSL/TLS configuration
 traefik_ssl_enabled: true
-# Certificate type: "acme" for Let's Encrypt, "custom" for own certificates
+# Certificate type: "acme" for Let's Encrypt, "custom" for own certificates, "none" for no SSL
 traefik_certificate_type: "acme"
 traefik_ssl_certificate_resolver: "letsencrypt"
 
@@ -60,6 +60,9 @@ traefik_certificate_files:
     key: "/opt/traefik/certs/key.pem"
     stores:
       - default
+
+# No certificate configuration - automatically controlled by traefik_certificate_type
+traefik_no_certificates: "{{ traefik_certificate_type == 'none' }}"
 
 # Certificate paths inside the container (for Traefik config)
 traefik_certificate_files_container:

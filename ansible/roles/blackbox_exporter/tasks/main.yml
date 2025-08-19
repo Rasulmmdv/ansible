@@ -1,12 +1,13 @@
 ---
 # tasks file for blackbox_exporter
 
-- name: Setup Blackbox Exporter
+- name: Setup Blackbox Exporter infrastructure
   block:
     - name: Create blackbox_exporter group
       group:
         name: "{{ blackbox_exporter_group }}"
       become: true
+      tags: [install, configure]
 
     - name: Create blackbox_exporter user
       user:
@@ -16,6 +17,7 @@
         shell: /usr/sbin/nologin
         create_home: no
       become: true
+      tags: [install, configure]
 
     - name: Create blackbox_exporter data directory
       file:
@@ -25,25 +27,9 @@
         group: "{{ blackbox_exporter_group }}"
         mode: '0755'
       become: true
-
-    - name: Start blackbox_exporter with Docker Compose
-      command: docker compose up -d
-      args:
-        chdir: "{{ blackbox_exporter_data_dir }}"
-      become: true
-      notify: restart blackbox_exporter
-
-    # Create service discovery file for Prometheus to pick up automatically
-    - name: Create blackbox targets service discovery file
-      template:
-        src: blackbox_targets.yml.j2
-        dest: "{{ blackbox_exporter_prometheus_config_dir }}/targets/blackbox_targets.yml"
-        owner: "{{ blackbox_exporter_prometheus_user_id }}"
-        group: "{{ blackbox_exporter_prometheus_group_id }}"
-        mode: '0644'
-      become: true
-      when: blackbox_endpoints is defined and blackbox_endpoints | length > 0
+      tags: [install, configure]
   when: not ansible_check_mode
+  tags: [install, configure]
 
 - name: Deploy blackbox_exporter config
   template:
@@ -72,6 +58,28 @@
     group: "{{ blackbox_exporter_group }}"
     mode: '0644'
   become: true
+  tags: [configure, deploy]
+
+# Create service discovery file for Prometheus to pick up automatically
+- name: Create blackbox targets service discovery file
+  template:
+    src: blackbox_targets.yml.j2
+    dest: "{{ blackbox_exporter_prometheus_config_dir }}/targets/blackbox_targets.yml"
+    owner: "{{ blackbox_exporter_prometheus_user_id }}"
+    group: "{{ blackbox_exporter_prometheus_group_id }}"
+    mode: '0644'
+  become: true
+  when: blackbox_endpoints is defined and blackbox_endpoints | length > 0
+  tags: [configure, deploy]
+
+- name: Start blackbox_exporter with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ blackbox_exporter_data_dir }}"
+  become: true
+  notify: restart blackbox_exporter
+  when: not ansible_check_mode
+  tags: [deploy, start]
 
 # Register blackbox targets for prometheus configuration
 - name: Register blackbox targets
