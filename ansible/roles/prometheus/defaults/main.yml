@@ -38,9 +38,7 @@ prometheus_command:
 
 # Blackbox monitoring targets (can be overridden by blackbox_exporter role)
 prometheus_blackbox_targets:
-  - "http://example.com"
   - "https://google.com"
-  - "http://prometheus.io"
 
 # Enhanced cAdvisor scraping configuration
 prometheus_cadvisor_config:

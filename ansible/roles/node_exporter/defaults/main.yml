@@ -18,5 +18,11 @@ node_exporter_extra_args: ""
 # Service discovery configuration
 node_exporter_service_discovery_enabled: true
 node_exporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"
-node_exporter_prometheus_user_id: "65533"
-node_exporter_prometheus_group_id: "65533" 
+
+# Security configuration - bind to localhost by default
+node_exporter_bind_address: "0.0.0.0"
+node_exporter_port: "9100"
+
+# Networking / firewall configuration
+node_exporter_monitoring_network_name: "monitoring"
+node_exporter_manage_firewall: true 

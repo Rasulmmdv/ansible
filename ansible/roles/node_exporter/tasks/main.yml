@@ -71,7 +71,7 @@
           User={{ node_exporter_user }}
           Group={{ node_exporter_user }}
           Type=simple
-          ExecStart=/usr/local/bin/node_exporter --web.listen-address=0.0.0.0:9100 {{ node_exporter_extra_args | default('') }}
+          ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ node_exporter_bind_address }}:{{ node_exporter_port }} {{ node_exporter_extra_args | default('') }}
           Restart=on-failure
 
           [Install]
@@ -95,75 +95,56 @@
       tags: [install, configure]
   when: not ansible_check_mode
 
-# Debug: Show current variable values
-- name: Debug node_exporter variables
-  debug:
-    msg:
-      - "node_exporter_service_discovery_enabled: {{ node_exporter_service_discovery_enabled }}"
-      - "node_exporter_prometheus_config_dir: {{ node_exporter_prometheus_config_dir }}"
-      - "node_exporter_prometheus_user_id: {{ node_exporter_prometheus_user_id }}"
-      - "node_exporter_prometheus_group_id: {{ node_exporter_prometheus_group_id }}"
-  tags: [configure]
-
-# Detect Docker gateway IP for Prometheus connectivity
-- name: Detect Docker gateway IP for Prometheus connectivity
-  shell: |
-    # Try to get the gateway IP of the monitoring network
-    docker network inspect monitoring --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
-    # Fallback to default bridge network gateway
-    docker network inspect bridge --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
-    # Final fallback
-    echo "172.17.0.1"
-  register: docker_gateway_ip
-  become: true
-  when: node_exporter_service_discovery_enabled and not ansible_check_mode
-  tags: [configure]
-
-# Set node_exporter target IP for Prometheus
-- name: Set node_exporter target IP for Prometheus
-  set_fact:
-    prometheus_node_exporter_target: "host.docker.internal:9100"
-  when: node_exporter_service_discovery_enabled and not ansible_check_mode
-  tags: [configure]
-
-# Create service discovery file for consistency
-- name: Create node_exporter targets service discovery file
-  template:
-    src: node_exporter_targets.yml.j2
-    dest: "{{ node_exporter_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets/node_exporter.yml"
-    owner: "{{ node_exporter_prometheus_user_id | default('65533') }}"
-    group: "{{ node_exporter_prometheus_group_id | default('65533') }}"
-    mode: '0644'
+- name: Get monitoring network details
+  command: docker network inspect {{ node_exporter_monitoring_network_name }}
+  register: monitoring_network_inspect
+  changed_when: false
   become: true
   when: node_exporter_service_discovery_enabled
   tags: [configure]
 
-# Configure iptables to allow monitoring containers to reach host node_exporter
-- name: Allow monitoring containers to access host node_exporter (DOCKER-USER chain)
-  iptables:
-    chain: DOCKER-USER
-    source: "172.19.0.0/16"
-    destination: "{{ ansible_default_ipv4.address | default('192.168.1.10') }}"
-    destination_port: "9100"
-    protocol: tcp
-    jump: RETURN
-    action: insert
-    rule_num: 1
-  become: true
-  when: not ansible_check_mode
-  tags: [configure, firewall]
+- name: Set node_exporter host IP and subnet facts
+  set_fact:
+    node_exporter_host_ip: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Gateway }}"
+    node_exporter_monitoring_subnet: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Subnet }}"
+  when: node_exporter_service_discovery_enabled and monitoring_network_inspect.stdout is defined
+  tags: [configure]
 
-# Also add a rule to the FORWARD chain for compatibility
-- name: Allow monitoring containers to access host node_exporter (FORWARD chain)
-  iptables:
-    chain: FORWARD
-    source: "172.19.0.0/16"
-    destination: "{{ ansible_default_ipv4.address | default('192.168.1.10') }}"
-    destination_port: "9100"
-    protocol: tcp
-    jump: ACCEPT
-    action: insert
-    rule_num: 1
+# Create service discovery file for Prometheus
+- name: Ensure Prometheus targets directory exists
+  file:
+    path: "{{ node_exporter_prometheus_config_dir }}/targets"
+    state: directory
+    owner: "65533"
+    group: "65533"
+    mode: '0755'
   become: true
-  when: not ansible_check_mode
-  tags: [configure, firewall] 
+  when: node_exporter_service_discovery_enabled and not ansible_check_mode
+  tags: [configure]
+
+- name: Create node_exporter targets service discovery file
+  template:
+    src: node_exporter_targets.yml.j2
+    dest: "{{ node_exporter_prometheus_config_dir }}/targets/node_exporter.yml"
+    owner: "65533"
+    group: "65533"
+    mode: '0644'
+  become: true
+  when: node_exporter_service_discovery_enabled and not ansible_check_mode
+  tags: [configure]
+
+- name: Allow monitoring subnet to reach node_exporter (INPUT)
+  iptables:
+    action: insert
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    source: "{{ node_exporter_monitoring_subnet }}"
+    jump: ACCEPT
+    comment: "Allow monitoring subnet to reach node_exporter on the host."
+  become: true
+  when: node_exporter_manage_firewall and node_exporter_monitoring_subnet is defined and not ansible_check_mode
+  tags: [configure]
+
+# Note: Firewall configuration is handled by the existing iptables role
+# to ensure proper iptables rules and avoid conflicts between individual roles. 

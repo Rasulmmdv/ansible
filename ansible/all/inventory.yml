@@ -7,7 +7,7 @@ all:
       ansible_become: true
       ansible_become_method: sudo
       tailscale_auth_key: "tskey-auth-kpQnKjDD9p11CNTRL-vdPxgHjfN5AtnmEQEAXk5AhinEiEyfQr"
-      iptables_allowed_tcp_ports: [22, 80, 443, 41641, 8080, 9443]
+      iptables_allowed_tcp_ports: [22, 80, 443, 41641, 8080, 9443, 9090, 9100]
       # iptables_install_when_docker_present: false  # Removed due to recursive templating issues
       tailscale_enable_route_advertisement: true
       tailscale_advertise_routes:
@@ -20,7 +20,16 @@ all:
       traefik_certificate_type: "none"
       traefik_dashboard_domain: "localhost"
       traefik_dashboard_insecure: true
-
+    infra-01: # gitlab server
+      ansible_host: 5.188.158.83
+      ansible_port: 2222 
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      iptables_docker_public_tcp_ports:
+        - 22 #gitlab-ce for git commands
+        - 80 # gitlab-ce for web interface
+        - 443 # gitlab-ce for web interface
   
   vars:
     # Common variables for all hosts

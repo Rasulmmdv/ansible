@@ -18,9 +18,7 @@ blackbox_enable_website_monitoring: true
 
 # Blackbox targets for Prometheus monitoring
 blackbox_targets:
-  - http://example.com
   - https://google.com
-  - http://prometheus.io
 
 # Endpoint configuration - can be defined as variables or loaded from config file
 blackbox_endpoints_config_file: "{{ blackbox_exporter_data_dir }}/endpoints.yml"
