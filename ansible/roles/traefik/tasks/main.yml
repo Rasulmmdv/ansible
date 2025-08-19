@@ -240,7 +240,11 @@
       loop: "{{ traefik_certificate_files }}"
       loop_control:
         loop_var: cert_item
-      when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
+      when: 
+        - traefik_certificate_type == 'custom' 
+        - traefik_certificates_enabled
+        - traefik_certificate_files is defined
+        - traefik_certificate_files | length > 0
 
     - name: Warn about missing custom certificate files
       debug:
@@ -251,6 +255,7 @@
       when: 
         - traefik_certificate_type == 'custom' 
         - traefik_certificates_enabled
+        - custom_cert_check is defined
         - result_item.stat.exists == false
 
     - name: Copy custom certificate files
@@ -264,7 +269,11 @@
       loop_control:
         loop_var: cert_file
       become: true
-      when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
+      when: 
+        - traefik_certificate_type == 'custom' 
+        - traefik_certificates_enabled
+        - traefik_certificate_files is defined
+        - traefik_certificate_files | length > 0
 
     - name: Copy custom private key files
       copy:
@@ -277,7 +286,11 @@
       loop_control:
         loop_var: key_file
       become: true
-      when: traefik_certificate_type == 'custom' and traefik_certificates_enabled
+      when: 
+        - traefik_certificate_type == 'custom' 
+        - traefik_certificates_enabled
+        - traefik_certificate_files is defined
+        - traefik_certificate_files | length > 0
 
     - name: Create Traefik docker-compose file
       template:

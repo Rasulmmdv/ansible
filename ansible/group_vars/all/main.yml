@@ -31,15 +31,17 @@ roles_all:
   - traefik              # Edge reverse-proxy / load balancer
   - portainer            # Portainer UI (needs docker & traefik certs)
   - portainer-agent      # Portainer agent side-car
-  - prometheus           # Metric collection (needs docker)
+  
+  # Monitoring infrastructure (create network and base configs first)
+  - monitoring-stack     # Create monitoring network and base configs (runs first)
+  - prometheus           # Metric collection (needs docker + monitoring network)
   - alertmanager         # Prometheus alerting (needs prometheus)
-  - loki                 # Log aggregation (needs docker)
+  - loki                 # Log aggregation (needs docker + monitoring network)
   - grafana              # Dashboards (needs prometheus & loki)
   - node_exporter        # Node metrics Exporter
   - blackbox_exporter    # Black-box probing exporter
-
   - cadvisor             # Container metrics exporter
-  - monitoring-stack     # Opinionated bundle (depends on above exporters)
+  
   - remote_monitoring    # Remote probes (depends on blackbox / node exporter)
   - alloy                # Lightweight OTEL collector
   - postgres             # PostgreSQL in docker
@@ -56,15 +58,18 @@ role_dependencies:
   portainer: [docker, traefik]
   portainer-agent: [docker, portainer]
 
+  # Monitoring stack orchestrates all monitoring components
+  monitoring-stack: [docker]
+  # Individual monitoring roles no longer need explicit dependencies
+  # since monitoring-stack handles orchestration
   prometheus: [docker]
-  alertmanager: [prometheus]
+  alertmanager: [docker]
   loki: [docker]
-  grafana: [prometheus, loki]
+  grafana: [docker]
   node_exporter: [docker]
   blackbox_exporter: [docker]
-
   cadvisor: [docker]
-  monitoring-stack: [prometheus, grafana, loki, node_exporter, cadvisor, alertmanager]
+  
   remote_monitoring: [blackbox_exporter, node_exporter]
   alloy: [docker]
 

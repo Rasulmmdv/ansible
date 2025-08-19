@@ -1,6 +1,9 @@
 ---
 # defaults file for prometheus
 
+# Import monitoring configuration from group_vars
+prometheus_config: "{{ prometheus_config | default({}) }}"
+
 prometheus_image: "prom/prometheus:latest"
 prometheus_container_name: "prometheus"
 prometheus_data_dir: "/opt/monitoring/prometheus"
@@ -13,6 +16,9 @@ prometheus_user_id: "65533"
 prometheus_group_id: "65533"
 prometheus_ports:
   - "9090:9090"
+
+# Network configuration - keep "bridge" for compatibility with other services
+prometheus_network_mode: "bridge"  # Options: "bridge", "host"
 prometheus_volumes:
   - "{{ prometheus_config_dir }}:/etc/prometheus"
   - "{{ prometheus_data_dir }}/data:/prometheus"

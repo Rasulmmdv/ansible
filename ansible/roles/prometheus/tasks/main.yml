@@ -1,6 +1,47 @@
 ---
 # tasks file for prometheus
 
+- name: Ensure monitoring network exists
+  community.docker.docker_network:
+    name: "{{ monitoring_stack.network_name }}"
+    state: present
+  become: true
+  when: not ansible_check_mode
+  tags: [install, configure]
+
+- name: Detect Docker gateway IP for node_exporter connectivity
+  shell: |
+    # Try to get the gateway IP of the monitoring network
+    docker network inspect {{ monitoring_stack.network_name }} --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
+    # Fallback to default bridge network gateway
+    docker network inspect bridge --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
+    # Final fallback
+    echo "172.17.0.1"
+  register: docker_gateway_ip
+  become: true
+  when: not ansible_check_mode
+  tags: [configure]
+
+- name: Set node_exporter target IP
+  set_fact:
+    prometheus_node_exporter_target: "{{ docker_gateway_ip.stdout | default('host.docker.internal') }}:9100"
+  when: not ansible_check_mode
+  tags: [configure]
+
+- name: Allow monitoring containers to access host node_exporter
+  iptables:
+    chain: FORWARD
+    source: "172.19.0.0/16"
+    destination: "{{ docker_gateway_ip.stdout | default('172.19.0.1') }}"
+    destination_port: "9100"
+    protocol: tcp
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+  become: true
+  when: not ansible_check_mode
+  tags: [configure]
+
 - name: Setup Prometheus user and directories
   block:
     - name: Create Prometheus group
@@ -8,6 +49,7 @@
         name: "{{ prometheus_group }}"
         gid: "{{ prometheus_group_id }}"
       become: true
+      tags: [install, configure]
 
     - name: Create Prometheus user
       user:
@@ -18,6 +60,7 @@
         shell: /usr/sbin/nologin
         create_home: no
       become: true
+      tags: [install, configure]
 
     - name: Create Prometheus directories
       file:
@@ -34,6 +77,7 @@
         - "{{ prometheus_alerts_dir }}"
         - "{{ prometheus_config_dir }}/targets"  # For file-based service discovery
       become: true
+      tags: [install, configure]
 
     - name: Ensure data directory has correct permissions
       file:
@@ -43,41 +87,9 @@
         mode: '0755'
         recurse: yes
       become: true
-
-    - name: Start Prometheus with Docker Compose
-      command: docker compose up -d
-      args:
-        chdir: "{{ prometheus_data_dir }}"
-      become: true
-      notify: restart prometheus
-
-    - name: Deploy retention cleanup script
-      copy:
-        src: cleanup_retention.sh
-        dest: "{{ prometheus_data_dir }}/cleanup_retention.sh"
-        owner: "{{ prometheus_user_id }}"
-        group: "{{ prometheus_group_id }}"
-        mode: '0755'
-      become: true
-
-    - name: Create retention cleanup symlink
-      file:
-        src: "{{ prometheus_data_dir }}/cleanup_retention.sh"
-        dest: "/usr/local/bin/cleanup-monitoring-retention"
-        state: link
-      become: true
-
-    # Create retention monitoring cron job
-    - name: Create retention monitoring cron job
-      cron:
-        name: "Monitor retention and cleanup"
-        minute: "0"
-        hour: "2"
-        job: "{{ prometheus_data_dir }}/cleanup_retention.sh --check >> /var/log/monitoring-retention.log 2>&1"
-        user: "{{ prometheus_user }}"
-      become: true
-      when: prometheus_retention.cleanup.enabled | default(true)
+      tags: [install, configure]
   when: not ansible_check_mode
+  tags: [install, configure]
 
 - name: Deploy docker-compose.yml for Prometheus
   template:
@@ -87,6 +99,7 @@
     group: "{{ prometheus_group_id }}"
     mode: '0644'
   become: true
+  tags: [configure, deploy]
 
 - name: Deploy prometheus.yml config
   template:
@@ -96,6 +109,7 @@
     group: "{{ prometheus_group_id }}"
     mode: '0644'
   become: true
+  tags: [configure, deploy]
 
 - name: Deploy Loki targets for file-based service discovery
   template:
@@ -104,8 +118,8 @@
     owner: "{{ prometheus_user_id }}"
     group: "{{ prometheus_group_id }}"
     mode: '0644'
-  become: true
   notify: reload prometheus
+  tags: [configure, deploy]
 
 # Deploy retention monitoring and management
 - name: Deploy retention alert rules
@@ -115,8 +129,48 @@
     owner: "{{ prometheus_user_id }}"
     group: "{{ prometheus_group_id }}"
     mode: '0644'
-  become: true
   notify: reload prometheus
+  tags: [configure, deploy]
+
+- name: Start Prometheus with Docker Compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ prometheus_data_dir }}"
+  become: true
+  notify: restart prometheus
+  when: not ansible_check_mode
+  tags: [deploy, start]
+
+- name: Deploy retention cleanup script
+  copy:
+    src: cleanup_retention.sh
+    dest: "{{ prometheus_data_dir }}/cleanup_retention.sh"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0755'
+  become: true
+  tags: [configure, deploy]
+
+- name: Create retention cleanup symlink
+  file:
+    src: "{{ prometheus_data_dir }}/cleanup_retention.sh"
+    dest: "/usr/local/bin/cleanup-monitoring-retention"
+    state: link
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, deploy]
+
+# Create retention monitoring cron job
+- name: Create retention monitoring cron job
+  cron:
+    name: "Monitor retention and cleanup"
+    minute: "0"
+    hour: "2"
+    job: "{{ prometheus_data_dir }}/cleanup_retention.sh --check >> /var/log/monitoring-retention.log 2>&1"
+    user: "{{ prometheus_user }}"
+  become: true
+  when: prometheus_retention.cleanup.enabled | default(true) and not ansible_check_mode
+  tags: [configure, deploy]
 
 # Verify retention configuration
 - name: Wait for Prometheus to be ready
@@ -130,6 +184,7 @@
   delay: 10
   ignore_errors: true
   when: not ansible_check_mode
+  tags: [validate]
 
 - name: Check Prometheus retention configuration
   uri:
@@ -139,6 +194,7 @@
   register: prometheus_runtime_info
   ignore_errors: true
   when: not ansible_check_mode
+  tags: [validate]
 
 - name: Display Prometheus retention settings
   debug:
@@ -147,4 +203,5 @@
       - "Time retention: {{ prometheus_retention.time }}"
       - "Size retention: {{ prometheus_retention.size }}"
       - "Runtime retention: {{ prometheus_runtime_info.json.data.storageRetention | default('Not available') }}"
-  when: prometheus_runtime_info.json is defined and not ansible_check_mode 
+  when: prometheus_runtime_info.json is defined and not ansible_check_mode
+  tags: [validate] 

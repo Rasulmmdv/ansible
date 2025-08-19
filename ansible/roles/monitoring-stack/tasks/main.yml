@@ -1,14 +1,15 @@
 ---
 # Monitoring stack orchestration tasks
-# This role coordinates configuration and validation across all monitoring components
+# This role orchestrates the complete monitoring stack deployment in correct order
 
-- name: Setup monitoring stack
+- name: Setup monitoring infrastructure
   block:
     - name: Create monitoring network
       community.docker.docker_network:
         name: "{{ monitoring_stack.network_name }}"
         state: present
       become: true
+      tags: [install, configure]
 
     - name: Create monitoring data root directory
       file:
@@ -18,23 +19,77 @@
         group: root
         mode: '0755'
       become: true
+      tags: [install, configure]
   when: not ansible_check_mode
+  tags: [install, configure]
 
 - name: Initialize monitoring configuration variables
   set_fact:
     monitoring_alertmanagers: []
     monitoring_scrape_configs: []
-  
+  tags: [configure]
+
 - name: Display monitoring stack configuration summary
   debug:
     msg:
-      - "Monitoring Stack Configuration:"
+      - "=== Monitoring Stack Deployment Starting ==="
       - "Network: {{ monitoring_stack.network_name }}"
       - "Data Root: {{ monitoring_stack.data_root }}"
-      - "Alertmanagers: {{ monitoring_alertmanagers | default([]) | length }} configured"
-      - "Scrape Configs: {{ monitoring_scrape_configs | default([]) | length }} configured"
-      - "Blackbox Targets: {{ prometheus_blackbox_targets | default([]) | length }} configured"
+      - "Components will be deployed in dependency order"
+  tags: [configure]
 
-- name: Validate monitoring stack deployment
-  include_tasks: validate.yml
+# Deploy core monitoring services in dependency order
+- name: Deploy Prometheus (core metrics collection)
+  include_role:
+    name: prometheus
+  tags: [deploy, prometheus, metrics]
+
+- name: Deploy Node Exporter (host metrics)
+  include_role:
+    name: node_exporter
+  tags: [deploy, node_exporter, metrics]
+
+- name: Deploy cAdvisor (container metrics)
+  include_role:
+    name: cadvisor
+  tags: [deploy, cadvisor, metrics]
+
+- name: Deploy Blackbox Exporter (endpoint monitoring)
+  include_role:
+    name: blackbox_exporter
+  tags: [deploy, blackbox_exporter, uptime]
+
+- name: Deploy Alertmanager (alerting)
+  include_role:
+    name: alertmanager
+  tags: [deploy, alertmanager, alerts]
+
+- name: Deploy Loki (log aggregation)
+  include_role:
+    name: loki
+  tags: [deploy, loki, logs]
+
+- name: Deploy Alloy (OTEL collector)
+  include_role:
+    name: alloy
+  tags: [deploy, alloy, logs]
+
+- name: Deploy Grafana (visualization - deploy last)
+  include_role:
+    name: grafana
+  tags: [deploy, grafana, visualization]
+
+- name: Validate complete monitoring stack deployment
+  include_tasks: validate_complete.yml
   tags: ["validate"]
+
+- name: Display deployment summary
+  debug:
+    msg:
+      - "=== Monitoring Stack Deployment Complete ==="
+      - "Prometheus: http://{{ ansible_default_ipv4.address }}:9090"
+      - "Grafana: http://{{ ansible_default_ipv4.address }}:3000 (admin/admin)"
+      - "Alertmanager: http://{{ ansible_default_ipv4.address }}:9093"
+      - "Loki: http://{{ ansible_default_ipv4.address }}:3100"
+      - "Run with --tags validate to validate deployment"
+  tags: [deploy]

@@ -9,7 +9,9 @@ services:
       - --providers.file.watch=true
     ports:
       - "{{ traefik_web_port }}:80"
+{% if traefik_ssl_enabled %}
       - "{{ traefik_websecure_port }}:443"
+{% endif %}
 {% if traefik_dashboard_enabled and traefik_dashboard_expose_port %}
       - "{{ traefik_dashboard_port }}:8080"
 {% endif %}
