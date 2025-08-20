@@ -2,6 +2,7 @@
 # Validate required variables for Tailscale
 - name: Validate Tailscale configuration variables
   include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
   vars:
     role_name: "tailscale"
     required_variables:
@@ -25,20 +26,20 @@
         dest: "{{ tailscale_install_script_path }}"
         mode: "0755"
         timeout: 60
-      tags: [tailscale]
+      tags: [install, networking]
 
     - name: Install Tailscale
       ansible.builtin.command: "{{ tailscale_install_script_path }}"
       args:
         creates: "/usr/bin/tailscale"
       register: tailscale_install
-      tags: [tailscale]
+      tags: [install, networking]
 
     - name: Clean up install script
       ansible.builtin.file:
         path: "{{ tailscale_install_script_path }}"
         state: absent
-      tags: [tailscale]
+      tags: [install, networking]
 
     # # TUN/TAP kernel module and device setup
     # - name: Load TUN kernel module
@@ -75,14 +76,14 @@
         state: "{{ tailscale_service_state }}"
         enabled: "{{ tailscale_service_enabled }}"
         daemon_reload: true
-      tags: [tailscale, configure]
+      tags: [configure, networking]
 
     - name: Check current Tailscale status
       ansible.builtin.command: "tailscale status"
       register: tailscale_current_status
       changed_when: false
       failed_when: false
-      tags: [validate]
+      tags: [validate, networking]
 
     - name: Wait for Tailscale to be ready (after authentication)
       ansible.builtin.wait_for:
@@ -91,7 +92,7 @@
       when:
         - tailscale_auth is defined
         - tailscale_auth is changed
-      tags: [validate]
+      tags: [validate, networking]
   when: not ansible_check_mode
 
 - name: Set default Tailscale status for check mode
@@ -100,7 +101,7 @@
       rc: 1
       stdout: "Not available in check mode"
   when: ansible_check_mode
-  tags: [validate]
+  tags: [validate, networking]
 
 - name: Debug - Show current Tailscale status
   ansible.builtin.debug:
@@ -108,7 +109,7 @@
       Current Tailscale status:
       {{ tailscale_current_status.stdout_lines | default(['Not available in check mode']) }}
       Return code: {{ tailscale_current_status.rc | default('Not available in check mode') }}
-  tags: [validate]
+  tags: [validate, networking]
 
 - name: Build complete Tailscale up command
   ansible.builtin.set_fact:
@@ -116,20 +117,20 @@
   when: 
     - tailscale_auth_key is defined and tailscale_auth_key != ""
     - tailscale_current_status.rc != 0 or "Logged out" in tailscale_current_status.stdout
-  tags: [configure]
+  tags: [configure, networking]
 
 - name: Build Tailscale up command without auth key (if already authenticated)
   ansible.builtin.set_fact:
     tailscale_up_cmd: "tailscale up --accept-dns={{ tailscale_accept_dns | lower }} --accept-routes={{ tailscale_accept_routes | lower }}"
   when: 
     - tailscale_current_status.rc == 0 and "Logged out" not in tailscale_current_status.stdout
-  tags: [configure]
+  tags: [configure, networking]
 
 - name: Add hostname to Tailscale up command
   ansible.builtin.set_fact:
     tailscale_up_cmd: "{{ tailscale_up_cmd }} --hostname={{ tailscale_hostname }}"
   when: tailscale_hostname is defined and tailscale_hostname != ""
-  tags: [configure]
+  tags: [configure, networking]
 
 - name: Add route advertisement to Tailscale up command
   ansible.builtin.set_fact:
@@ -137,13 +138,13 @@
   when: 
     - tailscale_enable_route_advertisement | default(false)
     - tailscale_advertise_routes | length > 0
-  tags: [configure]
+  tags: [configure, networking]
 
 - name: Add exit node advertisement to Tailscale up command
   ansible.builtin.set_fact:
     tailscale_up_cmd: "{{ tailscale_up_cmd }} --advertise-exit-node={{ tailscale_advertise_exit_node | lower }}"
   when: tailscale_advertise_exit_node | default(false)
-  tags: [configure]
+  tags: [configure, networking]
 
 - name: Debug - Show complete Tailscale up command
   ansible.builtin.debug:
@@ -159,7 +160,7 @@
       - Advertise routes: {{ tailscale_advertise_routes | default([]) }}
       - Advertise exit node: {{ tailscale_advertise_exit_node | default(false) }}
   when: tailscale_up_cmd is defined
-  tags: [configure]
+  tags: [configure, networking]
 
 # - name: Authenticate Tailscale with complete configuration
 #   ansible.builtin.command: "{{ tailscale_up_cmd }}"
@@ -184,7 +185,7 @@
   ansible.builtin.command: "tailscale status"
   register: tailscale_status
   changed_when: false
-  tags: [validate]
+  tags: [validate, networking]
 
 - name: Debug - Show Tailscale status
   ansible.builtin.debug:
@@ -192,4 +193,4 @@
       Tailscale status:
       {{ tailscale_status.stdout_lines | default(['Not available in check mode']) }}
   when: tailscale_status is defined
-  tags: [validate] 
+  tags: [validate, networking] 

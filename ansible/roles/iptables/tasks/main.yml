@@ -2,8 +2,7 @@
 # tasks file for iptables
 - name: Check if Docker role has been applied
   become: true
-  tags:
-    - iptables
+  tags: [prereq, validate, docker]
   block:
     - name: Check for docker binary
       ansible.builtin.stat:
@@ -27,8 +26,7 @@
 
 
 - name: Configure iptables
-  tags:
-    - iptables
+  tags: [configure, security, networking]
   block:
     - name: Install iptables and at packages
       become: true

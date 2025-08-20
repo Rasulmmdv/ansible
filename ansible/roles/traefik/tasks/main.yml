@@ -4,6 +4,7 @@
 # Validate required variables for Traefik
 - name: Validate Traefik configuration variables
   include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
   vars:
     role_name: "traefik"
     required_variables:
@@ -77,6 +78,7 @@
     update_cache: true
   become: true
   when: not ansible_check_mode
+  tags: [install, prereq]
 
 - name: Try to install Python dependencies via system packages
   package:
@@ -197,6 +199,7 @@
 
 - name: Setup Traefik user and directories (standardized)
   include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  tags: [configure, security]
   vars:
     service_name: "traefik"
     service_user: "{{ traefik_user }}"
@@ -368,9 +371,11 @@
     state: present
   register: traefik_service
   when: not ansible_check_mode
+  tags: [deploy, docker, web]
 
 - name: Wait for Traefik to be ready (standardized health check)
   include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  tags: [validate, web]
   vars:
     service_name: "traefik"
     service_url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"

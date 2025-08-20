@@ -4,6 +4,7 @@
 # Validate required variables for Grafana
 - name: Validate Grafana configuration variables
   include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
   vars:
     role_name: "grafana"
     required_variables:
@@ -47,7 +48,7 @@
     group: "{{ grafana_group_id }}"
     mode: '0644'
   become: true
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 - name: Start grafana with Docker Compose
   community.docker.docker_compose_v2:
@@ -56,7 +57,7 @@
   become: true
   notify: restart grafana
   when: not ansible_check_mode
-  tags: [deploy, start]
+  tags: [deploy, docker, web]
 
 - name: Deploy Grafana provisioning for Prometheus datasource
   template:
