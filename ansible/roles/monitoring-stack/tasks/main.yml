@@ -1,6 +1,6 @@
 ---
-# Monitoring stack orchestration tasks
-# This role orchestrates the complete monitoring stack deployment in correct order
+# Monitoring stack orchestration tasks with dependency management and rollback support
+# This role orchestrates the complete monitoring stack deployment with enhanced reliability
 
 - name: Setup monitoring infrastructure
   block:
@@ -20,6 +20,19 @@
         mode: '0755'
       become: true
       tags: [install, configure]
+  rescue:
+    - name: "Handle infrastructure setup failure"
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Monitoring Stack Infrastructure Setup"
+        error_message: "Failed to create basic monitoring infrastructure"
+        troubleshooting_steps:
+          - "Check Docker daemon status"
+          - "Verify root permissions for directory creation"
+          - "Ensure sufficient disk space"
+          - "Check network connectivity"
+        should_fail: true
   when: not ansible_check_mode
   tags: [install, configure]
 
@@ -29,67 +42,65 @@
     monitoring_scrape_configs: []
   tags: [configure]
 
+- name: "Phase 1: Validate dependencies and system requirements"
+  include_tasks: dependency_checks.yml
+  tags: [install, configure, validate]
+
+- name: "Phase 2: Initialize rollback mechanisms"
+  include_tasks: rollback_mechanisms.yml
+  tags: [install, configure]
+
 - name: Display monitoring stack configuration summary
   debug:
     msg:
-      - "=== Monitoring Stack Deployment Starting ==="
+      - "=== Enhanced Monitoring Stack Deployment Starting ==="
       - "Network: {{ monitoring_stack.network_name }}"
       - "Data Root: {{ monitoring_stack.data_root }}"
-      - "Components will be deployed in dependency order"
+      - "Features: Dependency validation, incremental deployment, rollback support"
+      - "Components will be deployed with health checks and failure recovery"
   tags: [configure]
 
-# Deploy core monitoring services in dependency order
-- name: Deploy Prometheus (core metrics collection)
-  include_role:
-    name: prometheus
-  tags: [deploy, prometheus, metrics]
+# Phase 3: Deploy core monitoring services with incremental validation
+- name: "Deploy monitoring services with health checks and rollback support"
+  include_tasks: incremental_deployment.yml
+  tags: [deploy]
 
-- name: Deploy Node Exporter (host metrics)
-  include_role:
-    name: node_exporter
-  tags: [deploy, node_exporter, metrics]
-
-- name: Deploy cAdvisor (container metrics)
-  include_role:
-    name: cadvisor
-  tags: [deploy, cadvisor, metrics]
-
-- name: Deploy Blackbox Exporter (endpoint monitoring)
-  include_role:
-    name: blackbox_exporter
-  tags: [deploy, blackbox_exporter, uptime]
-
-- name: Deploy Alertmanager (alerting)
-  include_role:
-    name: alertmanager
-  tags: [deploy, alertmanager, alerts]
-
-- name: Deploy Loki (log aggregation)
-  include_role:
-    name: loki
-  tags: [deploy, loki, logs]
-
-- name: Deploy Alloy (OTEL collector)
-  include_role:
-    name: alloy
-  tags: [deploy, alloy, logs]
-
-- name: Deploy Grafana (visualization - deploy last)
-  include_role:
-    name: grafana
-  tags: [deploy, grafana, visualization]
-
-- name: Validate complete monitoring stack deployment
+# Phase 4: Final validation and deployment summary
+- name: "Validate complete monitoring stack deployment"
   include_tasks: validate_complete.yml
   tags: ["validate"]
+  when: monitoring_stack.validation_enabled | default(true)
 
-- name: Display deployment summary
+- name: "Display enhanced deployment summary"
   debug:
     msg:
-      - "=== Monitoring Stack Deployment Complete ==="
-      - "Prometheus: http://{{ ansible_default_ipv4.address }}:9090"
-      - "Grafana: http://{{ ansible_default_ipv4.address }}:3000 (admin/admin)"
-      - "Alertmanager: http://{{ ansible_default_ipv4.address }}:9093"
-      - "Loki: http://{{ ansible_default_ipv4.address }}:3100"
-      - "Run with --tags validate to validate deployment"
+      - "=== Enhanced Monitoring Stack Deployment Complete ==="
+      - "📊 Service URLs:"
+      - "  • Prometheus: http://{{ ansible_default_ipv4.address }}:9090"
+      - "  • Grafana: http://{{ ansible_default_ipv4.address }}:3000 (admin/admin)"
+      - "  • Alertmanager: http://{{ ansible_default_ipv4.address }}:9093"
+      - "  • Loki: http://{{ ansible_default_ipv4.address }}:3100"
+      - ""
+      - "🛠️  Management Tools:"
+      - "  • Rollback: {{ monitoring_stack.data_root }}/.deployment-state/complete_rollback.sh"
+      - "  • Service Recovery: {{ monitoring_stack.data_root }}/.deployment-state/recover_service.sh <service>"
+      - "  • Deployment State: {{ monitoring_stack.data_root }}/.deployment-state/final_state.yml"
+      - ""
+      - "📋 Available Commands:"
+      - "  • Full validation: ansible-playbook --tags validate <playbook>"
+      - "  • Service logs: docker compose -f {{ monitoring_stack.data_root }}/<service>/docker-compose.yml logs"
+      - "  • Stack status: docker compose -f {{ monitoring_stack.data_root }}/*/docker-compose.yml ps"
+  tags: [deploy]
+
+# Always run cleanup on completion
+- name: "Cleanup temporary deployment files"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml.tmp"
+    - "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml.failed"
+    - "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml.new"
+  ignore_errors: true
+  become: true
   tags: [deploy]

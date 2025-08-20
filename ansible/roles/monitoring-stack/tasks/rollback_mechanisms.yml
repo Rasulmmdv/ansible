@@ -1,0 +1,236 @@
+---
+# Rollback mechanisms for monitoring stack deployment failures
+# Provides recovery options when deployments fail
+
+- name: "Initialize rollback tracking"
+  ansible.builtin.set_fact:
+    deployed_services: []
+    rollback_required: false
+    deployment_failures: []
+
+- name: "Create rollback state directory"
+  ansible.builtin.file:
+    path: "{{ monitoring_stack.data_root }}/.deployment-state"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: "Save initial deployment state"
+  ansible.builtin.copy:
+    content: |
+      # Monitoring Stack Deployment State
+      # Generated: {{ ansible_date_time.iso8601 }}
+      deployment_started: {{ ansible_date_time.epoch }}
+      target_services:
+        - prometheus
+        - node_exporter
+        - cadvisor
+        - blackbox_exporter
+        - alertmanager
+        - loki
+        - alloy
+        - grafana
+      deployed_services: []
+      failed_services: []
+    dest: "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml"
+    mode: '0644'
+  become: true
+
+- name: "Define rollback service operations"
+  ansible.builtin.set_fact:
+    service_rollback_operations:
+      prometheus:
+        containers: ["prometheus"]
+        compose_dir: "/opt/monitoring/prometheus"
+        data_dirs: ["/opt/monitoring/prometheus/data"]
+        ports: [9090]
+      grafana:
+        containers: ["grafana"]
+        compose_dir: "/opt/monitoring/grafana"
+        data_dirs: ["/opt/monitoring/grafana/data"]
+        ports: [3000]
+      alertmanager:
+        containers: ["alertmanager"]
+        compose_dir: "/opt/monitoring/alertmanager"
+        data_dirs: ["/opt/monitoring/alertmanager/data"]
+        ports: [9093]
+      loki:
+        containers: ["loki"]
+        compose_dir: "/opt/monitoring/loki"
+        data_dirs: ["/opt/monitoring/loki/data"]
+        ports: [3100]
+      node_exporter:
+        containers: ["node_exporter"]
+        compose_dir: "/opt/monitoring/node_exporter"
+        data_dirs: []
+        ports: [9100]
+      cadvisor:
+        containers: ["cadvisor"]
+        compose_dir: "/opt/monitoring/cadvisor"
+        data_dirs: []
+        ports: [8080]
+      blackbox_exporter:
+        containers: ["blackbox_exporter"]
+        compose_dir: "/opt/monitoring/blackbox_exporter"
+        data_dirs: []
+        ports: [9115]
+      alloy:
+        containers: ["alloy"]
+        compose_dir: "/opt/monitoring/alloy"
+        data_dirs: ["/opt/monitoring/alloy/data"]
+        ports: [12345]
+
+- name: "Create service rollback script template"
+  ansible.builtin.template:
+    src: rollback_service.sh.j2
+    dest: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh"
+    mode: '0755'
+  become: true
+  vars:
+    rollback_operations: "{{ service_rollback_operations }}"
+
+- name: "Create complete rollback script"
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      # Complete monitoring stack rollback script
+      # Generated: {{ ansible_date_time.iso8601 }}
+      
+      set -euo pipefail
+      
+      DEPLOYMENT_STATE_DIR="{{ monitoring_stack.data_root }}/.deployment-state"
+      SERVICES=(prometheus node_exporter cadvisor blackbox_exporter alertmanager loki alloy grafana)
+      
+      echo "🔄 Starting monitoring stack rollback..."
+      
+      # Stop all services in reverse order
+      for service in "${SERVICES[@]}"; do
+          echo "Stopping ${service}..."
+          if [ -d "/opt/monitoring/${service}" ]; then
+              cd "/opt/monitoring/${service}"
+              docker compose down --remove-orphans 2>/dev/null || true
+              docker container rm -f "${service}" 2>/dev/null || true
+          fi
+      done
+      
+      # Remove monitoring network
+      echo "Removing monitoring network..."
+      docker network rm {{ monitoring_stack.network_name }} 2>/dev/null || true
+      
+      # Optional: Remove data directories (uncomment if complete cleanup needed)
+      # echo "Removing data directories..."
+      # rm -rf {{ monitoring_stack.data_root }}
+      
+      echo "✅ Monitoring stack rollback completed"
+      echo "📝 To preserve data, data directories were NOT removed"
+      echo "📝 To complete cleanup, manually remove: {{ monitoring_stack.data_root }}"
+    dest: "{{ monitoring_stack.data_root }}/.deployment-state/complete_rollback.sh"
+    mode: '0755'
+  become: true
+
+- name: "Create selective service recovery script"
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      # Selective service recovery for monitoring stack
+      # Usage: ./recover_service.sh <service_name>
+      
+      set -euo pipefail
+      
+      SERVICE="${1:-}"
+      if [ -z "$SERVICE" ]; then
+          echo "Usage: $0 <service_name>"
+          echo "Available services: prometheus, grafana, alertmanager, loki, node_exporter, cadvisor, blackbox_exporter, alloy"
+          exit 1
+      fi
+      
+      SERVICE_DIR="/opt/monitoring/${SERVICE}"
+      
+      if [ ! -d "$SERVICE_DIR" ]; then
+          echo "❌ Service directory not found: $SERVICE_DIR"
+          exit 1
+      fi
+      
+      echo "🔄 Recovering ${SERVICE}..."
+      
+      cd "$SERVICE_DIR"
+      
+      # Stop existing container
+      echo "Stopping existing ${SERVICE} container..."
+      docker compose down --remove-orphans 2>/dev/null || true
+      docker container rm -f "${SERVICE}" 2>/dev/null || true
+      
+      # Restart service
+      echo "Starting ${SERVICE}..."
+      docker compose up -d
+      
+      # Wait for service to be ready
+      sleep 10
+      
+      # Basic health check
+      case "${SERVICE}" in
+          prometheus)
+              curl -f http://localhost:9090/-/ready || { echo "❌ Prometheus health check failed"; exit 1; }
+              ;;
+          grafana)
+              curl -f http://localhost:3000/api/health || { echo "❌ Grafana health check failed"; exit 1; }
+              ;;
+          alertmanager)
+              curl -f http://localhost:9093/-/healthy || { echo "❌ Alertmanager health check failed"; exit 1; }
+              ;;
+          loki)
+              curl -f http://localhost:3100/ready || { echo "❌ Loki health check failed"; exit 1; }
+              ;;
+          node_exporter)
+              curl -f http://localhost:9100/metrics >/dev/null || { echo "❌ Node Exporter health check failed"; exit 1; }
+              ;;
+          cadvisor)
+              curl -f http://localhost:8080/metrics >/dev/null || { echo "❌ cAdvisor health check failed"; exit 1; }
+              ;;
+          blackbox_exporter)
+              curl -f http://localhost:9115/metrics >/dev/null || { echo "❌ Blackbox Exporter health check failed"; exit 1; }
+              ;;
+          alloy)
+              curl -f http://localhost:12345/-/ready || { echo "❌ Alloy health check failed"; exit 1; }
+              ;;
+      esac
+      
+      echo "✅ ${SERVICE} recovery completed successfully"
+    dest: "{{ monitoring_stack.data_root }}/.deployment-state/recover_service.sh"
+    mode: '0755'
+  become: true
+
+- name: "Create deployment state update function"
+  ansible.builtin.set_fact:
+    update_deployment_state: |
+      #!/bin/bash
+      SERVICE="$1"
+      STATUS="$2"  # deployed, failed, rolled_back
+      STATE_FILE="{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml"
+      
+      # Update deployment state
+      if [ "$STATUS" = "deployed" ]; then
+          echo "  - $SERVICE" >> "$STATE_FILE.tmp"
+          sed '/deployed_services:/r '"$STATE_FILE.tmp"' "$STATE_FILE" > "$STATE_FILE.new"
+          mv "$STATE_FILE.new" "$STATE_FILE"
+          rm -f "$STATE_FILE.tmp"
+      elif [ "$STATUS" = "failed" ]; then
+          echo "  - $SERVICE" >> "$STATE_FILE.failed"
+          sed '/failed_services:/r '"$STATE_FILE.failed"' "$STATE_FILE" > "$STATE_FILE.new"
+          mv "$STATE_FILE.new" "$STATE_FILE"
+          rm -f "$STATE_FILE.failed"
+      fi
+
+- name: "Display rollback information"
+  ansible.builtin.debug:
+    msg:
+      - "=== Rollback Mechanisms Initialized ==="
+      - "Rollback Scripts Location: {{ monitoring_stack.data_root }}/.deployment-state/"
+      - "Complete Rollback: ./complete_rollback.sh"
+      - "Service Recovery: ./recover_service.sh <service_name>"
+      - "Deployment State: ./deployment.yml"
+      - ""
+      - "In case of deployment failure:"
+      - "1. Check logs: docker compose logs <service>"
+      - "2. Recover specific service: ./recover_service.sh <service>"
+      - "3. Complete rollback: ./complete_rollback.sh"
