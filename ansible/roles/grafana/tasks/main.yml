@@ -54,9 +54,9 @@
   tags: [configure, deploy]
 
 - name: Start grafana with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ grafana_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_data_dir }}"
+    state: present
   become: true
   notify: restart grafana
   when: not ansible_check_mode

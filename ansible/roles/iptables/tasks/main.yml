@@ -6,9 +6,9 @@
     - iptables
   block:
     - name: Check for docker binary
-      ansible.builtin.command: which docker
+      ansible.builtin.stat:
+        path: /usr/bin/docker
       register: docker_binary_check
-      changed_when: false
       failed_when: false
 
     - name: Check for docker service
@@ -19,7 +19,7 @@
 
     - name: Set docker_installed fact
       ansible.builtin.set_fact:
-        docker_installed: "{{ docker_binary_check.rc == 0 and docker_service_check.rc == 0 }}"
+        docker_installed: "{{ docker_binary_check.stat.exists and docker_service_check.rc == 0 }}"
   rescue:
     - name: Set docker_installed fact to false if check fails
       ansible.builtin.set_fact:
@@ -76,16 +76,21 @@
     - name: Schedule emergency recovery (runs in 3 minutes if not cancelled)
       become: true
       ansible.builtin.shell: |
+        set -euo pipefail
         # Cancel any existing emergency recovery jobs
-        for job in $(atq | awk '{print $1}'); do
-          atrm $job 2>/dev/null || true
+        for job in $(atq | awk '{print $1}' 2>/dev/null || echo ""); do
+          if [[ -n "$job" ]]; then
+            atrm "$job" 2>/dev/null || true
+          fi
         done
         
         # Schedule new emergency recovery in 3 minutes
-        echo "/usr/local/bin/emergency-iptables-recovery.sh" | at now + 3 minutes
+        printf '%s\n' "/usr/local/bin/emergency-iptables-recovery.sh" | at now + 3 minutes
         
         # Show scheduled job
         atq
+      args:
+        executable: /bin/bash
       register: emergency_job
       changed_when: true
 
@@ -101,10 +106,15 @@
     - name: Reset iptables to a permissive state before applying new rules
       become: true
       ansible.builtin.shell: |
+        set -euo pipefail
+        # Set permissive policies first (critical for SSH access)
         iptables -P INPUT ACCEPT
         iptables -P FORWARD ACCEPT
         iptables -P OUTPUT ACCEPT
+        # Flush all existing rules
         iptables -F
+      args:
+        executable: /bin/bash
       changed_when: true
       notify: commit iptables rules
 

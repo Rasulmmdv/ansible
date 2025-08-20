@@ -10,15 +10,41 @@
   tags: [install, configure]
 
 - name: Detect Docker gateway IP for node_exporter connectivity
-  shell: |
-    # Try to get the gateway IP of the monitoring network
-    docker network inspect {{ monitoring_stack.network_name }} --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
-    # Fallback to default bridge network gateway
-    docker network inspect bridge --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
-    # Final fallback
-    echo "172.17.0.1"
-  register: docker_gateway_ip
-  become: true
+  block:
+    - name: Inspect monitoring network for gateway IP
+      community.docker.docker_network_info:
+        name: "{{ monitoring_stack.network_name }}"
+      register: monitoring_network_info
+      failed_when: false
+      
+    - name: Extract monitoring network gateway IP
+      ansible.builtin.set_fact:
+        monitoring_gateway_ip: "{{ monitoring_network_info.network.IPAM.Config[0].Gateway | default('') }}"
+      when: 
+        - monitoring_network_info is succeeded
+        - monitoring_network_info.network.IPAM.Config is defined
+        - monitoring_network_info.network.IPAM.Config | length > 0
+        
+    - name: Inspect default bridge network for gateway IP
+      community.docker.docker_network_info:
+        name: "bridge"
+      register: bridge_network_info
+      failed_when: false
+      when: monitoring_gateway_ip is not defined or monitoring_gateway_ip == ''
+      
+    - name: Extract bridge network gateway IP
+      ansible.builtin.set_fact:
+        bridge_gateway_ip: "{{ bridge_network_info.network.IPAM.Config[0].Gateway | default('') }}"
+      when: 
+        - bridge_network_info is defined
+        - bridge_network_info is succeeded
+        - bridge_network_info.network.IPAM.Config is defined
+        - bridge_network_info.network.IPAM.Config | length > 0
+        
+    - name: Set final Docker gateway IP
+      ansible.builtin.set_fact:
+        docker_gateway_ip:
+          stdout: "{{ monitoring_gateway_ip | default(bridge_gateway_ip | default('172.17.0.1')) }}"
   when: not ansible_check_mode
   tags: [configure]
 
@@ -122,9 +148,9 @@
   tags: [configure, deploy]
 
 - name: Start Prometheus with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ prometheus_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ prometheus_data_dir }}"
+    state: present
   become: true
   notify: restart prometheus
   when: not ansible_check_mode

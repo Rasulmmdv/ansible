@@ -168,22 +168,17 @@
         append: true
       become: true
 
-    - name: Get Traefik user UID and GID
-      shell: "id -u {{ traefik_user }}"
-      register: traefik_uid_result
-      changed_when: false
-      become: true
-
-    - name: Get Traefik user GID
-      shell: "id -g {{ traefik_user }}"
-      register: traefik_gid_result
-      changed_when: false
+    - name: Get Traefik user information
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ traefik_user }}"
+      register: traefik_user_info
       become: true
 
     - name: Set Traefik UID and GID variables
-      set_fact:
-        traefik_uid: "{{ traefik_uid_result.stdout | int }}"
-        traefik_gid: "{{ traefik_gid_result.stdout | int }}"
+      ansible.builtin.set_fact:
+        traefik_uid: "{{ traefik_user_info.ansible_facts.getent_passwd[traefik_user][1] | int }}"
+        traefik_gid: "{{ traefik_user_info.ansible_facts.getent_passwd[traefik_user][2] | int }}"
 
     - name: Set ownership of Traefik directories
       file:
