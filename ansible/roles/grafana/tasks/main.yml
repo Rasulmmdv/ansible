@@ -14,17 +14,17 @@
       - "{{ grafana_data_dir }}/provisioning"
       - "{{ grafana_data_dir }}/provisioning/datasources"
     directory_mode: "0755"
-    # Note: Grafana often uses root ownership for Docker compatibility
-    directory_owner: "0"
-    directory_group: "0"
+    # Use proper Grafana user ownership instead of root
+    directory_owner: "{{ grafana_user_id }}"
+    directory_group: "{{ grafana_group_id }}"
   when: not ansible_check_mode
 
 - name: Deploy docker-compose.yml for grafana
   template:
     src: docker-compose.yml.j2
     dest: "{{ grafana_data_dir }}/docker-compose.yml"
-    owner: "0"
-    group: "0"
+    owner: "{{ grafana_user_id }}"
+    group: "{{ grafana_group_id }}"
     mode: '0644'
   become: true
   tags: [configure, deploy]
@@ -42,8 +42,8 @@
   template:
     src: provisioning/datasources/prometheus.yml.j2
     dest: "{{ grafana_data_dir }}/provisioning/datasources/prometheus.yml"
-    owner: "0"
-    group: "0"
+    owner: "{{ grafana_user_id }}"
+    group: "{{ grafana_group_id }}"
     mode: '0644'
   become: true
   notify: restart grafana 
