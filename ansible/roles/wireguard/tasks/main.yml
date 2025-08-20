@@ -85,14 +85,14 @@
 - name: Generate WireGuard private key if needed
   ansible.builtin.command: wg genkey
   register: wg_private_key_result
-  when: wireguard_private_key_needed
+  when: wireguard_private_key_needed | bool
   changed_when: false
   no_log: true
 
 - name: Set WireGuard private key fact if generated
   ansible.builtin.set_fact:
     wireguard_private_key: "{{ wg_private_key_result.stdout }}"
-  when: wireguard_private_key_needed
+  when: wireguard_private_key_needed | bool
   no_log: true
 
 - name: Show whether using existing or new private key

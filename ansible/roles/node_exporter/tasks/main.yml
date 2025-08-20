@@ -82,7 +82,7 @@
 
     - name: Reload systemd
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
       become: true
       tags: [install, configure]
 
@@ -90,7 +90,7 @@
       systemd:
         name: node_exporter
         state: started
-        enabled: yes
+        enabled: true
       become: true
       tags: [install, configure]
   when: not ansible_check_mode

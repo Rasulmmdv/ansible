@@ -31,7 +31,7 @@
   apt:
     name: "{{ restic_system_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
 
 # Create restic user and directories (standardized)
 - name: Setup restic user and directories (standardized)
@@ -306,25 +306,25 @@
 - name: Enable and start backup timer
   systemd:
     name: "{{ restic_service_name }}.timer"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: not ansible_check_mode
 
 - name: Enable and start prune timer
   systemd:
     name: "{{ restic_service_name }}_prune.timer"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: not ansible_check_mode
 
 - name: Enable and start check timer
   systemd:
     name: "{{ restic_service_name }}_check.timer"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: not ansible_check_mode
 
 # Verify restic is working

@@ -3,7 +3,7 @@
 
 - name: Update apt cache
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     cache_valid_time: 3600
   become: true
   tags:
@@ -58,7 +58,7 @@
   systemd:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
   become: true
   tags:
     # - common

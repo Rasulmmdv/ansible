@@ -74,7 +74,7 @@
   package:
     name: "{{ traefik_system_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
   become: true
   when: not ansible_check_mode
 
@@ -82,7 +82,7 @@
   package:
     name: "{{ traefik_system_python_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
   become: true
   register: system_packages_result
   ignore_errors: true
@@ -159,7 +159,7 @@
       systemd:
         name: docker
         state: started
-        enabled: yes
+        enabled: true
       become: true
       when: traefik_ensure_docker_installed | default(true)
 
