@@ -85,4 +85,10 @@ cadvisor_prometheus_group_id: "65533"
 cadvisor_labels:
   job: "cadvisor"
   service: "container-monitoring"
-  environment: "{{ ansible_environment | default('production') }}" 
+  environment: "{{ ansible_environment | default('production') }}"
+
+# Health check configuration
+cadvisor_health_check:
+  max_retries: 30
+  retry_delay: 5  # Reduced from hardcoded 10 seconds
+  timeout: 300    # Total timeout in seconds (5 minutes) 

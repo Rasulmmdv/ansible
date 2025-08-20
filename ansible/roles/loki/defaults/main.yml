@@ -32,4 +32,10 @@ loki_retention:
 # Compactor configuration for retention management
 loki_compactor:
   enabled: true
-  working_directory: "{{ loki_data_dir }}/compactor" 
+  working_directory: "{{ loki_data_dir }}/compactor"
+
+# Health check configuration
+loki_health_check:
+  max_retries: 30
+  retry_delay: 5  # Reduced from hardcoded 10 seconds
+  timeout: 300    # Total timeout in seconds (5 minutes) 

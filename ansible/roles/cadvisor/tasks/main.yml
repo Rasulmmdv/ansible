@@ -99,29 +99,35 @@
   when: not ansible_check_mode
   tags: [deploy, start]
 
-# Verify cAdvisor health
-- name: Wait for cAdvisor to be ready
-  uri:
-    url: "http://localhost:8080/healthz"
-    method: GET
-    status_code: 200
-  register: cadvisor_health_check
-  until: cadvisor_health_check.status == 200
-  retries: 30
-  delay: 10
-  ignore_errors: true
+# Verify cAdvisor health (standardized health check)
+- name: Wait for cAdvisor to be ready (health endpoint)
+  include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  vars:
+    service_name: "cadvisor-health"
+    service_url: "http://localhost:8080/healthz"
+    service_port: 8080
+    expected_status_codes: [200]
+    max_retries: "{{ cadvisor_health_check.max_retries }}"
+    retry_delay: "{{ cadvisor_health_check.retry_delay }}"
+    service_container_name: "{{ cadvisor_container_name }}"
+    ignore_health_check_failures: true  # This is validation
   when: not ansible_check_mode
   tags: [validate]
 
-# Validate cAdvisor metrics endpoint
-- name: Check cAdvisor metrics endpoint
-  uri:
-    url: "http://localhost:8080/metrics"
-    method: GET
-    status_code: 200
-  register: cadvisor_metrics_check
-  ignore_errors: true
+# Validate cAdvisor metrics endpoint (standardized health check)
+- name: Wait for cAdvisor metrics to be ready
+  include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  vars:
+    service_name: "cadvisor-metrics"
+    service_url: "http://localhost:8080/metrics"
+    service_port: 8080
+    expected_status_codes: [200]
+    max_retries: "{{ cadvisor_health_check.max_retries }}"
+    retry_delay: "{{ cadvisor_health_check.retry_delay }}"
+    service_container_name: "{{ cadvisor_container_name }}"
+    ignore_health_check_failures: true  # This is validation
   when: not ansible_check_mode
+  register: cadvisor_metrics_check
   tags: [validate]
 
 - name: Check mode notice for cAdvisor
@@ -132,10 +138,10 @@
 
 - name: Display cAdvisor health status
   debug:
-    msg: "cAdvisor health: {{ 'HEALTHY' if (cadvisor_health_check.json is defined and not ansible_check_mode) else 'UNHEALTHY' }}"
+    msg: "cAdvisor health: {{ 'HEALTHY' if (cadvisor_health_ready | default(false)) else 'UNHEALTHY' }}"
   tags: [validate]
 
 - name: Display cAdvisor metrics status
   debug:
-    msg: "cAdvisor metrics: {{ 'AVAILABLE' if (cadvisor_metrics_check.json is defined and not ansible_check_mode) else 'UNAVAILABLE' }}"
+    msg: "cAdvisor metrics: {{ 'AVAILABLE' if (cadvisor_metrics_ready | default(false)) else 'UNAVAILABLE' }}"
   tags: [validate] 
