@@ -32,7 +32,11 @@
   register: existing_wg_config
 
 - name: Extract private key from existing config if it exists
-  ansible.builtin.shell: "grep -oP 'PrivateKey\\s*=\\s*\\K.*' \"/etc/wireguard/{{ wireguard_interface }}.conf\""
+  ansible.builtin.shell: |
+    set -eo pipefail
+    grep -oP 'PrivateKey\s*=\s*\K.*' "/etc/wireguard/{{ wireguard_interface }}.conf" || echo ""
+  args:
+    executable: /bin/bash
   register: existing_private_key
   when: existing_wg_config.stat.exists
   changed_when: false

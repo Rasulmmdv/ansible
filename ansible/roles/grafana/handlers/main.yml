@@ -2,25 +2,26 @@
 # handlers file for grafana
 
 - name: restart grafana
-  command: docker compose restart
-  args:
-    chdir: "{{ grafana_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_data_dir }}"
+    state: present
+    restarted: true
   become: true
   listen: restart grafana
   when: not ansible_check_mode
 
 - name: stop grafana
-  command: docker compose down
-  args:
-    chdir: "{{ grafana_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_data_dir }}"
+    state: absent
   become: true
   listen: stop grafana
   when: not ansible_check_mode
 
 - name: start grafana
-  command: docker compose up -d
-  args:
-    chdir: "{{ grafana_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_data_dir }}"
+    state: present
   become: true
   listen: start grafana
   when: not ansible_check_mode 

@@ -35,23 +35,34 @@
       notify: restart nginx_exporter
 
     - name: Wait for nginx_exporter to be ready
-      command: curl -f http://localhost:{{ nginx_exporter_port }}/metrics
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
       register: nginx_exporter_ready
       retries: 10
       delay: 5
-      until: nginx_exporter_ready.rc == 0
+      until: nginx_exporter_ready.status == 200
       changed_when: false
 
     - name: Verify nginx_exporter metrics endpoint
-      command: curl -f http://localhost:{{ nginx_exporter_port }}/metrics
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: true
       register: nginx_exporter_metrics
       changed_when: false
 
     - name: Verify nginx_exporter can scrape nginx stub_status
-      command: curl -f http://localhost:{{ nginx_exporter_port }}/metrics
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nginx_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: true
       register: nginx_exporter_scrape_check
       retries: 3
       delay: 5
-      until: nginx_exporter_scrape_check.rc == 0
+      until: nginx_exporter_scrape_check.status == 200
       changed_when: false
   when: not ansible_check_mode 
