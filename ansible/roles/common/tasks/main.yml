@@ -54,33 +54,33 @@
     - packages
     - monitoring
 
-# - name: Ensure Docker is running
-#   systemd:
-#     name: docker
-#     state: started
-#     enabled: yes
-#   become: true
-#   tags:
-#     # - common
-#     - docker
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: true
+  tags:
+    # - common
+    - docker
 
-# - name: Create monitoring network
-#   docker_network:
-#     name: monitoring
-#     state: present
-#   become: true
-#   tags:
-#     # - common
-#     - monitoring
+- name: Create monitoring network
+  docker_network:
+    name: monitoring
+    state: present
+  become: true
+  tags:
+    # - common
+    - monitoring
 
-# - name: Ensure monitoring parent directory exists
-#   file:
-#     path: "/opt/monitoring"
-#     state: directory
-#     owner: root
-#     group: root
-#     mode: '0755'
-#   become: true
-#   tags:
-#     # - common
-#     - monitoring 
+- name: Ensure monitoring parent directory exists
+  file:
+    path: "/opt/monitoring"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  tags:
+    # - common
+    - monitoring 

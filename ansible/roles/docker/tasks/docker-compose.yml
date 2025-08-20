@@ -1,31 +1,55 @@
 ---
-- name: Check current docker-compose version.
-  command: "{{ docker_compose_path }} --version"
+- name: Check current docker-compose version
+  ansible.builtin.command: "{{ docker_compose_path }} --version"
   register: docker_compose_vsn
   check_mode: false
   changed_when: false
   failed_when: false
 
-- set_fact:
-    docker_compose_current_version: "{{ docker_compose_vsn.stdout | regex_search('(\\d+(\\.\\d+)+)') }}"
-  when: >
-    docker_compose_vsn.stdout is defined
-    and (docker_compose_vsn.stdout | length > 0)
+- name: Extract current docker-compose version
+  ansible.builtin.set_fact:
+    docker_compose_current_version: "{{ docker_compose_vsn.stdout | regex_search('(\\d+(\\.\\d+)+)') | default('') }}"
+  when: 
+    - docker_compose_vsn.stdout is defined
+    - docker_compose_vsn.stdout | length > 0
 
-- name: Delete existing docker-compose version if it's different.
-  file:
+- name: Set empty version if not found
+  ansible.builtin.set_fact:
+    docker_compose_current_version: ""
+  when: docker_compose_current_version is not defined
+
+- name: Delete existing docker-compose version if it's different
+  ansible.builtin.file:
     path: "{{ docker_compose_path }}"
     state: absent
-  when: >
-    docker_compose_current_version is defined
-    and (docker_compose_version | regex_replace('v', '')) not in docker_compose_current_version
+  when: 
+    - docker_compose_current_version | length > 0
+    - (docker_compose_version | regex_replace('v', '')) not in docker_compose_current_version
+  register: old_compose_removal
 
-- name: Install Docker Compose (if configured).
-  get_url:
+- name: Install Docker Compose standalone
+  ansible.builtin.get_url:
     url: "{{ docker_compose_url }}"
     dest: "{{ docker_compose_path }}"
-    mode: 0755
-  when: >
-    (docker_compose_current_version is not defined)
-    or (docker_compose_current_version | length == 0)
-    or (docker_compose_current_version is version((docker_compose_version | regex_replace('v', '')), '<'))
+    mode: "0755"
+    owner: root
+    group: root
+    backup: true
+    force: true
+    timeout: 30
+  when: 
+    - docker_compose_current_version | length == 0 or docker_compose_current_version is version((docker_compose_version | regex_replace('v', '')), '<')
+  register: compose_standalone_install
+
+- name: Verify Docker Compose installation
+  ansible.builtin.command: "{{ docker_compose_path }} --version"
+  register: compose_verify
+  changed_when: false
+  when: compose_standalone_install is changed
+
+- name: Display Docker Compose installation result
+  ansible.builtin.debug:
+    msg: 
+      - "Docker Compose standalone installation: {{ 'Success' if compose_verify.rc == 0 else 'Failed' }}"
+      - "Version: {{ compose_verify.stdout | default('Unknown') }}"
+  when: compose_standalone_install is changed

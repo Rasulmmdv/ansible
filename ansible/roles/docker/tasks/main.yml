@@ -25,82 +25,122 @@
       tags:
         - docker
 
-    - name: Ensure old versions of Docker are not installed.
-      package:
+    - name: Ensure old versions of Docker are not installed
+      ansible.builtin.package:
         name: "{{ docker_obsolete_packages }}"
         state: absent
+        purge: true
+      register: old_docker_removal
       tags:
         - docker
 
-    - name: Ensure dependencies are installed.
-      apt:
+    - name: Ensure dependencies are installed
+      ansible.builtin.apt:
         name:
           - apt-transport-https
           - ca-certificates
+          - gnupg
+          - lsb-release
         state: present
+        update_cache: true
+        cache_valid_time: 3600
       when: docker_add_repo | bool
       tags:
         - docker
 
     - name: Ensure directory exists for /etc/apt/keyrings
-      file:
+      ansible.builtin.file:
         path: /etc/apt/keyrings
         state: directory
         mode: "0755"
+        owner: root
+        group: root
       tags:
         - docker
 
-    - name: Add Docker apt key.
+    - name: Add Docker apt key (primary method)
       ansible.builtin.get_url:
         url: "{{ docker_apt_gpg_key }}"
         dest: /etc/apt/keyrings/docker.asc
         mode: "0644"
         force: false
         checksum: "{{ docker_apt_gpg_key_checksum | default(omit) }}"
+        backup: true
       register: add_repository_key
-      ignore_errors: "{{ docker_apt_ignore_key_error }}"
       when: docker_add_repo | bool
       tags:
         - docker
 
-    - name: Ensure curl is present (on older systems without SNI).
-      package: name=curl state=present
+    - name: Ensure curl is present (fallback dependency)
+      ansible.builtin.package:
+        name: curl
+        state: present
+        update_cache: true
       when: add_repository_key is failed and docker_add_repo | bool
       tags:
         - docker
 
-    - name: Add Docker apt key (alternative for older systems without SNI).
-      shell: >
-        curl -sSL {{ docker_apt_gpg_key }} | apt-key add -
+    - name: Add Docker apt key (fallback method using curl)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsSL "{{ docker_apt_gpg_key }}" | gpg --dearmor -o /etc/apt/keyrings/docker.asc
+        chmod 644 /etc/apt/keyrings/docker.asc
+      args:
+        creates: /etc/apt/keyrings/docker.asc
+        executable: /bin/bash
       when: add_repository_key is failed and docker_add_repo | bool
+      register: fallback_key_install
       tags:
         - docker
 
-    - name: Add Docker repository.
-      apt_repository:
+    - name: Verify Docker GPG key installation
+      ansible.builtin.stat:
+        path: /etc/apt/keyrings/docker.asc
+      register: docker_key_stat
+      when: docker_add_repo | bool
+      tags:
+        - docker
+
+    - name: Fail if Docker GPG key installation failed
+      ansible.builtin.fail:
+        msg: "Failed to install Docker GPG key. Both primary and fallback methods failed."
+      when: 
+        - docker_add_repo | bool
+        - not docker_key_stat.stat.exists
+      tags:
+        - docker
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
         repo: "{{ docker_apt_repository }}"
         state: present
         filename: "{{ docker_apt_filename }}"
         update_cache: true
-      when: docker_add_repo | bool
+      when: docker_add_repo | bool and docker_key_stat.stat.exists
+      register: docker_repo_add
       tags:
         - docker
 
     - name: Install Docker packages
-      apt:
+      ansible.builtin.apt:
         name: "{{ docker_packages }}"
         state: "{{ docker_packages_state }}"
-        update_cache: yes
+        update_cache: true
+        cache_valid_time: 3600
       notify: restart docker
+      register: docker_packages_install
       tags:
         - docker
 
     - name: Install docker-compose plugin
-      apt:
+      ansible.builtin.apt:
         name: "{{ docker_compose_package }}"
         state: "{{ docker_compose_package_state }}"
+        update_cache: true
+        cache_valid_time: 3600
       notify: restart docker
       when: docker_install_compose_plugin | bool
+      register: compose_plugin_install
       tags:
         - docker
 
@@ -122,3 +162,47 @@
   when: docker_daemon_options is defined and docker_daemon_options != {}
   tags:
     - docker
+
+# Validation tasks
+- name: Validate Docker installation
+  block:
+    - name: Verify Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+      when: docker_service_manage | bool
+
+    - name: Check Docker version
+      ansible.builtin.command: docker --version
+      register: docker_version_check
+      changed_when: false
+      failed_when: docker_version_check.rc != 0
+
+    - name: Check Docker Compose version (plugin)
+      ansible.builtin.command: docker compose version
+      register: compose_plugin_version_check
+      changed_when: false
+      failed_when: false
+      when: docker_install_compose_plugin | bool
+
+    - name: Check Docker Compose version (standalone)
+      ansible.builtin.command: "{{ docker_compose_path }} --version"
+      register: compose_standalone_version_check
+      changed_when: false
+      failed_when: false
+      when: docker_install_compose | bool
+
+    - name: Display Docker installation summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Docker Installation Summary ==="
+          - "Docker: {{ docker_version_check.stdout | default('Not installed') }}"
+          - "Docker Compose Plugin: {{ compose_plugin_version_check.stdout | default('Not installed') if docker_install_compose_plugin else 'Disabled' }}"
+          - "Docker Compose Standalone: {{ compose_standalone_version_check.stdout | default('Not installed') if docker_install_compose else 'Disabled' }}"
+          - "Docker users configured: {{ docker_users | length }}"
+          - "Docker service: {{ 'Managed' if docker_service_manage else 'Not managed' }}"
+  when: not ansible_check_mode
+  tags:
+    - docker
+    - validate
