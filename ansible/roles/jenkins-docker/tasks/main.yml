@@ -3,58 +3,29 @@
 
 - name: Setup Jenkins
   block:
-    - name: Create Jenkins group
-      group:
-        name: "{{ jenkins_group }}"
-        state: present
-        gid: 1001
-        system: true
-      become: true
-
-    - name: Create Jenkins user
-      user:
-        name: "{{ jenkins_user }}"
-        group: "{{ jenkins_group }}"
-        uid: 1000
-        system: true
-        shell: /bin/bash
-        home: "{{ jenkins_home }}"
-        create_home: false
-        state: present
-      become: true
-
-    - name: Ensure jenkins data directories exist
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ jenkins_user }}"
-        group: "{{ jenkins_group }}"
-        mode: '0755'
-      loop:
-        - "{{ jenkins_data_dir }}"
-        - "{{ jenkins_home }}"
-      become: true
-
-    - name: Add Jenkins user to docker group
-      user:
-        name: "{{ jenkins_user }}"
-        groups: docker
-        append: true
-      become: true
-
-    - name: Get Jenkins user UID and GID
-      user:
-        name: "{{ jenkins_user }}"
-      register: jenkins_user_info
-      become: true
-
-    - name: Set Jenkins UID and GID variables
-      set_fact:
+    - name: Setup Jenkins user and directories (standardized)
+      include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+      vars:
+        service_name: "jenkins"
+        service_user: "{{ jenkins_user }}"
+        service_group: "{{ jenkins_group }}"
+        service_uid: 1000
+        service_gid: 1001
+        service_shell: "/bin/bash"
+        service_home: "{{ jenkins_home }}"
+        additional_groups: ["docker"]
+        service_directories:
+          - "{{ jenkins_data_dir }}"
+          - "{{ jenkins_home }}"
+        directory_mode: "0755"
+        
+    - name: Set Jenkins UID and GID variables for backward compatibility
+      ansible.builtin.set_fact:
         jenkins_uid: "{{ jenkins_user_info.uid }}"
-        jenkins_gid: "{{ jenkins_user_info.group }}"
-
-    - name: Set ownership of Jenkins directories
-      file:
+        jenkins_gid: "{{ jenkins_user_info.gid }}"
+        
+    - name: Set ownership of Jenkins directories with recursion
+      ansible.builtin.file:
         path: "{{ item }}"
         owner: "{{ jenkins_user }}"
         group: "{{ jenkins_group }}"

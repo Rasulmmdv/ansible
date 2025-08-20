@@ -1,0 +1,147 @@
+---
+# Reusable service user creation with standardized patterns
+# Usage: include this task with variables:
+#   - service_name: "prometheus" (required)
+#   - service_user: "prometheus" (optional, defaults to service_name)
+#   - service_group: "prometheus" (optional, defaults to service_name)
+#   - service_uid: 9090 (optional, auto-generated if not specified)
+#   - service_gid: 9090 (optional, auto-generated if not specified)  
+#   - service_shell: "/usr/sbin/nologin" (optional, default: /usr/sbin/nologin)
+#   - service_home: "/opt/prometheus" (optional, default: /nonexistent)
+#   - create_home: false (optional, default: false)
+#   - system_user: true (optional, default: true)
+#   - additional_groups: ["docker"] (optional, default: [])
+
+- name: "Create service user and group for {{ service_name | default('service') }}"
+  block:
+    - name: "Load service user defaults from common configuration"
+      ansible.builtin.include_vars: "{{ role_path }}/../common/defaults/service_users.yml"
+      
+    - name: "Set service configuration with defaults and overrides for {{ service_name | default('service') }}"
+      ansible.builtin.set_fact:
+        _service_config: "{{ service_users[service_name] | default({}) | combine(default_service_user_config) }}"
+        
+    - name: "Set final values for {{ service_name | default('service') }}"
+      ansible.builtin.set_fact:
+        _service_user: "{{ service_user | default(_service_config.user | default(service_name)) }}"
+        _service_group: "{{ service_group | default(_service_config.group | default(service_name)) }}"
+        _service_shell: "{{ service_shell | default(_service_config.shell) }}"
+        _service_home: "{{ service_home | default(_service_config.home) }}"
+        _create_home: "{{ create_home | default(_service_config.create_home) }}"
+        _system_user: "{{ system_user | default(_service_config.system_user) }}"
+        _additional_groups: "{{ additional_groups | default(_service_config.additional_groups) }}"
+        
+    - name: "Set UID/GID for {{ service_name | default('service') }} with precedence: explicit > config > generated"
+      ansible.builtin.set_fact:
+        _service_uid: >-
+          {%- if service_uid is defined -%}
+            {{ service_uid }}
+          {%- elif _service_config.uid is defined -%}
+            {{ _service_config.uid }}
+          {%- else -%}
+            {{ (service_name | default('service') | hash('md5'))[:8] | int(0, 16) % 55000 + 5000 }}
+          {%- endif -%}
+        _service_gid: >-
+          {%- if service_gid is defined -%}
+            {{ service_gid }}
+          {%- elif _service_config.gid is defined -%}
+            {{ _service_config.gid }}
+          {%- else -%}
+            {{ (service_name | default('service') | hash('md5'))[:8] | int(0, 16) % 55000 + 5000 }}
+          {%- endif -%}
+      
+    - name: "Check if group {{ _service_group }} already exists"
+      ansible.builtin.getent:
+        database: group
+        key: "{{ _service_group }}"
+      register: existing_group
+      failed_when: false
+      
+    - name: "Create {{ _service_group }} group"
+      ansible.builtin.group:
+        name: "{{ _service_group }}"
+        gid: "{{ _service_gid }}"
+        state: present
+        system: "{{ _system_user }}"
+      become: true
+      when: not existing_group.ansible_facts.getent_group is defined
+      
+    - name: "Check if user {{ _service_user }} already exists"  
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ _service_user }}"
+      register: existing_user
+      failed_when: false
+      
+    - name: "Create {{ _service_user }} user"
+      ansible.builtin.user:
+        name: "{{ _service_user }}"
+        group: "{{ _service_group }}"
+        uid: "{{ _service_uid }}"
+        shell: "{{ _service_shell }}"
+        home: "{{ _service_home }}"
+        create_home: "{{ _create_home }}"
+        system: "{{ _system_user }}"
+        state: present
+        groups: "{{ _additional_groups }}"
+        append: true
+      become: true
+      when: not existing_user.ansible_facts.getent_passwd is defined
+      register: user_creation_result
+      
+    - name: "Update existing user {{ _service_user }} groups if needed"
+      ansible.builtin.user:
+        name: "{{ _service_user }}"
+        groups: "{{ _additional_groups }}"
+        append: true
+      become: true
+      when: 
+        - existing_user.ansible_facts.getent_passwd is defined
+        - _additional_groups | length > 0
+      register: user_update_result
+      
+    - name: "Verify user {{ _service_user }} creation/update"
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ _service_user }}"
+      register: final_user_info
+      
+    - name: "Set user creation facts for {{ service_name | default('service') }}"
+      ansible.builtin.set_fact:
+        "{{ service_name | default('service') }}_user_info":
+          username: "{{ _service_user }}"
+          groupname: "{{ _service_group }}"
+          uid: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][1] }}"
+          gid: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][2] }}"
+          home: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][4] }}"
+          shell: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][5] }}"
+          created: "{{ user_creation_result is changed }}"
+          updated: "{{ user_update_result is changed | default(false) }}"
+          
+  rescue:
+    - name: "Handle user creation failure for {{ service_name | default('service') }}"
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Service user creation for {{ service_name | default('service') }}"
+        error_message: "Failed to create or configure service user {{ _service_user | default('unknown') }}"
+        troubleshooting_steps:
+          - "Check if UID {{ _service_uid | default('unknown') }} is already in use"
+          - "Verify sufficient permissions for user creation"
+          - "Check if username {{ _service_user | default('unknown') }} conflicts with existing users"
+          - "Validate group membership requirements"
+        should_fail: true
+        
+  always:
+    - name: "Display user creation summary for {{ service_name | default('service') }}"
+      ansible.builtin.debug:
+        msg:
+          - "=== Service User Creation Summary ==="
+          - "Service: {{ service_name | default('service') }}"
+          - "User: {{ _service_user | default('unknown') }} (UID: {{ _service_uid | default('unknown') }})"
+          - "Group: {{ _service_group | default('unknown') }} (GID: {{ _service_gid | default('unknown') }})"
+          - "Home: {{ _service_home | default('unknown') }}"
+          - "Shell: {{ _service_shell | default('unknown') }}"
+          - "Additional Groups: {{ _additional_groups | join(', ') if _additional_groups | length > 0 else 'None' }}"
+          - "Status: {{ 'Created' if user_creation_result is changed else ('Updated' if user_update_result is changed else 'Already exists') }}"
+      when: show_user_creation_summary | default(true)

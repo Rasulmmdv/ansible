@@ -127,58 +127,26 @@
       - "  - Docker Compose: {{ 'OK' if docker_compose_check.json is defined and docker_compose_check.rc == 0 else 'SKIPPED' if not traefik_ensure_docker_installed | default(true) else 'FAILED' }}"
       - "  - Required ports configured: {{ traefik_web_port }}, {{ traefik_websecure_port }}, {{ traefik_dashboard_port }}"
 
-- name: Setup Traefik user and directories
-  block:
-    - name: Create Traefik group
-      group:
-        name: "{{ traefik_group }}"
-        state: present
-        system: true
-      become: true
-
-    - name: Create Traefik user
-      user:
-        name: "{{ traefik_user }}"
-        group: "{{ traefik_group }}"
-        system: true
-        shell: /bin/bash
-        home: "{{ traefik_data_dir }}"
-        create_home: false
-        state: present
-      become: true
-
-    - name: Ensure Traefik directories exist
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ traefik_user }}"
-        group: "{{ traefik_group }}"
-        mode: '0755'
-      loop:
-        - "{{ traefik_data_dir }}"
-        - "{{ traefik_config_dir }}"
-        - "{{ traefik_certs_dir }}"
-        - "{{ traefik_logs_dir }}"
-      become: true
-
-    - name: Add Traefik user to docker group
-      user:
-        name: "{{ traefik_user }}"
-        groups: docker
-        append: true
-      become: true
-
-    - name: Get Traefik user information
-      ansible.builtin.getent:
-        database: passwd
-        key: "{{ traefik_user }}"
-      register: traefik_user_info
-      become: true
-
-    - name: Set Traefik UID and GID variables
-      ansible.builtin.set_fact:
-        traefik_uid: "{{ traefik_user_info.ansible_facts.getent_passwd[traefik_user][1] | int }}"
-        traefik_gid: "{{ traefik_user_info.ansible_facts.getent_passwd[traefik_user][2] | int }}"
+- name: Setup Traefik user and directories (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "traefik"
+    service_user: "{{ traefik_user }}"
+    service_group: "{{ traefik_group }}"
+    service_home: "{{ traefik_data_dir }}"
+    service_shell: "/bin/bash"
+    additional_groups: ["docker"]
+    service_directories:
+      - "{{ traefik_data_dir }}"
+      - "{{ traefik_config_dir }}"
+      - "{{ traefik_certs_dir }}"
+      - "{{ traefik_logs_dir }}"
+    directory_mode: "0755"
+    
+- name: Set Traefik UID and GID variables for backward compatibility
+  ansible.builtin.set_fact:
+    traefik_uid: "{{ traefik_user_info.uid }}"
+    traefik_gid: "{{ traefik_user_info.gid }}"
 
     - name: Set ownership of Traefik directories
       file:

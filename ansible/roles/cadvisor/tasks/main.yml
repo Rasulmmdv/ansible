@@ -18,30 +18,15 @@
       become: true
       tags: [install, configure]
 
-    - name: Create cadvisor group
-      group:
-        name: "{{ cadvisor_group }}"
-      become: true
-      tags: [install, configure]
-
-    - name: Create cadvisor user
-      user:
-        name: "{{ cadvisor_user }}"
-        group: "{{ cadvisor_group }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-      tags: [install, configure]
-
-    - name: Create cadvisor data directory
-      file:
-        path: "{{ cadvisor_data_dir }}"
-        state: directory
-        owner: "{{ cadvisor_user }}"
-        group: "{{ cadvisor_group }}"
-        mode: '0755'
-      become: true
+    - name: Setup cAdvisor user and directories (standardized)
+      include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+      vars:
+        service_name: "cadvisor"
+        service_user: "{{ cadvisor_user }}"
+        service_group: "{{ cadvisor_group }}"
+        service_directories:
+          - "{{ cadvisor_data_dir }}"
+        directory_mode: "0755"
       tags: [install, configure]
 
     # Create prometheus targets directory
