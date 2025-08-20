@@ -10,6 +10,12 @@
         enabled: yes
       become: true
 
+    - name: Ensure monitoring network exists
+      community.docker.docker_network:
+        name: "{{ alloy_network_name }}"
+        state: present
+      become: true
+
     - name: Create alloy group
       group:
         name: "{{ alloy_group }}"

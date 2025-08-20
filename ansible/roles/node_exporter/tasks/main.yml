@@ -95,22 +95,23 @@
       tags: [install, configure]
   when: not ansible_check_mode
 
-- name: Get monitoring network details
+- name: Try to get monitoring network details
   command: docker network inspect {{ node_exporter_monitoring_network_name }}
   register: monitoring_network_inspect
   changed_when: false
+  failed_when: false
   become: true
   when: node_exporter_service_discovery_enabled
   tags: [configure]
 
-- name: Set node_exporter host IP and subnet facts
+- name: Set node_exporter host IP and subnet facts (if network exists)
   set_fact:
     node_exporter_host_ip: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Gateway }}"
     node_exporter_monitoring_subnet: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Subnet }}"
-  when: node_exporter_service_discovery_enabled and monitoring_network_inspect.stdout is defined
+  when: node_exporter_service_discovery_enabled and monitoring_network_inspect.stdout is defined and (monitoring_network_inspect.stdout | length) > 2
   tags: [configure]
 
-# Create service discovery file for Prometheus
+# Create service discovery file for Prometheus (only on Prometheus host)
 - name: Ensure Prometheus targets directory exists
   file:
     path: "{{ node_exporter_prometheus_config_dir }}/targets"
@@ -119,7 +120,7 @@
     group: "65533"
     mode: '0755'
   become: true
-  when: node_exporter_service_discovery_enabled and not ansible_check_mode
+  when: node_exporter_service_discovery_enabled and node_exporter_generate_prometheus_targets and not ansible_check_mode
   tags: [configure]
 
 - name: Create node_exporter targets service discovery file
@@ -130,9 +131,10 @@
     group: "65533"
     mode: '0644'
   become: true
-  when: node_exporter_service_discovery_enabled and not ansible_check_mode
+  when: node_exporter_service_discovery_enabled and node_exporter_generate_prometheus_targets and not ansible_check_mode
   tags: [configure]
 
+# Firewall rules: allow from monitoring subnet if known
 - name: Allow monitoring subnet to reach node_exporter (INPUT)
   iptables:
     action: insert
@@ -146,5 +148,19 @@
   when: node_exporter_manage_firewall and node_exporter_monitoring_subnet is defined and not ansible_check_mode
   tags: [configure]
 
-# Note: Firewall configuration is handled by the existing iptables role
-# to ensure proper iptables rules and avoid conflicts between individual roles. 
+# Firewall rules: allow explicit allowed sources
+- name: Allow explicit sources to reach node_exporter (INPUT)
+  iptables:
+    action: insert
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    comment: "Allow explicit source to reach node_exporter on the host."
+  loop: "{{ node_exporter_allowed_sources }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
+  when: node_exporter_manage_firewall and node_exporter_allowed_sources | length > 0 and not ansible_check_mode
+  tags: [configure] 

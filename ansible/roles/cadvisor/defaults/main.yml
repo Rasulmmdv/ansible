@@ -12,6 +12,9 @@ cadvisor_ensure_docker_installed: true
 cadvisor_ports:
   - "8080:8080"
 
+# Docker network to attach cAdvisor to
+cadvisor_network_name: "monitoring"
+
 # Security options - configurable for different environments
 # Set to empty list for WSL2 or environments with AppArmor issues
 cadvisor_security_opts: []

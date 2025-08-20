@@ -132,6 +132,7 @@
     group: "{{ monitoring_users.prometheus.gid | default(65533) }}"
     mode: '0644'
   become: true
+  ignore_errors: true
   notify: reload prometheus
 
 - name: Display Loki retention settings
