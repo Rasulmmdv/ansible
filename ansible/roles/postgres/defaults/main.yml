@@ -13,6 +13,9 @@ postgres_config_dir: "{{ postgres_base_dir }}/config"
 postgres_log_dir: "{{ postgres_base_dir }}/log"
 
 postgres_user: postgres
+postgres_group: postgres
+postgres_user_id: 999   # Official PostgreSQL Docker image UID
+postgres_group_id: 999
 # Default password - should be overridden in production for security
 postgres_password: "changeme"
 postgres_db: postgres

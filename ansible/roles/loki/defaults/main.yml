@@ -6,6 +6,8 @@ loki_container_name: "loki"
 loki_data_dir: "/opt/monitoring/loki"
 loki_user: "loki"
 loki_group: "loki"
+loki_user_id: 10001   # Official Loki Docker image UID
+loki_group_id: 10001
 loki_system_packages:
   - docker-compose
 loki_ensure_docker_installed: true

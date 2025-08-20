@@ -148,26 +148,28 @@
     traefik_uid: "{{ traefik_user_info.uid }}"
     traefik_gid: "{{ traefik_user_info.gid }}"
 
-    - name: Set ownership of Traefik directories
-      file:
-        path: "{{ item }}"
-        owner: "{{ traefik_user }}"
-        group: "{{ traefik_group }}"
-        recurse: true
-      loop:
-        - "{{ traefik_data_dir }}"
-        - "{{ traefik_config_dir }}"
-        - "{{ traefik_certs_dir }}"
-        - "{{ traefik_logs_dir }}"
-      become: true
+- name: Set ownership of Traefik directories
+  file:
+    path: "{{ item }}"
+    owner: "{{ traefik_user }}"
+    group: "{{ traefik_group }}"
+    recurse: true
+  loop:
+    - "{{ traefik_data_dir }}"
+    - "{{ traefik_config_dir }}"
+    - "{{ traefik_certs_dir }}"
+    - "{{ traefik_logs_dir }}"
+  become: true
 
-    - name: Set special permissions for certificates directory
-      file:
-        path: "{{ traefik_certs_dir }}"
-        mode: '0600'
-        state: directory
-      become: true
+- name: Set special permissions for certificates directory
+  file:
+    path: "{{ traefik_certs_dir }}"
+    mode: '0600'
+    state: directory
+  become: true
 
+- name: Create Docker network and configure Traefik
+  block:
     - name: Create Docker network for Traefik
       community.docker.docker_network:
         name: "{{ traefik_network_name }}"

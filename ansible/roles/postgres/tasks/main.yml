@@ -5,19 +5,19 @@
       file:
         path: "{{ postgres_data_dir }}"
         state: directory
-        owner: "999"
-        group: "999"
+        owner: "{{ postgres_user_id }}"
+        group: "{{ postgres_group_id }}"
         mode: "0755"
-        recurse: yes
+        recurse: true
 
     - name: Create postgresql log directory
       file:
         path: "{{ postgres_log_dir }}"
         state: directory
-        owner: "999"
-        group: "999"
+        owner: "{{ postgres_user_id }}"
+        group: "{{ postgres_group_id }}"
         mode: "0775"
-        recurse: yes
+        recurse: true
 
     - name: Create postgresql config directory
       file:

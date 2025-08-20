@@ -14,7 +14,7 @@
       file:
         path: "{{ loki_data_dir }}"
         state: directory
-        owner: "10001"
+        owner: "{{ loki_user_id }}"
         group: "10001"
         mode: '0755'
       become: true
@@ -23,7 +23,7 @@
       file:
         path: "{{ item }}"
         state: directory
-        owner: "10001"
+        owner: "{{ loki_user_id }}"
         group: "10001"
         mode: '0755'
       loop:
@@ -41,10 +41,10 @@
     - name: Ensure all loki subdirectories have correct ownership for container
       file:
         path: "{{ loki_data_dir }}"
-        owner: "10001"
+        owner: "{{ loki_user_id }}"
         group: "10001"
         mode: '0755'
-        recurse: yes
+        recurse: true
       become: true
 
 
@@ -66,7 +66,7 @@
   template:
     src: loki-config.yaml.j2
     dest: "{{ loki_data_dir }}/loki-config.yaml"
-    owner: "10001"
+    owner: "{{ loki_user_id }}"
     group: "10001"
     mode: '0644'
   become: true
@@ -75,7 +75,7 @@
   template:
     src: docker-compose.yml.j2
     dest: "{{ loki_data_dir }}/docker-compose.yml"
-    owner: "10001"
+    owner: "{{ loki_user_id }}"
     group: "10001"
     mode: '0644'
   become: true

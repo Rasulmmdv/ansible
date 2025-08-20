@@ -116,8 +116,8 @@
   file:
     path: "{{ node_exporter_prometheus_config_dir }}/targets"
     state: directory
-    owner: "65533"
-    group: "65533"
+    owner: "{{ node_exporter_prometheus_user_id }}"
+    group: "{{ node_exporter_prometheus_group_id }}"
     mode: '0755'
   become: true
   when: node_exporter_service_discovery_enabled and node_exporter_generate_prometheus_targets and not ansible_check_mode
@@ -127,8 +127,8 @@
   template:
     src: node_exporter_targets.yml.j2
     dest: "{{ node_exporter_prometheus_config_dir }}/targets/node_exporter.yml"
-    owner: "65533"
-    group: "65533"
+    owner: "{{ node_exporter_prometheus_user_id }}"
+    group: "{{ node_exporter_prometheus_group_id }}"
     mode: '0644'
   become: true
   when: node_exporter_service_discovery_enabled and node_exporter_generate_prometheus_targets and not ansible_check_mode
