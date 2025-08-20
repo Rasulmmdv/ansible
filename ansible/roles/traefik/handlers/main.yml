@@ -2,9 +2,10 @@
 # handlers file for traefik
 
 - name: restart traefik
-  command: docker compose restart
-  args:
-    chdir: "{{ traefik_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "traefik"
+    project_src: "{{ traefik_data_dir }}"
+    restarted: true
   become: true
   listen: restart traefik
   when: not ansible_check_mode
@@ -18,17 +19,20 @@
   when: not ansible_check_mode
 
 - name: stop traefik
-  command: docker compose down
-  args:
-    chdir: "{{ traefik_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "traefik"
+    project_src: "{{ traefik_data_dir }}"
+    state: present
+    stopped: true
   become: true
   listen: stop traefik
   when: not ansible_check_mode
 
 - name: start traefik
-  command: docker compose up -d
-  args:
-    chdir: "{{ traefik_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "traefik"
+    project_src: "{{ traefik_data_dir }}"
+    state: present
   become: true
   listen: start traefik
   when: not ansible_check_mode 

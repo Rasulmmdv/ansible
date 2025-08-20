@@ -2,26 +2,29 @@
 # handlers file for blackbox_exporter
 
 - name: restart blackbox_exporter
-  command: docker compose restart
-  args:
-    chdir: "{{ blackbox_exporter_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "blackbox_exporter"
+    project_src: "{{ blackbox_exporter_data_dir }}"
+    restarted: true
   become: true
   listen: restart blackbox_exporter
   when: not ansible_check_mode
 
 - name: stop blackbox_exporter
-  command: docker compose down
-  args:
-    chdir: "{{ blackbox_exporter_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "blackbox_exporter"
+    project_src: "{{ blackbox_exporter_data_dir }}"
+    state: present
+    stopped: true
   become: true
   listen: stop blackbox_exporter
   when: not ansible_check_mode
 
 - name: start blackbox_exporter
-  command: docker compose up -d
-  args:
-    chdir: "{{ blackbox_exporter_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "blackbox_exporter"
+    project_src: "{{ blackbox_exporter_data_dir }}"
+    state: present
   become: true
   listen: start blackbox_exporter
   when: not ansible_check_mode
-
