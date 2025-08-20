@@ -57,52 +57,22 @@
 # Note: Firewall configuration is handled centrally by the monitoring-stack role
 # to ensure proper iptables rules and avoid conflicts between individual roles.
 
-- name: Setup Prometheus user and directories
-  block:
-    - name: Create Prometheus group
-      group:
-        name: "{{ prometheus_group }}"
-        gid: "{{ prometheus_group_id }}"
-      become: true
-      tags: [install, configure]
-
-    - name: Create Prometheus user
-      user:
-        name: "{{ prometheus_user }}"
-        group: "{{ prometheus_group }}"
-        uid: "{{ prometheus_user_id }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-      tags: [install, configure]
-
-    - name: Create Prometheus directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ prometheus_user_id }}"
-        group: "{{ prometheus_group_id }}"
-        mode: '0755'
-      loop:
-        - "{{ prometheus_data_dir }}"
-        - "{{ prometheus_data_dir }}/data"
-        - "{{ prometheus_config_dir }}"
-        - "{{ prometheus_rules_dir }}"
-        - "{{ prometheus_alerts_dir }}"
-        - "{{ prometheus_config_dir }}/targets"  # For file-based service discovery
-      become: true
-      tags: [install, configure]
-
-    - name: Ensure data directory has correct permissions
-      file:
-        path: "{{ prometheus_data_dir }}/data"
-        owner: "{{ prometheus_user_id }}"
-        group: "{{ prometheus_group_id }}"
-        mode: '0755'
-        recurse: yes
-      become: true
-      tags: [install, configure]
+- name: Setup Prometheus user and directories (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "prometheus"
+    service_user: "{{ prometheus_user }}"
+    service_group: "{{ prometheus_group }}"
+    service_uid: "{{ prometheus_user_id | default(omit) }}"
+    service_gid: "{{ prometheus_group_id | default(omit) }}"
+    service_directories:
+      - "{{ prometheus_data_dir }}"
+      - "{{ prometheus_data_dir }}/data"
+      - "{{ prometheus_config_dir }}"
+      - "{{ prometheus_rules_dir }}"
+      - "{{ prometheus_alerts_dir }}"
+      - "{{ prometheus_config_dir }}/targets"
+    directory_mode: "0755"
   when: not ansible_check_mode
   tags: [install, configure]
 

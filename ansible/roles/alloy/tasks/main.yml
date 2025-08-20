@@ -16,28 +16,15 @@
         state: present
       become: true
 
-    - name: Create alloy group
-      group:
-        name: "{{ alloy_group }}"
-      become: true
-
-    - name: Create alloy user
-      user:
-        name: "{{ alloy_user }}"
-        group: "{{ alloy_group }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-
-    - name: Create alloy data directory
-      file:
-        path: "{{ alloy_data_dir }}"
-        state: directory
-        owner: "{{ alloy_user }}"
-        group: "{{ alloy_group }}"
-        mode: '0755'
-      become: true
+    - name: Setup Alloy user and directories (standardized)
+      include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+      vars:
+        service_name: "alloy"
+        service_user: "{{ alloy_user }}"
+        service_group: "{{ alloy_group }}"
+        service_directories:
+          - "{{ alloy_data_dir }}"
+        directory_mode: "0755"
 
 
   when: not ansible_check_mode

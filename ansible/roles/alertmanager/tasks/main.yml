@@ -3,33 +3,18 @@
 
 - name: Setup Alertmanager
   block:
-    - name: Create alertmanager group
-      group:
-        name: "{{ alertmanager_group }}"
-        gid: "{{ alertmanager_group_id }}"
-      become: true
-
-    - name: Create alertmanager user
-      user:
-        name: "{{ alertmanager_user }}"
-        group: "{{ alertmanager_group }}"
-        uid: "{{ alertmanager_user_id }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-
-    - name: Create alertmanager directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ alertmanager_user_id }}"
-        group: "{{ alertmanager_group_id }}"
-        mode: '0755'
-      loop:
-        - "{{ alertmanager_data_dir }}"
-        - "{{ alertmanager_data_dir }}/data"
-      become: true
+    - name: Setup Alertmanager user and directories (standardized)
+      include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+      vars:
+        service_name: "alertmanager"
+        service_user: "{{ alertmanager_user }}"
+        service_group: "{{ alertmanager_group }}"
+        service_uid: "{{ alertmanager_user_id | default(omit) }}"
+        service_gid: "{{ alertmanager_group_id | default(omit) }}"
+        service_directories:
+          - "{{ alertmanager_data_dir }}"
+          - "{{ alertmanager_data_dir }}/data"
+        directory_mode: "0755"
 
 
 
