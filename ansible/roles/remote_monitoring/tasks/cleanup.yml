@@ -12,13 +12,12 @@
 
 - name: Cleanup nginx_exporter resources
   block:
-    - name: Stop and remove nginx_exporter container
-      command: docker compose down
-      args:
-        chdir: "{{ nginx_exporter_data_dir }}"
-      become: true
-      failed_when: false
-      changed_when: false
+    - name: Remove nginx_exporter with standardized Docker Compose
+      include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+      vars:
+        compose_project_name: "nginx_exporter"
+        compose_project_src: "{{ nginx_exporter_data_dir }}"
+        compose_state: "absent"  # Remove the service
       when: nginx_exporter_data_dir is defined
 
     - name: Remove nginx_exporter data directory

@@ -13,25 +13,14 @@
 
 - name: Setup and manage nginx_exporter container
   block:
-    - name: Stop and remove existing nginx_exporter container
-      command: docker compose down
-      args:
-        chdir: "{{ nginx_exporter_data_dir }}"
-      become: true
-      failed_when: false
-      changed_when: false
-
-    # - name: Force remove any existing nginx_exporter container
-    #   command: docker rm -f {{ nginx_exporter_container_name }}
-    #   become: true
-    #   failed_when: false
-    #   changed_when: false
-
-    - name: Start nginx_exporter with Docker Compose
-      command: docker compose up -d
-      args:
-        chdir: "{{ nginx_exporter_data_dir }}"
-      become: true
+    - name: Deploy nginx_exporter with standardized Docker Compose
+      include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+      vars:
+        compose_project_name: "nginx_exporter"
+        compose_project_src: "{{ nginx_exporter_data_dir }}"
+        compose_pull: true
+        compose_remove_orphans: true
+        compose_recreate: "always"  # Force recreate to ensure clean deployment
       notify: restart nginx_exporter
 
     - name: Wait for nginx_exporter to be ready

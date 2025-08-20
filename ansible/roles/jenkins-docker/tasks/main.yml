@@ -83,11 +83,13 @@
         mode: '0775'
       become: true
 
-    - name: Start Jenkins with Docker Compose
-      command: docker compose up -d
-      args:
-        chdir: "{{ jenkins_data_dir }}"
-      become: true
+    - name: Deploy Jenkins with standardized Docker Compose
+      include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+      vars:
+        compose_project_name: "jenkins"
+        compose_project_src: "{{ jenkins_data_dir }}"
+        compose_pull: true
+        compose_remove_orphans: true
 
     - name: Wait for Jenkins to be ready (standardized health check)
       include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"

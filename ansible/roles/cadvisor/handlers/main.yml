@@ -2,25 +2,29 @@
 # handlers file for cadvisor
 
 - name: restart cadvisor
-  command: docker compose restart
-  args:
-    chdir: "{{ cadvisor_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "cadvisor"
+    project_src: "{{ cadvisor_data_dir }}"
+    restarted: true
   become: true
   listen: restart cadvisor
   when: not ansible_check_mode
 
 - name: stop cadvisor
-  command: docker compose down
-  args:
-    chdir: "{{ cadvisor_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "cadvisor"
+    project_src: "{{ cadvisor_data_dir }}"
+    state: present
+    stopped: true
   become: true
   listen: stop cadvisor
   when: not ansible_check_mode
 
 - name: start cadvisor
-  command: docker compose up -d
-  args:
-    chdir: "{{ cadvisor_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "cadvisor"
+    project_src: "{{ cadvisor_data_dir }}"
+    state: present
   become: true
   listen: start cadvisor
   when: not ansible_check_mode

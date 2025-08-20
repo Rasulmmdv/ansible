@@ -1,0 +1,56 @@
+---
+# Standardized Docker Compose handlers
+# These handlers provide consistent service management across all Docker Compose roles
+# They can be included by any role that needs Docker Compose service management
+
+- name: restart compose service
+  community.docker.docker_compose_v2:
+    project_name: "{{ compose_service_name }}"
+    project_src: "{{ compose_service_directory }}"
+    restarted: true
+  become: true
+  when: 
+    - compose_service_name is defined
+    - compose_service_directory is defined
+
+- name: stop compose service
+  community.docker.docker_compose_v2:
+    project_name: "{{ compose_service_name }}"
+    project_src: "{{ compose_service_directory }}"
+    state: present
+    stopped: true
+  become: true
+  when: 
+    - compose_service_name is defined
+    - compose_service_directory is defined
+
+- name: start compose service
+  community.docker.docker_compose_v2:
+    project_name: "{{ compose_service_name }}"
+    project_src: "{{ compose_service_directory }}"
+    state: present
+  become: true
+  when: 
+    - compose_service_name is defined
+    - compose_service_directory is defined
+
+- name: recreate compose service
+  community.docker.docker_compose_v2:
+    project_name: "{{ compose_service_name }}"
+    project_src: "{{ compose_service_directory }}"
+    recreate: always
+    state: present
+  become: true
+  when: 
+    - compose_service_name is defined
+    - compose_service_directory is defined
+
+- name: remove compose service
+  community.docker.docker_compose_v2:
+    project_name: "{{ compose_service_name }}"
+    project_src: "{{ compose_service_directory }}"
+    state: absent
+  become: true
+  when: 
+    - compose_service_name is defined
+    - compose_service_directory is defined
