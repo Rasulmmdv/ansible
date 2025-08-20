@@ -1,10 +1,36 @@
 ---
-- name: Ensure docker users are added to the docker group.
-  user:
-    name: "{{ item }}"
+- name: Verify users exist before adding to docker group
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ item }}"
+  loop: "{{ docker_users }}"
+  register: user_check
+  failed_when: false
+
+- name: Warn about non-existent users
+  ansible.builtin.debug:
+    msg: "Warning: User '{{ item.item }}' does not exist and will be skipped"
+  loop: "{{ user_check.results }}"
+  when: item.failed | default(false)
+
+- name: Ensure docker users are added to the docker group
+  ansible.builtin.user:
+    name: "{{ item.item }}"
     groups: docker
     append: true
-  with_items: "{{ docker_users }}"
+    state: present
+  loop: "{{ user_check.results }}"
+  when: not (item.failed | default(false))
+  register: users_added
 
-- name: Reset ssh connection to apply user changes.
-  meta: reset_connection
+- name: Display users added to docker group
+  ansible.builtin.debug:
+    msg: "Successfully added {{ item.item.item }} to docker group"
+  loop: "{{ users_added.results }}"
+  when: 
+    - users_added is defined
+    - item is changed
+
+- name: Reset ssh connection to apply user changes
+  ansible.builtin.meta: reset_connection
+  when: users_added is changed
