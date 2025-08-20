@@ -5,15 +5,13 @@
       ansible.builtin.file:
         path: /etc/apt/trusted.gpg.d/docker.asc
         state: absent
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Ensure old apt source list is not present in /etc/apt/sources.list.d
       ansible.builtin.file:
         path: "/etc/apt/sources.list.d/download_docker_com_linux_{{ docker_apt_ansible_distribution | lower }}.list"
         state: absent
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Ensure the repo referencing the previous trusted.gpg.d key is not present
       apt_repository:
@@ -22,8 +20,7 @@
         filename: "{{ docker_apt_filename }}"
         update_cache: true
       when: docker_add_repo | bool
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Ensure old versions of Docker are not installed
       ansible.builtin.package:
@@ -31,8 +28,7 @@
         state: absent
         purge: true
       register: old_docker_removal
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Ensure dependencies are installed
       ansible.builtin.apt:
@@ -45,8 +41,7 @@
         update_cache: true
         cache_valid_time: 3600
       when: docker_add_repo | bool
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Ensure directory exists for /etc/apt/keyrings
       ansible.builtin.file:
@@ -55,8 +50,7 @@
         mode: "0755"
         owner: root
         group: root
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Add Docker apt key (primary method)
       ansible.builtin.get_url:
@@ -68,8 +62,7 @@
         backup: true
       register: add_repository_key
       when: docker_add_repo | bool
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Ensure curl is present (fallback dependency)
       ansible.builtin.package:
@@ -77,8 +70,7 @@
         state: present
         update_cache: true
       when: add_repository_key is failed and docker_add_repo | bool
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Add Docker apt key (fallback method using curl)
       ansible.builtin.shell: |
@@ -90,16 +82,14 @@
         executable: /bin/bash
       when: add_repository_key is failed and docker_add_repo | bool
       register: fallback_key_install
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Verify Docker GPG key installation
       ansible.builtin.stat:
         path: /etc/apt/keyrings/docker.asc
       register: docker_key_stat
       when: docker_add_repo | bool
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Fail if Docker GPG key installation failed
       ansible.builtin.fail:
@@ -107,8 +97,7 @@
       when: 
         - docker_add_repo | bool
         - not docker_key_stat.stat.exists
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Add Docker repository
       ansible.builtin.apt_repository:
@@ -118,8 +107,7 @@
         update_cache: true
       when: docker_add_repo | bool and docker_key_stat.stat.exists
       register: docker_repo_add
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Install Docker packages
       ansible.builtin.apt:
@@ -129,8 +117,7 @@
         cache_valid_time: 3600
       notify: restart docker
       register: docker_packages_install
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Install docker-compose plugin
       ansible.builtin.apt:
@@ -141,27 +128,23 @@
       notify: restart docker
       when: docker_install_compose_plugin | bool
       register: compose_plugin_install
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Install Docker Compose (standalone) if configured
       include_tasks: docker-compose.yml
       when: docker_install_compose | bool
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
 
     - name: Add users to docker group
       include_tasks: docker-users.yml
       when: docker_users | length > 0
-      tags:
-        - docker
+      tags: [prereq, configure, docker]
   when: not ansible_check_mode
 
 - name: Configure Docker daemon
   include_tasks: configure-daemon.yml
   when: docker_daemon_options is defined and docker_daemon_options != {}
-  tags:
-    - docker
+  tags: [configure, docker, systemd]
 
 # Validation tasks
 - name: Validate Docker installation
@@ -203,6 +186,4 @@
           - "Docker users configured: {{ docker_users | length }}"
           - "Docker service: {{ 'Managed' if docker_service_manage else 'Not managed' }}"
   when: not ansible_check_mode
-  tags:
-    - docker
-    - validate
+  tags: [validate, docker]

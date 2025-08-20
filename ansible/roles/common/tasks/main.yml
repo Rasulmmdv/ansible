@@ -6,9 +6,7 @@
     update_cache: true
     cache_valid_time: 3600
   become: true
-  tags:
-    - common
-    - packages
+  tags: [prereq, install]
 
 - name: Install essential system utilities
   ansible.builtin.apt:
@@ -16,10 +14,7 @@
     state: present
   become: true
   when: common_install_system_utils | default(true)
-  tags:
-    - common
-    - packages
-    - system-utils
+  tags: [install, configure, systemd]
 
 - name: Install bash completion and shell utilities
   ansible.builtin.apt:
@@ -27,10 +22,7 @@
     state: present
   become: true
   when: common_install_shell_utils | default(true)
-  tags:
-    - common
-    - packages
-    - shell-utils
+  tags: [install, configure]
 
 - name: Install network utilities
   ansible.builtin.apt:
@@ -38,10 +30,7 @@
     state: present
   become: true
   when: common_install_network_utils | default(true)
-  tags:
-    - common
-    - packages
-    - network-utils
+  tags: [install, networking]
 
 - name: Install monitoring and debugging tools
   ansible.builtin.apt:
@@ -49,10 +38,7 @@
     state: present
   become: true
   when: common_install_monitoring | default(true)
-  tags:
-    - common
-    - packages
-    - monitoring
+  tags: [install, monitoring]
 
 - name: Ensure Docker is running
   systemd:
@@ -60,18 +46,14 @@
     state: started
     enabled: true
   become: true
-  tags:
-    # - common
-    - docker
+  tags: [configure, docker, systemd]
 
 - name: Create monitoring network
   docker_network:
     name: monitoring
     state: present
   become: true
-  tags:
-    # - common
-    - monitoring
+  tags: [configure, docker, networking]
 
 - name: Ensure monitoring parent directory exists
   file:
@@ -81,6 +63,4 @@
     group: root
     mode: '0755'
   become: true
-  tags:
-    # - common
-    - monitoring 
+  tags: [configure, storage, monitoring] 

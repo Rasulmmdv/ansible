@@ -2,6 +2,7 @@
 # Validate required variables for Restic
 - name: Validate Restic configuration variables
   include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
   vars:
     role_name: "restic"
     required_variables:
@@ -29,13 +30,15 @@
 
 - name: Install system packages
   apt:
+  tags: [install, prereq]
     name: "{{ restic_system_packages }}"
     state: present
     update_cache: true
 
 # Create restic user and directories (standardized)
 - name: Setup restic user and directories (standardized)
-  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  include_tasks:
+  tags: [configure, security] "{{ role_path }}/../common/tasks/setup_service_user.yml"
   vars:
     service_name: "restic"
     service_user: "{{ restic_user }}"

@@ -4,6 +4,7 @@
 # Validate required variables for Jenkins
 - name: Validate Jenkins configuration variables
   include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
   vars:
     role_name: "jenkins-docker"
     required_variables:
@@ -35,6 +36,7 @@
 
 - name: Setup Jenkins
   block:
+  tags: [install, configure, docker]
     - name: Setup Jenkins user and directories (standardized)
       include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
       vars:
@@ -197,6 +199,7 @@
 
 - name: Create basic Jenkins configuration files
   template:
+  tags: [configure, web]
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     owner: "{{ jenkins_user }}"
@@ -256,6 +259,7 @@
 
 - name: Create Docker Compose configuration
   template:
+  tags: [configure, deploy, docker]
     src: docker-compose.yml.j2
     dest: "{{ jenkins_data_dir }}/docker-compose.yml"
     owner: "{{ jenkins_user }}"
@@ -291,6 +295,7 @@
 
 - name: Test Jenkins login functionality
   uri:
+  tags: [validate, web]
     url: "https://{{ jenkins_domain }}/login"
     method: GET
     validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
