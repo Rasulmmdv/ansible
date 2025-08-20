@@ -43,16 +43,42 @@
   when: traefik_pip_packages is defined and traefik_pip_packages | length > 0 and not ansible_check_mode
 
 - name: Verify Python bcrypt installation
-  command: python3 -c "import bcrypt; print('bcrypt is available')"
-  register: bcrypt_check
-  changed_when: false
-  ignore_errors: true
+  block:
+    - name: Test bcrypt import
+      ansible.builtin.command: python3 -c "import bcrypt; print('bcrypt is available')"
+      register: bcrypt_check
+      changed_when: false
+  rescue:
+    - name: Handle bcrypt verification failure
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Python bcrypt verification"
+        error_message: "bcrypt library is not available"
+        troubleshooting_steps:
+          - "Install bcrypt: pip3 install bcrypt"
+          - "Or install via system package: apt install python3-bcrypt"
+          - "Verify Python version compatibility"
+        should_fail: true
 
 - name: Verify Python docker installation
-  command: python3 -c "import docker; print('docker is available')"
-  register: docker_python_check
-  changed_when: false
-  ignore_errors: true
+  block:
+    - name: Test docker import
+      ansible.builtin.command: python3 -c "import docker; print('docker is available')"
+      register: docker_python_check
+      changed_when: false
+  rescue:
+    - name: Handle docker verification failure
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Python docker verification"
+        error_message: "docker library is not available"
+        troubleshooting_steps:
+          - "Install docker: pip3 install docker"
+          - "Or install via system package: apt install python3-docker"
+          - "Verify Docker daemon is running"
+        should_fail: true
 
 - name: Setup Docker and verify services
   block:
@@ -310,15 +336,17 @@
   register: traefik_service
   when: not ansible_check_mode
 
-- name: Wait for Traefik to be ready
-  uri:
-    url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"
-    method: GET
-    status_code: 200
-  register: traefik_ready_check
-  retries: 30
-  delay: 10
-  until: traefik_ready_check.status == 200
+- name: Wait for Traefik to be ready (standardized health check)
+  include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  vars:
+    service_name: "traefik"
+    service_url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"
+    service_port: "{{ traefik_dashboard_port }}"
+    expected_status_codes: [200]
+    max_retries: 30
+    retry_delay: 10
+    service_container_name: "traefik"
+    ignore_health_check_failures: false
   when: not ansible_check_mode
 
 - name: Display Traefik status

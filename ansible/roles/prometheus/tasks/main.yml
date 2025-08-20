@@ -162,26 +162,30 @@
   tags: [configure, deploy]
 
 # Verify retention configuration
-- name: Wait for Prometheus to be ready
-  uri:
-    url: "http://localhost:9090/-/ready"
-    method: GET
-    status_code: 200
-  register: prometheus_ready
-  until: prometheus_ready.status == 200
-  retries: 30
-  delay: 10
-  ignore_errors: true
+- name: Wait for Prometheus to be ready (standardized health check)
+  include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  vars:
+    service_name: "prometheus"
+    service_url: "http://localhost:9090/-/ready"
+    service_port: 9090
+    expected_status_codes: [200]
+    max_retries: 30
+    retry_delay: 10
+    service_container_name: "prometheus"
+    ignore_health_check_failures: true  # This is a validation step
   when: not ansible_check_mode
   tags: [validate]
 
 - name: Check Prometheus retention configuration
-  uri:
-    url: "http://localhost:9090/api/v1/status/runtimeinfo"
-    method: GET
-    status_code: 200
+  include_tasks: "{{ role_path }}/../common/tasks/network_retry.yml"
+  vars:
+    operation_name: "Prometheus runtime info query"
+    operation_url: "http://localhost:9090/api/v1/status/runtimeinfo"
+    operation_method: "GET"
+    max_retries: 5
+    retry_delay: 5
+    ignore_network_failures: true  # This is validation, not critical
   register: prometheus_runtime_info
-  ignore_errors: true
   when: not ansible_check_mode
   tags: [validate]
 

@@ -1,0 +1,122 @@
+---
+# Example playbook demonstrating standardized error handling usage
+# This shows how to use the new error handling patterns in your roles
+
+- name: Example of Standardized Error Handling
+  hosts: localhost
+  gather_facts: true
+  
+  tasks:
+    # Example 1: Using network retry for downloads
+    - name: Download a file with retry logic
+      include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/network_retry.yml"
+      vars:
+        operation_name: "Download Docker Compose"
+        operation_url: "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-linux-x86_64"
+        operation_dest: "/tmp/docker-compose"
+        operation_method: "GET"
+        max_retries: 3
+        retry_delay: 5
+        ignore_network_failures: false
+        
+    # Example 2: Using package installation with retry
+    - name: Install packages with standardized retry
+      include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/package_retry.yml"
+      vars:
+        package_name: ["curl", "wget", "git"]
+        package_state: "present"
+        max_retries: 3
+        retry_delay: 5
+        update_cache: true
+        ignore_package_failures: false
+        
+    # Example 3: Using service health check
+    - name: Check service health with standardized check
+      include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/service_health_check.yml"
+      vars:
+        service_name: "nginx"
+        service_url: "http://localhost:80"
+        service_port: 80
+        expected_status_codes: [200, 301, 302]
+        max_retries: 10
+        retry_delay: 5
+        ignore_health_check_failures: true  # This is just a demo
+        
+    # Example 4: Using failure notifications
+    - name: Demonstrate error notification
+      block:
+        - name: A task that might fail
+          ansible.builtin.command: "false"  # This will always fail
+      rescue:
+        - name: Send standardized error notification
+          include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/failure_notification.yml"
+          vars:
+            notification_type: "error"
+            operation_name: "Demo operation"
+            error_message: "This is a demonstration of error handling"
+            troubleshooting_steps:
+              - "This is step 1 of troubleshooting"
+              - "This is step 2 of troubleshooting"
+              - "This is step 3 of troubleshooting"
+            docs_url: "https://example.com/docs"
+            should_fail: false  # Don't fail the playbook for this demo
+            
+    # Example 5: Using warning notifications
+    - name: Demonstrate warning notification
+      include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "warning"
+        operation_name: "Configuration check"
+        error_message: "Some configuration values are using defaults"
+        troubleshooting_steps:
+          - "Review configuration file"
+          - "Set explicit values for production"
+        should_fail: false
+        
+    # Example 6: Complex error handling with custom logic
+    - name: Complex operation with multiple failure points
+      block:
+        - name: First risky operation
+          ansible.builtin.command: "echo 'This works'"
+          register: first_op
+          
+        - name: Second risky operation
+          ansible.builtin.uri:
+            url: "http://httpstat.us/500"  # Always returns 500
+            method: GET
+            status_code: 200
+          register: second_op
+          
+      rescue:
+        - name: Analyze what went wrong
+          ansible.builtin.set_fact:
+            failure_analysis:
+              first_op_failed: "{{ first_op is failed }}"
+              second_op_failed: "{{ second_op is failed }}"
+              
+        - name: Handle first operation failure
+          include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/failure_notification.yml"
+          vars:
+            notification_type: "error"
+            operation_name: "First operation"
+            error_message: "First operation failed unexpectedly"
+            should_fail: false
+          when: failure_analysis.first_op_failed
+          
+        - name: Handle second operation failure
+          include_tasks: "{{ playbook_dir }}/../ansible/roles/common/tasks/failure_notification.yml"
+          vars:
+            notification_type: "warning"
+            operation_name: "HTTP status check"
+            error_message: "HTTP endpoint returned error status"
+            troubleshooting_steps:
+              - "Check if the service is running"
+              - "Verify network connectivity"
+              - "Check service logs"
+            should_fail: false
+          when: failure_analysis.second_op_failed
+          
+      always:
+        - name: Cleanup and reporting
+          ansible.builtin.debug:
+            msg: "Complex operation completed with partial success"

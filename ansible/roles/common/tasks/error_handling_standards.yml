@@ -1,0 +1,134 @@
+---
+# Common Error Handling Standards for Ansible Roles
+# This file defines reusable error handling patterns
+
+# Standard retry patterns for different operation types
+error_handling_defaults:
+  # Network operations (API calls, downloads, etc.)
+  network_operations:
+    retries: 5
+    delay: 10
+    until_condition: "result.status_code | default(0) == 200"
+    
+  # Service readiness checks
+  service_readiness:
+    retries: 30
+    delay: 10
+    until_condition: "service_check.status == 200"
+    
+  # Package operations
+  package_operations:
+    retries: 3
+    delay: 5
+    until_condition: "package_result is succeeded"
+    
+  # File operations
+  file_operations:
+    retries: 3
+    delay: 2
+    until_condition: "file_result is succeeded"
+
+# Standard error messages
+error_messages:
+  network_timeout: "Network operation timed out after {{ retries }} attempts. Please check connectivity."
+  service_unavailable: "Service failed to become ready after {{ retries * delay }} seconds."
+  package_failed: "Package installation/update failed. Check repository configuration."
+  dependency_missing: "Required dependency '{{ dependency_name }}' is not available."
+  permission_denied: "Permission denied. Check user privileges and file permissions."
+  configuration_invalid: "Configuration validation failed. Check syntax and required parameters."
+
+# Standard validation patterns
+validation_patterns:
+  # Service health check
+  service_health:
+    - name: "Check service is running"
+      uri:
+        url: "{{ service_url }}"
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: "{{ error_handling_defaults.service_readiness.retries }}"
+      delay: "{{ error_handling_defaults.service_readiness.delay }}"
+      until: health_check.status == 200
+      failed_when: false
+      
+  # Dependency validation
+  dependency_check:
+    - name: "Verify required command exists"
+      command: "which {{ required_command }}"
+      register: command_check
+      failed_when: command_check.rc != 0
+      changed_when: false
+      
+  # Port availability check
+  port_check:
+    - name: "Check port {{ port }} is available"
+      wait_for:
+        host: "{{ ansible_default_ipv4.address }}"
+        port: "{{ port }}"
+        timeout: 30
+      register: port_check
+      failed_when: false
+
+# Standard notification patterns
+notification_patterns:
+  # Success notification
+  success:
+    - name: "Operation completed successfully"
+      debug:
+        msg:
+          - "✅ {{ operation_name }} completed successfully"
+          - "Duration: {{ operation_duration | default('Unknown') }}"
+          - "Details: {{ operation_details | default('No additional details') }}"
+          
+  # Warning notification  
+  warning:
+    - name: "Operation completed with warnings"
+      debug:
+        msg:
+          - "⚠️  {{ operation_name }} completed with warnings"
+          - "Warnings: {{ warning_messages | join(', ') }}"
+          - "Impact: {{ warning_impact | default('Minimal') }}"
+          
+  # Error notification
+  error:
+    - name: "Operation failed"
+      fail:
+        msg:
+          - "❌ {{ operation_name }} failed"
+          - "Error: {{ error_message }}"
+          - "Troubleshooting: {{ troubleshooting_hint | default('Check logs for more details') }}"
+          - "Documentation: {{ docs_url | default('N/A') }}"
+
+# Block-level error handling templates
+error_handling_blocks:
+  # Standard retry block for network operations
+  network_operation_block:
+    block:
+      - name: "{{ operation_name }}"
+        # Task definition goes here
+    rescue:
+      - name: "Retry {{ operation_name }} after brief delay"
+        pause:
+          seconds: "{{ error_handling_defaults.network_operations.delay }}"
+      - name: "{{ operation_name }} (retry)"
+        # Retry task definition
+    always:
+      - name: "Log {{ operation_name }} result"
+        debug:
+          msg: "{{ operation_name }} {{ 'succeeded' if operation_result is succeeded else 'failed' }}"
+          
+  # Standard validation block
+  validation_block:
+    block:
+      - name: "{{ validation_name }}"
+        # Validation task
+    rescue:
+      - name: "Handle {{ validation_name }} failure"
+        debug:
+          msg: "{{ validation_name }} failed: {{ validation_error | default('Unknown error') }}"
+        when: ignore_validation_errors | default(false)
+      - name: "Fail on critical validation error"
+        fail:
+          msg: "Critical validation failed: {{ validation_name }}"
+        when: not (ignore_validation_errors | default(false))
