@@ -1,4 +1,29 @@
 ---
+# Validate required variables for Docker Registry
+- name: Validate Docker Registry configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "docker-registry"
+    required_variables:
+      - "docker_registry_data_dir"
+      - "docker_registry_s3_bucket"
+      - "docker_registry_s3_region"
+      - "docker_registry_s3_access_key"
+      - "docker_registry_s3_secret_key"
+    sensitive_variables:
+      - "docker_registry_s3_access_key"
+      - "docker_registry_s3_secret_key"
+    custom_validations:
+      - name: "docker_registry_data_dir"
+        validation: "docker_registry_data_dir | regex_search('^/')"
+        error_message: "docker_registry_data_dir must be an absolute path starting with '/'"
+      - name: "docker_registry_port"
+        validation: "docker_registry_port | int > 0 and docker_registry_port | int <= 65535"
+        error_message: "docker_registry_port must be a valid port number (1-65535)"
+      - name: "docker_registry_s3_bucket"
+        validation: "docker_registry_s3_bucket | regex_search('^[a-z0-9.-]+$')"
+        error_message: "docker_registry_s3_bucket must be a valid S3 bucket name (lowercase letters, numbers, dots, hyphens only)"
+
 - name: Setup docker registry
   block:
     - name: Create docker registry data dir

@@ -1,6 +1,74 @@
 ---
 # tasks file for traefik
 
+# Validate required variables for Traefik
+- name: Validate Traefik configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "traefik"
+    required_variables:
+      - "traefik_domain"
+      - "traefik_dashboard_domain"
+      - "traefik_data_dir"
+      - "traefik_config_dir"
+      - "traefik_certs_dir"
+      - "traefik_logs_dir"
+      - "traefik_user"
+      - "traefik_group"
+      - "traefik_network_name"
+    sensitive_variables:
+      - "traefik_dashboard_password"
+    conditional_variables:
+      - condition: "traefik_acme_enabled | default(false)"
+        variables: 
+          - "traefik_acme_email"
+          - "traefik_acme_ca_server"
+      - condition: "traefik_dashboard_auth_enabled | default(false)"
+        variables:
+          - "traefik_dashboard_password"
+          - "traefik_dashboard_username"
+      - condition: "traefik_certificate_type == 'custom'"
+        variables:
+          - "traefik_certificate_files"
+    custom_validations:
+      - name: "traefik_domain"
+        validation: "traefik_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "traefik_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "traefik_dashboard_domain"
+        validation: "traefik_dashboard_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "traefik_dashboard_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "traefik_acme_email"
+        condition: "traefik_acme_enabled | default(false)"
+        validation: "traefik_acme_email | regex_search('@')"
+        error_message: "traefik_acme_email must be a valid email address when ACME is enabled"
+      - name: "traefik_data_dir"
+        validation: "traefik_data_dir | regex_search('^/')"
+        error_message: "traefik_data_dir must be an absolute path starting with '/'"
+      - name: "traefik_config_dir"
+        validation: "traefik_config_dir | regex_search('^/')"
+        error_message: "traefik_config_dir must be an absolute path starting with '/'"
+      - name: "traefik_certs_dir"
+        validation: "traefik_certs_dir | regex_search('^/')"
+        error_message: "traefik_certs_dir must be an absolute path starting with '/'"
+      - name: "traefik_logs_dir"
+        validation: "traefik_logs_dir | regex_search('^/')"
+        error_message: "traefik_logs_dir must be an absolute path starting with '/'"
+      - name: "traefik_web_port"
+        validation: "traefik_web_port | int > 0 and traefik_web_port | int <= 65535"
+        error_message: "traefik_web_port must be a valid port number (1-65535)"
+      - name: "traefik_websecure_port"
+        validation: "traefik_websecure_port | int > 0 and traefik_websecure_port | int <= 65535"
+        error_message: "traefik_websecure_port must be a valid port number (1-65535)"
+      - name: "traefik_dashboard_port"
+        validation: "traefik_dashboard_port | int > 0 and traefik_dashboard_port | int <= 65535"
+        error_message: "traefik_dashboard_port must be a valid port number (1-65535)"
+      - name: "traefik_certificate_type"
+        validation: "traefik_certificate_type in ['acme', 'custom', 'none']"
+        error_message: "traefik_certificate_type must be one of: acme, custom, none"
+      - name: "traefik_log_level"
+        validation: "traefik_log_level in ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL', 'PANIC']"
+        error_message: "traefik_log_level must be one of: DEBUG, INFO, WARN, ERROR, FATAL, PANIC"
+
 # Prerequisites installation
 - name: Install system prerequisites
   package:

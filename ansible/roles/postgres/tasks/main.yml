@@ -1,4 +1,27 @@
 ---
+# Validate required variables for PostgreSQL
+- name: Validate PostgreSQL configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "postgres"
+    required_variables:
+      - "postgres_password"
+      - "postgres_db"
+      - "project_name"
+      - "postgres_instance_name"
+    sensitive_variables:
+      - "postgres_password"
+    custom_validations:
+      - name: "postgres_port"
+        validation: "postgres_port | int > 0 and postgres_port | int <= 65535"
+        error_message: "postgres_port must be a valid port number (1-65535)"
+      - name: "postgres_password"
+        validation: "postgres_password | length >= 8"
+        error_message: "postgres_password must be at least 8 characters long for security"
+      - name: "postgres_data_dir"
+        validation: "postgres_data_dir | regex_search('^/')"
+        error_message: "postgres_data_dir must be an absolute path starting with '/'"
+
 - name: Setup PostgreSQL
   block:
     - name: Create postgresql data directory
