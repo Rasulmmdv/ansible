@@ -3,5 +3,4 @@
   hosts: all
   become: true
   roles:
-    - monitoring-stack  # Create monitoring network first
-    - loki             # Then deploy loki 
+    - loki

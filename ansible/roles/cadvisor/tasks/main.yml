@@ -11,6 +11,13 @@
       become: true
       tags: [install, configure]
 
+    - name: Ensure monitoring network exists
+      community.docker.docker_network:
+        name: "{{ cadvisor_network_name }}"
+        state: present
+      become: true
+      tags: [install, configure]
+
     - name: Create cadvisor group
       group:
         name: "{{ cadvisor_group }}"

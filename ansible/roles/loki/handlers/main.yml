@@ -23,4 +23,13 @@
     chdir: "{{ loki_data_dir }}"
   become: true
   listen: start loki
-  when: not ansible_check_mode 
+  when: not ansible_check_mode
+
+- name: reload prometheus
+  uri:
+    url: "{{ loki_prometheus_reload_url | default('http://localhost:9090/-/reload') }}"
+    method: POST
+    status_code: 200
+  listen: reload prometheus
+  when: loki_notify_prometheus_reload | default(false)
+  ignore_errors: true 

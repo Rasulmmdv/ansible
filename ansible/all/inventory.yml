@@ -30,6 +30,27 @@ all:
         - 22 #gitlab-ce for git commands
         - 80 # gitlab-ce for web interface
         - 443 # gitlab-ce for web interface
+    prod-01: # prod server
+      ansible_host: 188.124.37.101
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      iptables_allowed_tcp_ports:
+        - 5432 # postgres
+    test-01: # test server Fields
+      ansible_host: 82.202.197.209
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+    vpn-01: # vpn server Hetzner
+      ansible_host: 159.69.207.188
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      wireguard_address: 10.0.0.1/24
+      iptables_allowed_tcp_ports:
+        - 40152 # xray
+        - 38837 # xray ui
   
   vars:
     # Common variables for all hosts

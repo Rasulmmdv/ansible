@@ -1,6 +1,9 @@
 loki.write "local" {
   endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
+    url = "{{ alloy_loki_write_url }}"
+{% if alloy_loki_tenant_id | length > 0 %}
+    headers = { "X-Scope-OrgID" = "{{ alloy_loki_tenant_id }}" }
+{% endif %}
   }
 }
 

@@ -18,6 +18,8 @@ node_exporter_extra_args: ""
 # Service discovery configuration
 node_exporter_service_discovery_enabled: true
 node_exporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+# Whether this host should generate Prometheus file_sd targets locally (usually only the Prometheus host)
+node_exporter_generate_prometheus_targets: false
 
 # Security configuration - bind to localhost by default
 node_exporter_bind_address: "0.0.0.0"
@@ -25,4 +27,7 @@ node_exporter_port: "9100"
 
 # Networking / firewall configuration
 node_exporter_monitoring_network_name: "monitoring"
-node_exporter_manage_firewall: true 
+node_exporter_manage_firewall: true
+# Explicit allowed source CIDRs for accessing node_exporter (e.g., Prometheus VPN IP)
+# Example: ['10.0.0.5/32']
+node_exporter_allowed_sources: [10.0.0.0/24] 
