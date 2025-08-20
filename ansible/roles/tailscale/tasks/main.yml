@@ -74,7 +74,7 @@
         name: "tailscaled"
         state: "{{ tailscale_service_state }}"
         enabled: "{{ tailscale_service_enabled }}"
-        daemon_reload: yes
+        daemon_reload: true
       tags: [tailscale, configure]
 
     - name: Check current Tailscale status

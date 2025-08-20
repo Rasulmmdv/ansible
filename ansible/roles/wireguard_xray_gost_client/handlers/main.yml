@@ -23,7 +23,7 @@
   systemd:
     name: xray
     state: restarted
-    enabled: yes
+    enabled: true
   become: true
   when: not ansible_check_mode
   ignore_errors: true 

@@ -115,7 +115,7 @@
         - conditional_item.condition | bool
       vars:
         conditional_item: "{{ outer_item }}"
-      with_items: "{{ conditional_variables | default([]) }}"
+      loop: "{{ conditional_variables | default([]) }}"
       loop_control:
         loop_var: outer_item
         

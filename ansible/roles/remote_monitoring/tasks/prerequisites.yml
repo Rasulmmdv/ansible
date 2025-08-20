@@ -22,7 +22,7 @@
   systemd:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
   become: true
   when: not ansible_check_mode
 
