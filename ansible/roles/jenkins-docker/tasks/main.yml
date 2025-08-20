@@ -1,6 +1,38 @@
 ---
 # tasks file for jenkins-docker
 
+# Validate required variables for Jenkins
+- name: Validate Jenkins configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "jenkins-docker"
+    required_variables:
+      - "jenkins_domain"
+      - "jenkins_admin_username"
+      - "jenkins_admin_password"
+      - "jenkins_home"
+      - "jenkins_data_dir"
+    sensitive_variables:
+      - "jenkins_admin_password"
+    conditional_variables:
+      - condition: "jenkins_use_ssl | default(false)"
+        variables:
+          - "jenkins_ssl_cert_path"
+          - "jenkins_ssl_key_path"
+      - condition: "jenkins_install_plugins | default(true)"
+        variables:
+          - "jenkins_plugins_list"
+    custom_validations:
+      - name: "jenkins_domain"
+        validation: "jenkins_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "jenkins_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "jenkins_home"
+        validation: "jenkins_home | regex_search('^/')"
+        error_message: "jenkins_home must be an absolute path starting with '/'"
+      - name: "jenkins_data_dir"
+        validation: "jenkins_data_dir | regex_search('^/')"
+        error_message: "jenkins_data_dir must be an absolute path starting with '/'"
+
 - name: Setup Jenkins
   block:
     - name: Setup Jenkins user and directories (standardized)

@@ -1,4 +1,26 @@
 ---
+# Validate required variables for Restic
+- name: Validate Restic configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "restic"
+    required_variables:
+      - "restic_aws_access_key_id"
+      - "restic_aws_secret_access_key"
+      - "restic_password"
+      - "project_name"
+    sensitive_variables:
+      - "restic_aws_access_key_id"
+      - "restic_aws_secret_access_key"
+      - "restic_password"
+    custom_validations:
+      - name: "restic_repository"
+        validation: "restic_repository | regex_search('^(s3:|local:|sftp:|rest:|azure:|gs:|swift:)')"
+        error_message: "restic_repository must start with a valid backend: s3:, local:, sftp:, rest:, azure:, gs:, or swift:"
+      - name: "restic_repository_type"
+        validation: "restic_repository_type in ['s3', 'local', 'sftp', 'rest', 'azure', 'gs', 'swift']"
+        error_message: "restic_repository_type must be one of: s3, local, sftp, rest, azure, gs, swift"
+
 # Install system packages
 - name: Check mode notice for restic
   debug:

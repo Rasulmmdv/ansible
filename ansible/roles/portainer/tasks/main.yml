@@ -1,4 +1,20 @@
 ---
+# Validate required variables for Portainer
+- name: Validate Portainer configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "portainer"
+    required_variables:
+      - "portainer_domain"
+      - "portainer_data_directory"
+    custom_validations:
+      - name: "portainer_domain"
+        validation: "portainer_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "portainer_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "portainer_data_directory"
+        validation: "portainer_data_directory | regex_search('^/')"
+        error_message: "portainer_data_directory must be an absolute path starting with '/'"
+
 - name: Create portainer directories
   ansible.builtin.file:
     path: "{{ item }}"

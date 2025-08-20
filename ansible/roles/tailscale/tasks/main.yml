@@ -1,4 +1,22 @@
 ---
+# Validate required variables for Tailscale
+- name: Validate Tailscale configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "tailscale"
+    required_variables:
+      - "tailscale_auth_key"
+      - "tailscale_install_url"
+    sensitive_variables:
+      - "tailscale_auth_key"
+    custom_validations:
+      - name: "tailscale_auth_key"
+        validation: "tailscale_auth_key | length > 10"
+        error_message: "tailscale_auth_key must be a valid Tailscale auth key (generate one at https://login.tailscale.com/admin/settings/keys)"
+      - name: "tailscale_install_url"
+        validation: "tailscale_install_url | regex_search('^https://')"
+        error_message: "tailscale_install_url must be a valid HTTPS URL"
+
 - name: Setup Tailscale
   block:
     - name: Download Tailscale install script
