@@ -251,28 +251,48 @@
 
 # Initialize repository if it doesn't exist
 - name: Check if restic repository is initialized
-  become: yes
-  become_user: "{{ restic_user }}"
-  command: restic snapshots
-  environment: "{{ restic_environment }}"
-  vars:
-    restic_environment: "{{ restic_base_env | combine(restic_s3_env if restic_repository_type == 's3' else {}) }}"
-    restic_base_env:
-      RESTIC_REPOSITORY: "{{ restic_repository }}"
-      RESTIC_PASSWORD: "{{ restic_password }}"
-    restic_s3_env: >-
-      {{
-        {
-          'AWS_ACCESS_KEY_ID': restic_aws_access_key_id,
-          'AWS_SECRET_ACCESS_KEY': restic_aws_secret_access_key,
-          'AWS_DEFAULT_REGION': restic_aws_region
-        } |
-        combine({'AWS_S3_ENDPOINT': restic_s3_endpoint_url} if (restic_s3_endpoint_url is defined and restic_s3_endpoint_url) else {}) |
-        combine({'AWS_CA_BUNDLE': restic_s3_ca_bundle} if (restic_s3_ca_bundle is defined and restic_s3_ca_bundle and restic_setup_selectel_ca | bool) else {})
-      }}
-  register: restic_init_check
-  failed_when: false
-  changed_when: false
+  block:
+    - name: Test restic repository access
+      become: yes
+      become_user: "{{ restic_user }}"
+      ansible.builtin.command: restic snapshots
+      environment: "{{ restic_environment }}"
+      vars:
+        restic_environment: "{{ restic_base_env | combine(restic_s3_env if restic_repository_type == 's3' else {}) }}"
+        restic_base_env:
+          RESTIC_REPOSITORY: "{{ restic_repository }}"
+          RESTIC_PASSWORD: "{{ restic_password }}"
+        restic_s3_env: >-
+          {{
+            {
+              'AWS_ACCESS_KEY_ID': restic_aws_access_key_id,
+              'AWS_SECRET_ACCESS_KEY': restic_aws_secret_access_key,
+              'AWS_DEFAULT_REGION': restic_aws_region
+            } |
+            combine({'AWS_S3_ENDPOINT': restic_s3_endpoint_url} if (restic_s3_endpoint_url is defined and restic_s3_endpoint_url) else {}) |
+            combine({'AWS_CA_BUNDLE': restic_s3_ca_bundle} if (restic_s3_ca_bundle is defined and restic_s3_ca_bundle and restic_setup_selectel_ca | bool) else {})
+          }}
+      register: restic_init_check
+      failed_when: false
+      changed_when: false
+      retries: 3
+      delay: 5
+  rescue:
+    - name: Handle repository access failure
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "warning"
+        operation_name: "Restic repository access check"
+        error_message: "Cannot access restic repository, will attempt initialization"
+        troubleshooting_steps:
+          - "Verify repository URL and credentials"
+          - "Check network connectivity to repository"
+          - "Verify S3/storage service is accessible"
+        should_fail: false
+    - name: Set failed check result
+      ansible.builtin.set_fact:
+        restic_init_check:
+          rc: 1
   when: not ansible_check_mode
 
 - name: Initialize restic repository
