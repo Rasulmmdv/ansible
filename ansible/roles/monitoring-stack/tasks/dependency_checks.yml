@@ -1,0 +1,159 @@
+---
+# Dependency validation tasks for monitoring stack
+# Ensures all prerequisites are met before deployment
+
+- name: "Dependency validation for monitoring stack"
+  block:
+    - name: "Check Docker availability"
+      ansible.builtin.command: docker version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+      
+    - name: "Check Docker Compose availability"
+      ansible.builtin.command: docker compose version
+      register: docker_compose_check
+      failed_when: false
+      changed_when: false
+      
+    - name: "Check available disk space for monitoring data"
+      ansible.builtin.shell: df -BG {{ monitoring_stack.data_root | dirname }} | awk 'NR==2 {print $4}' | sed 's/G//'
+      register: available_space
+      changed_when: false
+      
+    - name: "Check available memory"
+      ansible.builtin.shell: free -m | awk 'NR==2{printf "%.0f", $7*100/$2}'
+      register: available_memory
+      changed_when: false
+      
+    - name: "Validate system requirements"
+      ansible.builtin.assert:
+        that:
+          - docker_check.rc == 0
+          - docker_compose_check.rc == 0
+          - available_space.stdout | int >= 10
+          - available_memory.stdout | int >= 20
+        fail_msg: |
+          ❌ SYSTEM REQUIREMENTS NOT MET
+          
+          Missing requirements:
+          {% if docker_check.rc != 0 %}
+          - Docker is not installed or not running
+          {% endif %}
+          {% if docker_compose_check.rc != 0 %}
+          - Docker Compose is not available
+          {% endif %}
+          {% if available_space.stdout | int < 10 %}
+          - Insufficient disk space: {{ available_space.stdout }}GB available, 10GB required
+          {% endif %}
+          {% if available_memory.stdout | int < 20 %}
+          - Insufficient available memory: {{ available_memory.stdout }}% available, 20% required
+          {% endif %}
+          
+          Please ensure:
+          - Docker and Docker Compose are installed and running
+          - At least 10GB free disk space in {{ monitoring_stack.data_root | dirname }}
+          - At least 20% available memory for monitoring services
+        success_msg: "✅ All system requirements validated successfully"
+        
+    - name: "Check for conflicting services"
+      ansible.builtin.command: "{{ item.command }}"
+      register: "{{ item.register }}"
+      failed_when: false
+      changed_when: false
+      loop:
+        - { command: "ss -tlnp | grep :9090", register: "prometheus_port_check" }
+        - { command: "ss -tlnp | grep :3000", register: "grafana_port_check" }
+        - { command: "ss -tlnp | grep :9093", register: "alertmanager_port_check" }
+        - { command: "ss -tlnp | grep :3100", register: "loki_port_check" }
+        - { command: "ss -tlnp | grep :9100", register: "node_exporter_port_check" }
+      loop_control:
+        loop_var: item
+        
+    - name: "Warn about port conflicts"
+      ansible.builtin.debug:
+        msg: |
+          ⚠️  WARNING: Port conflicts detected
+          
+          The following ports are already in use:
+          {% if prometheus_port_check.rc == 0 %}
+          - 9090 (Prometheus): {{ prometheus_port_check.stdout }}
+          {% endif %}
+          {% if grafana_port_check.rc == 0 %}
+          - 3000 (Grafana): {{ grafana_port_check.stdout }}
+          {% endif %}
+          {% if alertmanager_port_check.rc == 0 %}
+          - 9093 (Alertmanager): {{ alertmanager_port_check.stdout }}
+          {% endif %}
+          {% if loki_port_check.rc == 0 %}
+          - 3100 (Loki): {{ loki_port_check.stdout }}
+          {% endif %}
+          {% if node_exporter_port_check.rc == 0 %}
+          - 9100 (Node Exporter): {{ node_exporter_port_check.stdout }}
+          {% endif %}
+          
+          Existing services may be stopped and replaced during deployment.
+      when: >
+        prometheus_port_check.rc == 0 or 
+        grafana_port_check.rc == 0 or 
+        alertmanager_port_check.rc == 0 or
+        loki_port_check.rc == 0 or
+        node_exporter_port_check.rc == 0
+        
+    - name: "Check network connectivity for external dependencies"
+      ansible.builtin.uri:
+        url: "{{ item.url }}"
+        method: HEAD
+        timeout: 10
+        status_code: [200, 301, 302, 403, 404]  # Any response indicates connectivity
+      register: connectivity_check
+      failed_when: false
+      loop:
+        - { name: "Docker Hub", url: "https://hub.docker.com" }
+        - { name: "Prometheus GitHub", url: "https://github.com/prometheus/prometheus" }
+      loop_control:
+        loop_var: item
+        
+    - name: "Warn about connectivity issues"
+      ansible.builtin.debug:
+        msg: |
+          ⚠️  WARNING: Network connectivity issues detected
+          
+          Some external dependencies may not be reachable:
+          {% for result in connectivity_check.results %}
+          {% if result.status is not defined or result.status < 0 %}
+          - {{ result.item.name }} ({{ result.item.url }}): Connection failed
+          {% endif %}
+          {% endfor %}
+          
+          This may cause issues during Docker image pulls.
+          Consider using a local registry or checking network connectivity.
+      when: connectivity_check.results | selectattr('status', 'undefined') | list | length > 0 or
+            connectivity_check.results | selectattr('status', 'lessthan', 0) | list | length > 0
+
+  rescue:
+    - name: "Handle dependency validation failure"
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Monitoring Stack Dependency Validation"
+        error_message: "System requirements or dependencies not met"
+        troubleshooting_steps:
+          - "Install Docker and Docker Compose"
+          - "Ensure sufficient disk space (10GB+) and memory (20%+ available)"
+          - "Stop conflicting services on required ports"
+          - "Check network connectivity to external repositories"
+          - "Review system logs for detailed error information"
+        should_fail: true
+        
+  always:
+    - name: "Display dependency validation summary"
+      ansible.builtin.debug:
+        msg:
+          - "=== Monitoring Stack Dependency Validation ==="
+          - "Docker: {{ '✅ Available' if docker_check.rc == 0 else '❌ Not Available' }}"
+          - "Docker Compose: {{ '✅ Available' if docker_compose_check.rc == 0 else '❌ Not Available' }}"
+          - "Disk Space: {{ available_space.stdout | default('Unknown') }}GB available"
+          - "Available Memory: {{ available_memory.stdout | default('Unknown') }}%"
+          - "Port Conflicts: {{ 'Detected' if (prometheus_port_check.rc == 0 or grafana_port_check.rc == 0 or alertmanager_port_check.rc == 0 or loki_port_check.rc == 0 or node_exporter_port_check.rc == 0) else 'None' }}"
+          - "Status: {{ '✅ All checks passed' if (docker_check.rc == 0 and docker_compose_check.rc == 0 and available_space.stdout | int >= 10 and available_memory.stdout | int >= 20) else '⚠️  Issues detected' }}"

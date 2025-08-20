@@ -1,0 +1,369 @@
+---
+# Incremental deployment with validation and rollback support
+# Deploys monitoring services one by one with health checks
+
+- name: "Initialize deployment tracking"
+  ansible.builtin.set_fact:
+    deployment_progress:
+      services_to_deploy: ["prometheus", "node_exporter", "cadvisor", "blackbox_exporter", "alertmanager", "loki", "alloy", "grafana"]
+      services_deployed: []
+      services_failed: []
+      current_service: ""
+      deployment_successful: true
+
+- name: "Deploy Prometheus (core metrics collection)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'prometheus'}) }}"
+        
+    - name: "Deploy Prometheus role"
+      include_role:
+        name: prometheus
+      tags: [deploy, prometheus, metrics]
+      
+    - name: "Validate Prometheus deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "prometheus"
+        service_url: "http://localhost:9090/-/ready"
+        expected_status_codes: [200]
+        max_retries: 15
+        retry_delay: 10
+        service_container_name: "prometheus"
+        ignore_health_check_failures: false
+        
+    - name: "Mark Prometheus as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['prometheus']}) }}"
+        
+  rescue:
+    - name: "Handle Prometheus deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['prometheus'], 'deployment_successful': false}) }}"
+        
+    - name: "Execute Prometheus rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh prometheus"
+      ignore_errors: true
+      
+    - name: "Fail deployment due to Prometheus failure"
+      ansible.builtin.fail:
+        msg: |
+          ❌ PROMETHEUS DEPLOYMENT FAILED
+          
+          Prometheus is a critical core service and its failure blocks the entire monitoring stack.
+          
+          Troubleshooting steps:
+          - Check Docker daemon status
+          - Verify port 9090 is available
+          - Check disk space for {{ monitoring_stack.data_root }}
+          - Review Prometheus logs: docker compose -f {{ monitoring_stack.data_root }}/prometheus/docker-compose.yml logs
+          
+          Recovery options:
+          - Fix the issue and retry deployment
+          - Use manual recovery: {{ monitoring_stack.data_root }}/.deployment-state/recover_service.sh prometheus
+
+- name: "Deploy Node Exporter (host metrics)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'node_exporter'}) }}"
+        
+    - name: "Deploy Node Exporter role"
+      include_role:
+        name: node_exporter
+      tags: [deploy, node_exporter, metrics]
+      
+    - name: "Validate Node Exporter deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "node_exporter"
+        service_url: "http://localhost:9100/metrics"
+        expected_status_codes: [200]
+        max_retries: 10
+        retry_delay: 5
+        service_container_name: "node_exporter"
+        ignore_health_check_failures: false
+        
+    - name: "Mark Node Exporter as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['node_exporter']}) }}"
+        
+  rescue:
+    - name: "Handle Node Exporter deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['node_exporter']}) }}"
+        
+    - name: "Execute Node Exporter rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh node_exporter"
+      ignore_errors: true
+      
+    - name: "Continue deployment despite Node Exporter failure"
+      ansible.builtin.debug:
+        msg: "⚠️  Node Exporter deployment failed, but continuing with other services"
+
+- name: "Deploy cAdvisor (container metrics)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'cadvisor'}) }}"
+        
+    - name: "Deploy cAdvisor role"
+      include_role:
+        name: cadvisor
+      tags: [deploy, cadvisor, metrics]
+      
+    - name: "Validate cAdvisor deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "cadvisor"
+        service_url: "http://localhost:8080/metrics"
+        expected_status_codes: [200]
+        max_retries: 10
+        retry_delay: 5
+        service_container_name: "cadvisor"
+        ignore_health_check_failures: false
+        
+    - name: "Mark cAdvisor as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['cadvisor']}) }}"
+        
+  rescue:
+    - name: "Handle cAdvisor deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['cadvisor']}) }}"
+        
+    - name: "Execute cAdvisor rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh cadvisor"
+      ignore_errors: true
+      
+    - name: "Continue deployment despite cAdvisor failure"
+      ansible.builtin.debug:
+        msg: "⚠️  cAdvisor deployment failed, but continuing with other services"
+
+- name: "Deploy Blackbox Exporter (endpoint monitoring)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'blackbox_exporter'}) }}"
+        
+    - name: "Deploy Blackbox Exporter role"
+      include_role:
+        name: blackbox_exporter
+      tags: [deploy, blackbox_exporter, uptime]
+      
+    - name: "Validate Blackbox Exporter deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "blackbox_exporter"
+        service_url: "http://localhost:9115/metrics"
+        expected_status_codes: [200]
+        max_retries: 10
+        retry_delay: 5
+        service_container_name: "blackbox_exporter"
+        ignore_health_check_failures: false
+        
+    - name: "Mark Blackbox Exporter as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['blackbox_exporter']}) }}"
+        
+  rescue:
+    - name: "Handle Blackbox Exporter deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['blackbox_exporter']}) }}"
+        
+    - name: "Execute Blackbox Exporter rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh blackbox_exporter"
+      ignore_errors: true
+      
+    - name: "Continue deployment despite Blackbox Exporter failure"
+      ansible.builtin.debug:
+        msg: "⚠️  Blackbox Exporter deployment failed, but continuing with other services"
+
+- name: "Deploy Alertmanager (alerting)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'alertmanager'}) }}"
+        
+    - name: "Deploy Alertmanager role"
+      include_role:
+        name: alertmanager
+      tags: [deploy, alertmanager, alerts]
+      
+    - name: "Validate Alertmanager deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "alertmanager"
+        service_url: "http://localhost:9093/-/healthy"
+        expected_status_codes: [200]
+        max_retries: 10
+        retry_delay: 5
+        service_container_name: "alertmanager"
+        ignore_health_check_failures: false
+        
+    - name: "Mark Alertmanager as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['alertmanager']}) }}"
+        
+  rescue:
+    - name: "Handle Alertmanager deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['alertmanager'], 'deployment_successful': false}) }}"
+        
+    - name: "Execute Alertmanager rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh alertmanager"
+      ignore_errors: true
+      
+    - name: "Warn about Alertmanager failure"
+      ansible.builtin.debug:
+        msg: "⚠️  Alertmanager deployment failed - alerting functionality will not be available"
+
+- name: "Deploy Loki (log aggregation)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'loki'}) }}"
+        
+    - name: "Deploy Loki role"
+      include_role:
+        name: loki
+      tags: [deploy, loki, logs]
+      
+    - name: "Validate Loki deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "loki"
+        service_url: "http://localhost:3100/ready"
+        expected_status_codes: [200]
+        max_retries: 15
+        retry_delay: 10
+        service_container_name: "loki"
+        ignore_health_check_failures: false
+        
+    - name: "Mark Loki as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['loki']}) }}"
+        
+  rescue:
+    - name: "Handle Loki deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['loki']}) }}"
+        
+    - name: "Execute Loki rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh loki"
+      ignore_errors: true
+      
+    - name: "Continue deployment despite Loki failure"
+      ansible.builtin.debug:
+        msg: "⚠️  Loki deployment failed - log aggregation will not be available"
+
+- name: "Deploy Alloy (OTEL collector)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'alloy'}) }}"
+        
+    - name: "Deploy Alloy role"
+      include_role:
+        name: alloy
+      tags: [deploy, alloy, logs]
+      
+    - name: "Validate Alloy deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "alloy"
+        service_url: "http://localhost:12345/-/ready"
+        expected_status_codes: [200]
+        max_retries: 10
+        retry_delay: 5
+        service_container_name: "alloy"
+        ignore_health_check_failures: true  # Alloy is optional
+        
+    - name: "Mark Alloy as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['alloy']}) }}"
+        
+  rescue:
+    - name: "Handle Alloy deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['alloy']}) }}"
+        
+    - name: "Execute Alloy rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh alloy"
+      ignore_errors: true
+      
+    - name: "Continue deployment despite Alloy failure"
+      ansible.builtin.debug:
+        msg: "⚠️  Alloy deployment failed - OTEL collection will not be available"
+
+- name: "Deploy Grafana (visualization - deploy last)"
+  block:
+    - name: "Set current service"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'current_service': 'grafana'}) }}"
+        
+    - name: "Deploy Grafana role"
+      include_role:
+        name: grafana
+      tags: [deploy, grafana, visualization]
+      
+    - name: "Validate Grafana deployment"
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "grafana"
+        service_url: "http://localhost:3000/api/health"
+        expected_status_codes: [200]
+        max_retries: 20
+        retry_delay: 10
+        service_container_name: "grafana"
+        ignore_health_check_failures: false
+        
+    - name: "Mark Grafana as deployed"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_deployed': deployment_progress.services_deployed + ['grafana']}) }}"
+        
+  rescue:
+    - name: "Handle Grafana deployment failure"
+      ansible.builtin.set_fact:
+        deployment_progress: "{{ deployment_progress | combine({'services_failed': deployment_progress.services_failed + ['grafana'], 'deployment_successful': false}) }}"
+        
+    - name: "Execute Grafana rollback"
+      ansible.builtin.shell: "{{ monitoring_stack.data_root }}/.deployment-state/rollback_service.sh grafana"
+      ignore_errors: true
+      
+    - name: "Warn about Grafana failure"
+      ansible.builtin.debug:
+        msg: "⚠️  Grafana deployment failed - visualization dashboard will not be available"
+
+- name: "Update final deployment state"
+  ansible.builtin.copy:
+    content: |
+      # Monitoring Stack Final Deployment State
+      # Generated: {{ ansible_date_time.iso8601 }}
+      deployment_completed: {{ ansible_date_time.epoch }}
+      deployment_successful: {{ deployment_progress.deployment_successful }}
+      services_deployed: {{ deployment_progress.services_deployed | to_nice_yaml }}
+      services_failed: {{ deployment_progress.services_failed | to_nice_yaml }}
+      deployment_summary:
+        total_services: {{ deployment_progress.services_to_deploy | length }}
+        successful_deployments: {{ deployment_progress.services_deployed | length }}
+        failed_deployments: {{ deployment_progress.services_failed | length }}
+        success_rate: "{{ ((deployment_progress.services_deployed | length) / (deployment_progress.services_to_deploy | length) * 100) | round(1) }}%"
+    dest: "{{ monitoring_stack.data_root }}/.deployment-state/final_state.yml"
+    mode: '0644'
+  become: true
+
+- name: "Display incremental deployment summary"
+  ansible.builtin.debug:
+    msg:
+      - "=== Incremental Deployment Summary ==="
+      - "Total Services: {{ deployment_progress.services_to_deploy | length }}"
+      - "Successfully Deployed: {{ deployment_progress.services_deployed | length }}"
+      - "Failed Deployments: {{ deployment_progress.services_failed | length }}"
+      - "Success Rate: {{ ((deployment_progress.services_deployed | length) / (deployment_progress.services_to_deploy | length) * 100) | round(1) }}%"
+      - ""
+      - "✅ Deployed Services: {{ deployment_progress.services_deployed | join(', ') if deployment_progress.services_deployed else 'None' }}"
+      - "❌ Failed Services: {{ deployment_progress.services_failed | join(', ') if deployment_progress.services_failed else 'None' }}"
+      - ""
+      - "Deployment Status: {{ '✅ SUCCESS' if deployment_progress.deployment_successful else '⚠️  PARTIAL SUCCESS' }}"
