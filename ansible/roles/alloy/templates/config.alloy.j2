@@ -36,12 +36,58 @@ discovery.relabel "logs_integrations_docker" {
     }
 }
 
+discovery.relabel "logs_integrations_journald" {
+    targets = []
+
+    rule {
+        target_label = "job"
+        replacement  = "integrations/journald"
+    }
+
+    rule {
+        target_label = "instance"
+        replacement  = constants.hostname
+    }
+
+    rule {
+        source_labels = ["__meta_journald_unit"]
+        target_label  = "unit"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_syslog_identifier"]
+        target_label  = "syslog_identifier"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_container_name"]
+        target_label  = "container"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_container_id"]
+        target_label  = "container_id"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_priority"]
+        target_label  = "priority"
+    }
+}
+
 loki.source.docker "default" {
   host = "unix:///var/run/docker.sock"
   targets = discovery.docker.linux.targets
   relabel_rules = discovery.relabel.logs_integrations_docker.rules
   labels = {
   }
+  forward_to = [
+    loki.write.local.receiver,
+  ]
+}
+
+loki.source.journal "default" {
+  relabel_rules = discovery.relabel.logs_integrations_journald.rules
   forward_to = [
     loki.write.local.receiver,
   ]
