@@ -1,0 +1,68 @@
+---
+# defaults file for restic-exporter
+# Prometheus exporter for Restic backup system
+
+# Role configuration
+restic_exporter_enabled: true
+restic_exporter_version: "1.7.0"
+
+# Container configuration
+restic_exporter_container_name: "restic-exporter"
+restic_exporter_image: "ngosang/restic-exporter:{{ restic_exporter_version }}"
+restic_exporter_restart_policy: "unless-stopped"
+
+# Network configuration
+restic_exporter_port: 8001
+restic_exporter_internal_port: 8001
+restic_exporter_network: "monitoring"
+
+# Environment variables for restic-exporter
+restic_exporter_environment:
+  TZ: "UTC"
+  REFRESH_INTERVAL: "1800"  # 30 minutes - adjust based on your needs
+  LISTEN_PORT: "8001"
+  LISTEN_ADDRESS: "0.0.0.0"
+  LOG_LEVEL: "INFO"
+  EXIT_ON_ERROR: "False"
+  NO_CHECK: "False"
+  NO_STATS: "False"
+  NO_LOCKS: "False"
+  INCLUDE_PATHS: "False"
+  INSECURE_TLS: "False"
+
+# Restic repository configuration
+# These should be overridden in your playbook or inventory
+restic_exporter_restic_repository: ""
+restic_exporter_restic_password: ""
+restic_exporter_restic_password_file: ""
+
+# AWS S3 credentials (if using S3 backend)
+restic_exporter_aws_access_key_id: ""
+restic_exporter_aws_secret_access_key: ""
+
+# Backblaze B2 credentials (if using B2 backend)
+restic_exporter_b2_account_id: ""
+restic_exporter_b2_account_key: ""
+
+# Volume mounts
+restic_exporter_volumes:
+  - "/host_path/restic/data:/data:ro"  # Adjust this path as needed
+
+# Health check configuration
+restic_exporter_health_check_enabled: true
+restic_exporter_health_check_interval: "30s"
+restic_exporter_health_check_timeout: "10s"
+restic_exporter_health_check_retries: 3
+
+# Monitoring integration
+restic_exporter_prometheus_job_name: "restic-exporter"
+restic_exporter_prometheus_scrape_interval: "30s"
+
+# Security
+restic_exporter_user: "1000"
+restic_exporter_group: "1000"
+
+# Logging
+restic_exporter_log_driver: "json-file"
+restic_exporter_log_max_size: "10m"
+restic_exporter_log_max_files: 3
