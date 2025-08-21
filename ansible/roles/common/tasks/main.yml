@@ -40,27 +40,27 @@
   when: common_install_monitoring | default(true)
   tags: [install, monitoring]
 
-- name: Ensure Docker is running
-  systemd:
-    name: docker
-    state: started
-    enabled: true
-  become: true
-  tags: [configure, docker, systemd]
+# - name: Ensure Docker is running
+#   systemd:
+#     name: docker
+#     state: started
+#     enabled: true
+#   become: true
+#   tags: [configure, docker, systemd]
 
-- name: Create monitoring network
-  docker_network:
-    name: monitoring
-    state: present
-  become: true
-  tags: [configure, docker, networking]
+# - name: Create monitoring network
+#   docker_network:
+#     name: monitoring
+#     state: present
+#   become: true
+#   tags: [configure, docker, networking]
 
-- name: Ensure monitoring parent directory exists
-  file:
-    path: "/opt/monitoring"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  become: true
-  tags: [configure, storage, monitoring] 
+# - name: Ensure monitoring parent directory exists
+#   file:
+#     path: "/opt/monitoring"
+#     state: directory
+#     owner: root
+#     group: root
+#     mode: '0755'
+#   become: true
+#   tags: [configure, storage, monitoring] 
