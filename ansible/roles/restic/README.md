@@ -112,7 +112,7 @@ restic_check_schedule: "0 4 * * 0"   # Weekly on Sunday at 4 AM
 
 ```yaml
 # Service settings
-restic_service_name: "{{ project_name }}_{{ restic_instance_name }}"
+restic_service_name: "restic_backup"
 restic_service_description: "Restic Backup Service"
 restic_service_type: "oneshot"
 restic_service_restart: "no"
