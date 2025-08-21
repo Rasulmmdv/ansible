@@ -22,6 +22,7 @@ alloy_command:
   - 'run'
   - '--server.http.listen-addr=0.0.0.0:12345'
   - '--storage.path=/var/lib/alloy/data'
+  - '--cluster.node-name={{ inventory_hostname }}'
   - '/etc/alloy/config.alloy'
 
 # Docker network name to attach Alloy to

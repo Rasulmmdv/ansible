@@ -6,6 +6,7 @@ server:
 common:
   ring:
     instance_addr: 127.0.0.1
+    instance_id: "{{ inventory_hostname }}"
     kvstore:
       store: inmemory
   replication_factor: 1
@@ -13,13 +14,13 @@ common:
 
 # Basic limits configuration
 limits_config:
-  # Reject old samples
+  # Reject old samples - allow up to 30 days old
   reject_old_samples: true
-  reject_old_samples_max_age: {{ loki_retention.time }}
+  reject_old_samples_max_age: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
   
-  # Log retention configuration
-  retention_period: {{ alloy_log_retention_days | default(30) }}h
-  max_query_lookback: {{ alloy_log_retention_days | default(30) }}h
+  # Log retention configuration - keep data for 30 days
+  retention_period: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
+  max_query_lookback: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
 
 schema_config:
   configs:
@@ -54,6 +55,7 @@ ruler:
   rule_path: /loki/rules-temp
   alertmanager_url: ""
   ring:
+    instance_id: "{{ inventory_hostname }}"
     kvstore:
       store: inmemory
   enable_api: true 
