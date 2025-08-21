@@ -3,6 +3,7 @@ services:
     image: "{{ alloy_image }}"
     container_name: "{{ alloy_container_name }}"
     restart: unless-stopped
+    hostname: "{{ inventory_hostname }}"
     command:
 {% for arg in alloy_command %}
       - {{ arg }}
