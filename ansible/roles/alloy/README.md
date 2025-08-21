@@ -37,6 +37,9 @@ Include this role in your playbook:
                         v
                +----------------+
                |  Grafana Alloy |
+               |  +-----------+ |
+               |  | Sources   | |
+               |  +-----------+ |
                +----------------+
                         |
                         v
@@ -63,6 +66,9 @@ alloy_ports:
 
 # Journald configuration
 alloy_enable_journald: true  # Enables journald log collection
+
+# Log retention configuration
+alloy_log_retention_days: 30  # Filter out logs older than this many days (using loki.process)
 ```
 
 ### Log Collection Features
@@ -85,6 +91,15 @@ The Alloy configuration automatically:
    - Syslog identifier
    - Priority level
 5. **Forwards logs** to Loki for storage and querying
+
+### Log Retention Behavior
+
+By default, Alloy is configured to work with Loki's **built-in retention mechanisms** to manage log storage:
+
+- **Loki-level retention**: Uses Loki's Compactor to manage log retention and cleanup
+- **Configurable retention**: Set `alloy_log_retention_days` to control retention period (default: 30 days)
+- **Automatic cleanup**: Loki automatically removes logs older than the retention period
+- **Performance**: Prevents storage issues by automatically managing log lifecycle
 
 ## Integration with Grafana
 
@@ -179,4 +194,16 @@ docker logs loki
 
 1. **No journald logs**: Check if `/var/log/journal` and `/run/log/journal` are mounted
 2. **Permission errors**: Ensure Alloy container has privileged access
-3. **Missing units**: Verify systemd units are running and accessible 
+3. **Missing units**: Verify systemd units are running and accessible
+
+### Log Retention Issues
+
+1. **Missing historical logs**: By default, Loki retains logs for 30 days
+   - Adjust `alloy_log_retention_days` to control retention period
+   - Set to a higher value to retain older logs (use with caution)
+2. **No logs appearing**: Check if Alloy was recently restarted
+   - Logs are collected and sent to Loki in real-time
+   - Use `docker logs alloy` to verify collection status
+3. **Retention cleanup issues**: Check Loki's Compactor configuration
+   - Verify `retention_enabled: true` in Loki config
+   - Check if compactor is running and cleaning up old data 

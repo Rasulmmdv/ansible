@@ -14,6 +14,8 @@ loki_ports:
 loki_volumes:
   - "{{ loki_data_dir }}/loki-config.yaml:/etc/loki/local-config.yaml:ro"
   - "{{ loki_data_dir }}:/loki"
+  - "{{ loki_data_dir }}/compactor:/loki/compactor"
+  - "{{ loki_data_dir }}/delete-requests:/loki/delete-requests"
 loki_command:
   - '-config.file=/etc/loki/local-config.yaml'
   - '-config.expand-env=true'
@@ -22,10 +24,10 @@ loki_command:
 # Data retention configuration
 loki_retention:
   # Time-based retention (30 days maximum)
-  time: "720h"  # 30 days in hours
+  time: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"  # Convert days to hours
   enabled: true
   table_manager:
-    retention_period: "720h"  # 30 days in hours
+    retention_period: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"  # Convert days to hours
 
 # Compactor configuration for retention management
 loki_compactor:

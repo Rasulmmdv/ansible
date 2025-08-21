@@ -28,9 +28,12 @@ alloy_command:
 alloy_network_name: "monitoring"
 
 # Loki push endpoint (override with central Loki URL)
-alloy_loki_write_url: "http://loki:3100/loki/api/v1/push"
+alloy_loki_write_url: "http://10.0.0.5:3100/loki/api/v1/push"
 # Optional: multi-tenant header
 alloy_loki_tenant_id: ""
 
 # Journald configuration
-alloy_enable_journald: true 
+alloy_enable_journald: true
+
+# Log retention configuration
+alloy_log_retention_days: 30  # Log retention period in days (configured in Loki) 
