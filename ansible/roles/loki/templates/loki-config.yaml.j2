@@ -16,6 +16,10 @@ limits_config:
   # Reject old samples
   reject_old_samples: true
   reject_old_samples_max_age: {{ loki_retention.time }}
+  
+  # Log retention configuration
+  retention_period: {{ alloy_log_retention_days | default(30) }}h
+  max_query_lookback: {{ alloy_log_retention_days | default(30) }}h
 
 schema_config:
   configs:
@@ -30,6 +34,15 @@ schema_config:
 storage_config:
   filesystem:
     directory: /loki/chunks
+
+# Compactor configuration for retention management
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  delete_request_store: filesystem
 
 
 

@@ -36,6 +36,7 @@
         - "{{ loki_data_dir }}/tsdb-cache"
         - "{{ loki_data_dir }}/rules-temp"
         - "{{ loki_compactor.working_directory }}"
+        - "{{ loki_data_dir }}/delete-requests"
       become: true
 
     - name: Ensure all loki subdirectories have correct ownership for container
