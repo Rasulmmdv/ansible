@@ -2,8 +2,8 @@
 # tasks file for fail2ban
 
 - name: Setup fail2ban
-  block:
   tags: [install, configure, security]
+  block:
     - name: Install fail2ban
       apt:
         name: fail2ban
