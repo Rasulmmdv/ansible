@@ -1,11 +1,11 @@
 ---
-- name: Deploy Restic Backup Solution for Selectel S3 Cloud Storage
+- name: Deploy Restic Backup Solution for Yandex Cloud S3 Storage
   hosts: all
   become: yes
   
   vars:
     # REQUIRED: Set your project name for backup naming
-    # project_name: myproject
+    project_name: kimdev
 
     # REQUIRED for S3: Set your S3 credentials
     # restic_aws_access_key_id: ""
@@ -24,30 +24,31 @@
     # REQUIRED: Set your Restic repository password
     # restic_password: "supersecret"
     
-    # Selectel S3 repository configuration
-    # Using Selectel cloud storage in ru-7 region
-    # Container name dynamically set based on hostname: {{ project_name }}-backups-{{ inventory_hostname }}
-    restic_repository: "s3:s3.ru-7.storage.selcloud.ru/{{ project_name }}-backups-{{ inventory_hostname }}"
+    # Yandex Cloud S3 repository configuration
+    # Using Yandex Cloud Object Storage in ru-central1 region
+    # Bucket name dynamically set based on hostname: {{ project_name }}-backups-{{ inventory_hostname }}
+    restic_repository: "s3:https://storage.yandexcloud.net/backupsdi"
     restic_repository_type: "s3"
-    restic_password: "secure-password-change-me123"
+    restic_password: ""
     
-    # Selectel S3 credentials
-    # Get these from your Selectel control panel under S3 keys
-    restic_aws_access_key_id: "" # TODO: add credentials
-    restic_aws_secret_access_key: "" # TODO: add credentials
-    restic_aws_region: "ru-7"
-    restic_aws_endpoint: "s3.ru-7.storage.selcloud.ru"
+    # Yandex Cloud S3 credentials
+    # Get these from your Yandex Cloud IAM service account
+    restic_aws_access_key_id: ""
+    restic_aws_secret_access_key: ""
+    restic_aws_region: "ru-central1"
+    restic_aws_endpoint: "storage.yandexcloud.net"
     
-    # Selectel-specific S3 configuration
-    restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
-    restic_setup_selectel_ca: true
-    
+    # Yandex Cloud S3 configuration
+    restic_s3_endpoint_url: "storage.yandexcloud.net"
+    restic_setup_selectel_ca: false
+
     # Backup paths (customize for your environment)
     restic_backup_paths:
       - "/data"
       - "/opt"
       - "/etc"
       - "/home"
+      - "/root"
     
     # Exclusion patterns (files/directories to skip)
     restic_exclude_patterns:
@@ -99,7 +100,7 @@
     restic_log_level: "info"
     
     # PostgreSQL backup configuration
-    restic_postgresql_backup_enabled: true
+    restic_postgresql_backup_enabled: false
     restic_postgresql_retention_days: 7
     # Example for database user password in restic_postgresql_databases:
     # restic_postgresql_databases:

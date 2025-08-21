@@ -87,7 +87,7 @@ restic_prune_schedule: "Sun *-*-* 03:00:00"   # Weekly on Sunday at 3 AM
 restic_check_schedule: "Sun *-*-* 04:00:00"   # Weekly on Sunday at 4 AM
 
 # Systemd service configuration
-restic_service_name: "{{ project_name }}_{{ restic_instance_name }}"
+restic_service_name: "restic_backup"
 restic_service_description: "Restic Backup Service"
 restic_service_type: "oneshot"
 restic_service_restart: "no"
