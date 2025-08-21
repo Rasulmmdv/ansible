@@ -1,0 +1,28 @@
+---
+galaxy_info:
+  author: Ansible Maintainer
+  description: Prometheus exporter for Restic backup system
+  company: 
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: EL
+      versions:
+        - all
+  galaxy_tags:
+    - monitoring
+    - prometheus
+    - exporter
+    - restic
+    - backup
+    - docker
+
+dependencies:
+  - role: docker
+  - role: monitoring-stack

@@ -1,0 +1,108 @@
+---
+# Main tasks for restic-exporter role
+# Prometheus exporter for Restic backup system
+
+- name: Check mode notice for restic-exporter
+  debug:
+    msg: "Running in check mode - Docker container operations will be skipped. These tasks require actual execution."
+  when: ansible_check_mode
+  tags: [always]
+
+- name: Ensure monitoring network exists
+  docker_network:
+    name: "{{ restic_exporter_network }}"
+    state: present
+  when: not ansible_check_mode
+  tags: [install, configure]
+
+- name: Create restic-exporter container
+  docker_container:
+    name: "{{ restic_exporter_container_name }}"
+    image: "{{ restic_exporter_image }}"
+    state: started
+    restart_policy: "{{ restic_exporter_restart_policy }}"
+    networks:
+      - name: "{{ restic_exporter_network }}"
+    ports:
+      - "{{ restic_exporter_port }}:{{ restic_exporter_internal_port }}"
+    env:
+      TZ: "{{ restic_exporter_environment.TZ }}"
+      REFRESH_INTERVAL: "{{ restic_exporter_environment.REFRESH_INTERVAL }}"
+      LISTEN_PORT: "{{ restic_exporter_environment.LISTEN_PORT }}"
+      LISTEN_ADDRESS: "{{ restic_exporter_environment.LISTEN_ADDRESS }}"
+      LOG_LEVEL: "{{ restic_exporter_environment.LOG_LEVEL }}"
+      EXIT_ON_ERROR: "{{ restic_exporter_environment.EXIT_ON_ERROR }}"
+      NO_CHECK: "{{ restic_exporter_environment.NO_CHECK }}"
+      NO_STATS: "{{ restic_exporter_environment.NO_STATS }}"
+      NO_LOCKS: "{{ restic_exporter_environment.NO_LOCKS }}"
+      INCLUDE_PATHS: "{{ restic_exporter_environment.INCLUDE_PATHS }}"
+      INSECURE_TLS: "{{ restic_exporter_environment.INSECURE_TLS }}"
+      RESTIC_REPOSITORY: "{{ restic_exporter_restic_repository }}"
+      RESTIC_PASSWORD: "{{ restic_exporter_restic_password }}"
+      RESTIC_PASSWORD_FILE: "{{ restic_exporter_restic_password_file }}"
+      AWS_ACCESS_KEY_ID: "{{ restic_exporter_aws_access_key_id }}"
+      AWS_SECRET_ACCESS_KEY: "{{ restic_exporter_aws_secret_access_key }}"
+      B2_ACCOUNT_ID: "{{ restic_exporter_b2_account_id }}"
+      B2_ACCOUNT_KEY: "{{ restic_exporter_b2_account_key }}"
+    volumes: "{{ restic_exporter_volumes }}"
+    user: "{{ restic_exporter_user }}:{{ restic_exporter_group }}"
+    log_driver: "{{ restic_exporter_log_driver }}"
+    log_options:
+      max-size: "{{ restic_exporter_log_max_size }}"
+      max-file: "{{ restic_exporter_log_max_files }}"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{ restic_exporter_internal_port }}/metrics"]
+      interval: "{{ restic_exporter_health_check_interval }}"
+      timeout: "{{ restic_exporter_health_check_timeout }}"
+      retries: "{{ restic_exporter_health_check_retries }}"
+      start_period: "30s"
+  when: not ansible_check_mode
+  tags: [install, configure]
+
+- name: Wait for restic-exporter to be ready
+  uri:
+    url: "http://localhost:{{ restic_exporter_port }}/metrics"
+    status_code: 200
+  register: restic_exporter_health_check
+  retries: 10
+  delay: 5
+  until: restic_exporter_health_check.status == 200
+  when: 
+    - not ansible_check_mode
+    - restic_exporter_health_check_enabled
+  tags: [configure, validate]
+
+- name: Verify restic-exporter container status
+  docker_container_info:
+    name: "{{ restic_exporter_container_name }}"
+  register: restic_exporter_container_info
+  tags: [validate]
+
+- name: Display restic-exporter container information
+  debug:
+    msg: |
+      Restic-exporter container status:
+      - Name: {{ restic_exporter_container_info.containers[0].Config.Image }}
+      - Status: {{ restic_exporter_container_info.containers[0].State.Status }}
+      - Health: {{ restic_exporter_container_info.containers[0].State.Health.Status | default('N/A') }}
+      - Port: {{ restic_exporter_port }}
+      - Network: {{ restic_exporter_network }}
+  tags: [validate]
+
+- name: Test metrics endpoint
+  uri:
+    url: "http://localhost:{{ restic_exporter_port }}/metrics"
+    method: GET
+  register: metrics_response
+  when: not ansible_check_mode
+  tags: [validate]
+
+- name: Display metrics endpoint response
+  debug:
+    msg: |
+      Metrics endpoint test:
+      - Status: {{ metrics_response.status }}
+      - Content length: {{ metrics_response.content | length }} characters
+      - Available metrics: {{ metrics_response.content.split('\n') | select('match', '^# HELP') | list | length }}
+  when: not ansible_check_mode
+  tags: [validate]
