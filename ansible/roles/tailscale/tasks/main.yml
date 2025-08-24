@@ -79,10 +79,30 @@
       tags: [configure, networking]
 
     - name: Check current Tailscale status
-      ansible.builtin.command: "tailscale status"
+      ansible.builtin.command: "tailscale status --json"
       register: tailscale_current_status
       changed_when: false
       failed_when: false
+      tags: [validate, networking]
+
+    - name: Parse Tailscale status JSON
+      ansible.builtin.set_fact:
+        tailscale_status_parsed: "{{ tailscale_current_status.stdout | from_json }}"
+        tailscale_is_authenticated: "{{ (tailscale_current_status.stdout | from_json).Self.Online | default(false) }}"
+        tailscale_backend_state: "{{ (tailscale_current_status.stdout | from_json).BackendState | default('Unknown') }}"
+      when:
+        - tailscale_current_status.stdout is defined
+        - tailscale_current_status.stdout != ""
+        - tailscale_current_status.rc == 0
+      tags: [validate, networking]
+
+    - name: Set defaults when JSON parsing fails (not authenticated)
+      ansible.builtin.set_fact:
+        tailscale_is_authenticated: false
+        tailscale_backend_state: "NeedsAuth"
+      when:
+        - tailscale_current_status.rc != 0
+        - tailscale_is_authenticated is not defined
       tags: [validate, networking]
 
     - name: Wait for Tailscale to be ready (after authentication)
@@ -109,21 +129,27 @@
       Current Tailscale status:
       {{ tailscale_current_status.stdout_lines | default(['Not available in check mode']) }}
       Return code: {{ tailscale_current_status.rc | default('Not available in check mode') }}
+
+      Parsed Status:
+      - Is authenticated: {{ tailscale_is_authenticated | default('Unknown') }}
+      - Backend state: {{ tailscale_backend_state | default('Unknown') }}
+      - Status JSON: {{ tailscale_status_parsed | default('Not parsed') }}
   tags: [validate, networking]
 
-- name: Build complete Tailscale up command
-  ansible.builtin.set_fact:
-    tailscale_up_cmd: "tailscale up --authkey={{ tailscale_auth_key }} --accept-dns={{ tailscale_accept_dns | lower }} --accept-routes={{ tailscale_accept_routes | lower }}"
-  when: 
-    - tailscale_auth_key is defined and tailscale_auth_key != ""
-    - tailscale_current_status.rc != 0 or "Logged out" in tailscale_current_status.stdout
-  tags: [configure, networking]
-
-- name: Build Tailscale up command without auth key (if already authenticated)
+- name: Initialize Tailscale up command base
   ansible.builtin.set_fact:
     tailscale_up_cmd: "tailscale up --accept-dns={{ tailscale_accept_dns | lower }} --accept-routes={{ tailscale_accept_routes | lower }}"
-  when: 
-    - tailscale_current_status.rc == 0 and "Logged out" not in tailscale_current_status.stdout
+  when:
+    - tailscale_auth_key is defined and tailscale_auth_key != ""
+  tags: [configure, networking]
+
+- name: Add auth key to Tailscale up command (if not authenticated)
+  ansible.builtin.set_fact:
+    tailscale_up_cmd: "{{ tailscale_up_cmd }} --authkey={{ tailscale_auth_key }}"
+  when:
+    - tailscale_up_cmd is defined
+    - not tailscale_is_authenticated | default(true)
+    - tailscale_backend_state | default('Unknown') != 'Running'
   tags: [configure, networking]
 
 - name: Add hostname to Tailscale up command
@@ -142,9 +168,18 @@
 
 - name: Add exit node advertisement to Tailscale up command
   ansible.builtin.set_fact:
-    tailscale_up_cmd: "{{ tailscale_up_cmd }} --advertise-exit-node={{ tailscale_advertise_exit_node | lower }}"
+    tailscale_up_cmd: "{{ tailscale_up_cmd }} --advertise-exit-node"
   when: tailscale_advertise_exit_node | default(false)
   tags: [configure, networking]
+
+# Exit node LAN access flag removed - not available in this Tailscale version
+# - name: Add exit node allow LAN access to Tailscale up command
+#   ansible.builtin.set_fact:
+#     tailscale_up_cmd: "{{ tailscale_up_cmd }} --exit-node-allow-lan-access"
+#   when:
+#     - tailscale_advertise_exit_node | default(false)
+#     - tailscale_exit_node_allow_lan_access | default(false)
+#   tags: [configure, networking]
 
 - name: Debug - Show complete Tailscale up command
   ansible.builtin.debug:
@@ -158,39 +193,138 @@
       - Accept DNS: {{ tailscale_accept_dns | default(true) }}
       - Accept routes: {{ tailscale_accept_routes | default(false) }}
       - Advertise routes: {{ tailscale_advertise_routes | default([]) }}
-      - Advertise exit node: {{ tailscale_advertise_exit_node | default(false) }}
+      - Exit node enabled: {{ tailscale_advertise_exit_node | default(false) }}
+      - Exit node allow LAN access: Disabled (flag not available in this version)
   when: tailscale_up_cmd is defined
   tags: [configure, networking]
 
-# - name: Authenticate Tailscale with complete configuration
-#   ansible.builtin.command: "{{ tailscale_up_cmd }}"
-#   register: tailscale_auth
-#   timeout: 60
-#   when: tailscale_up_cmd is defined
+- name: Authenticate Tailscale with complete configuration
+  ansible.builtin.command: "{{ tailscale_up_cmd }}"
+  register: tailscale_auth
+  changed_when: true
+  timeout: 60
+  when:
+    - tailscale_up_cmd is defined
+    - not ansible_check_mode
+  failed_when: false
+  tags: [configure, networking]
 
-# - name: Debug - Show Tailscale authentication result
-#   ansible.builtin.debug:
-#     msg: |
-#       Tailscale authentication result:
-#       - Command: {{ tailscale_auth.cmd | default('NOT_RUN') }}
-#       - Return code: {{ tailscale_auth.rc | default('NOT_RUN') }}
-#       - Changed: {{ tailscale_auth.changed | default(false) }}
-#       - Stdout: {{ tailscale_auth.stdout | default('NOT_RUN') }}
-#       - Stderr: {{ tailscale_auth.stderr | default('NOT_RUN') }}
-#   when: 
-#     - tailscale_up_cmd is defined
-#     - tailscale_auth is defined
+- name: Retry Tailscale authentication with reset if needed
+  ansible.builtin.command: "{{ tailscale_up_cmd }} --reset"
+  register: tailscale_auth_reset
+  changed_when: true
+  timeout: 60
+  when:
+    - tailscale_auth is defined
+    - tailscale_auth.rc != 0
+    - "'requires mentioning all non-default flags' in tailscale_auth.stderr or 'changing settings via' in tailscale_auth.stderr"
+    - not ansible_check_mode
+  failed_when: false
+  tags: [configure, networking]
 
-- name: Show Tailscale status
-  ansible.builtin.command: "tailscale status"
-  register: tailscale_status
-  changed_when: false
-  tags: [validate, networking]
-
-- name: Debug - Show Tailscale status
+- name: Debug - Show Tailscale authentication result
   ansible.builtin.debug:
     msg: |
-      Tailscale status:
-      {{ tailscale_status.stdout_lines | default(['Not available in check mode']) }}
-  when: tailscale_status is defined
+      Tailscale authentication result:
+      - Original Command: {{ tailscale_auth.cmd | default('NOT_RUN') }}
+      - Original Return code: {{ tailscale_auth.rc | default('NOT_RUN') }}
+      - Original Changed: {{ tailscale_auth.changed | default(false) }}
+      - Original Stdout: {{ tailscale_auth.stdout | default('NOT_RUN') }}
+      - Original Stderr: {{ tailscale_auth.stderr | default('NOT_RUN') }}
+      {% if tailscale_auth_reset is defined %}
+      - Reset Command: {{ tailscale_auth_reset.cmd | default('NOT_RUN') }}
+      - Reset Return code: {{ tailscale_auth_reset.rc | default('NOT_RUN') }}
+      - Reset Changed: {{ tailscale_auth_reset.changed | default(false) }}
+      - Reset Stdout: {{ tailscale_auth_reset.stdout | default('NOT_RUN') }}
+      - Reset Stderr: {{ tailscale_auth_reset.stderr | default('NOT_RUN') }}
+      {% endif %}
+  when:
+    - tailscale_up_cmd is defined
+    - tailscale_auth is defined
+    - not ansible_check_mode
+  tags: [configure, networking]
+
+- name: Handle Tailscale authentication failure
+  ansible.builtin.fail:
+    msg: |
+      Tailscale authentication failed!
+
+      Original attempt:
+      Command: {{ tailscale_auth.cmd | default('Unknown') }}
+      Return code: {{ tailscale_auth.rc | default('Unknown') }}
+      Stdout: {{ tailscale_auth.stdout | default('') }}
+      Stderr: {{ tailscale_auth.stderr | default('') }}
+
+      {% if tailscale_auth_reset is defined and tailscale_auth_reset %}
+      Reset attempt:
+      Command: {{ tailscale_auth_reset.cmd | default('Unknown') }}
+      Return code: {{ tailscale_auth_reset.rc | default('Unknown') }}
+      Stdout: {{ tailscale_auth_reset.stdout | default('') }}
+      Stderr: {{ tailscale_auth_reset.stderr | default('') }}
+      {% endif %}
+
+      Common solutions:
+      1. Verify your auth key is valid and not expired
+      2. Check if the auth key has been used before (single-use)
+      3. Ensure the node is approved in your Tailscale admin console
+      4. Check network connectivity to tailscale.com
+      5. If node was previously configured, try manually running: tailscale up --reset
+  when:
+    - tailscale_auth is defined
+    - tailscale_auth.rc != 0
+    - (tailscale_auth_reset is not defined or tailscale_auth_reset.rc is not defined or tailscale_auth_reset.rc != 0)
+    - not ansible_check_mode
+  tags: [configure, networking]
+
+- name: Show final Tailscale status
+  ansible.builtin.command: "tailscale status --json"
+  register: tailscale_final_status
+  changed_when: false
+  failed_when: false
+  tags: [validate, networking]
+
+- name: Parse final Tailscale status
+  ansible.builtin.set_fact:
+    tailscale_final_parsed: "{{ tailscale_final_status.stdout | from_json }}"
+    tailscale_final_authenticated: "{{ (tailscale_final_status.stdout | from_json).Self.Online | default(false) }}"
+    tailscale_final_backend_state: "{{ (tailscale_final_status.stdout | from_json).BackendState | default('Unknown') }}"
+  when:
+    - tailscale_final_status.stdout is defined
+    - tailscale_final_status.stdout != ""
+    - tailscale_final_status.rc == 0
+  tags: [validate, networking]
+
+- name: Set final defaults when JSON parsing fails
+  ansible.builtin.set_fact:
+    tailscale_final_authenticated: false
+    tailscale_final_backend_state: "NeedsAuth"
+  when:
+    - tailscale_final_status.rc != 0
+    - tailscale_final_authenticated is not defined
+  tags: [validate, networking]
+
+- name: Display Tailscale installation summary
+  ansible.builtin.debug:
+    msg: |
+      === Tailscale Installation Summary ===
+      Node: {{ ansible_hostname }}
+      Authenticated: {{ tailscale_final_authenticated | default(false) }}
+      Backend State: {{ tailscale_final_backend_state | default('Unknown') }}
+      Service Status: {{ 'Running' if tailscale_service_state == 'started' else 'Not Running' }}
+
+      {% if tailscale_final_authenticated | default(false) -%}
+      ✅ Tailscale is successfully authenticated and online
+      {% if tailscale_final_parsed.Self.TailscaleIPs | default([]) -%}
+      Node IPs: {{ tailscale_final_parsed.Self.TailscaleIPs | join(', ') }}
+      {% endif -%}
+      {% else -%}
+      ❌ Tailscale is not authenticated
+      Backend State: {{ tailscale_final_backend_state | default('Unknown') }}
+
+      Common solutions:
+      1. Check if auth key is valid and not expired
+      2. Verify node is approved in Tailscale admin console
+      3. Ensure network connectivity to tailscale.com
+      4. Try running: tailscale up --authkey=YOUR_KEY
+      {% endif %}
   tags: [validate, networking] 
