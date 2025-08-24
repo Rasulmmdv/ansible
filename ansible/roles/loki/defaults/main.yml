@@ -32,4 +32,18 @@ loki_retention:
 # Compactor configuration for retention management
 loki_compactor:
   enabled: true
-  working_directory: "{{ loki_data_dir }}/compactor" 
+  working_directory: "{{ loki_data_dir }}/compactor"
+
+# Ingestion rate limits configuration
+loki_ingestion_rate_limit:
+  enabled: true
+  # Rate limit in bytes per second (default: 4MB/sec = 4194304 bytes/sec)
+  # Setting to 8MB/sec to handle higher log volumes
+  rate: "{{ loki_ingestion_rate_mb_per_sec | default(8) * 1024 * 1024 }}"
+  burst: "{{ loki_ingestion_burst_mb | default(16) * 1024 * 1024 }}"
+
+# Per-user rate limits
+loki_per_user_rate_limit:
+  enabled: true
+  rate: "{{ loki_per_user_rate_mb_per_sec | default(4) * 1024 * 1024 }}"
+  burst: "{{ loki_per_user_burst_mb | default(8) * 1024 * 1024 }}" 
