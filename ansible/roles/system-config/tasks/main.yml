@@ -31,7 +31,7 @@
       systemd:
         name: chronyd
         state: started
-        enabled: yes
+        enabled: true
       become: true
 
     # Install locales package

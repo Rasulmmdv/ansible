@@ -1,0 +1,108 @@
+---
+# Standardized Docker Compose deployment task
+# This provides consistent deployment patterns across all roles
+# Usage: include this task with variables:
+#   - compose_project_name: "prometheus" (required)
+#   - compose_project_src: "/opt/prometheus" (required - directory containing docker-compose.yml)
+#   - compose_state: "present" (optional, default: present)
+#   - compose_build: false (optional, default: false)
+#   - compose_pull: true (optional, default: true)
+#   - compose_recreate: "auto" (optional, default: auto)
+#   - compose_restarted: false (optional, default: false)
+#   - compose_remove_orphans: true (optional, default: true)
+#   - compose_files: ["docker-compose.yml"] (optional, default: auto-detect)
+#   - compose_profiles: [] (optional, default: [])
+
+- name: "Deploy Docker Compose for {{ compose_project_name | default('service') }}"
+  block:
+    - name: "Validate Docker Compose deployment parameters for {{ compose_project_name | default('service') }}"
+      ansible.builtin.assert:
+        that:
+          - compose_project_name is defined
+          - compose_project_name != ""
+          - compose_project_src is defined
+          - compose_project_src != ""
+        fail_msg: "compose_project_name and compose_project_src are required for Docker Compose deployment"
+        
+    - name: "Verify docker-compose.yml exists for {{ compose_project_name | default('service') }}"
+      ansible.builtin.stat:
+        path: "{{ compose_project_src }}/docker-compose.yml"
+      register: _compose_file_check
+      
+    - name: "Fail if docker-compose.yml not found for {{ compose_project_name | default('service') }}"
+      ansible.builtin.fail:
+        msg: "docker-compose.yml not found at {{ compose_project_src }}/docker-compose.yml"
+      when: not _compose_file_check.stat.exists
+        
+    - name: "Deploy {{ compose_project_name | default('service') }} with Docker Compose"
+      community.docker.docker_compose_v2:
+        project_name: "{{ compose_project_name }}"
+        project_src: "{{ compose_project_src }}"
+        state: "{{ compose_state | default('present') }}"
+        build: "{{ compose_build | default(false) }}"
+        pull: "{{ compose_pull | default(true) }}"
+        recreate: "{{ compose_recreate | default('auto') }}"
+        restarted: "{{ compose_restarted | default(false) }}"
+        remove_orphans: "{{ compose_remove_orphans | default(true) }}"
+        files: "{{ compose_files | default(['docker-compose.yml']) }}"
+        profiles: "{{ compose_profiles | default([]) }}"
+      register: _compose_result
+      become: true
+      
+  rescue:
+    - name: "Handle Docker Compose deployment failure for {{ compose_project_name | default('service') }}"
+      include_tasks: failure_notification.yml
+      vars:
+        notification_type: "error"
+        operation_name: "Docker Compose deployment for {{ compose_project_name | default('service') }}"
+        error_message: "Failed to deploy {{ compose_project_name | default('service') }} with Docker Compose"
+        troubleshooting_steps:
+          - "Check docker-compose.yml syntax: docker compose -f {{ compose_project_src }}/docker-compose.yml config"
+          - "Verify Docker daemon is running: docker info"
+          - "Check container logs: docker compose -f {{ compose_project_src }}/docker-compose.yml logs"
+          - "Ensure required images are available: docker compose -f {{ compose_project_src }}/docker-compose.yml pull"
+          - "Check available disk space and memory"
+          - "Verify network configuration and port availability"
+        should_fail: true
+        
+  always:
+    - name: "Set Docker Compose deployment facts for {{ compose_project_name | default('service') }}"
+      ansible.builtin.set_fact:
+        "{{ compose_project_name | default('service') }}_compose_result": "{{ _compose_result | default({}) }}"
+        "{{ compose_project_name | default('service') }}_compose_deployed": "{{ _compose_result is defined and _compose_result.changed is defined }}"
+        
+    - name: "Display Docker Compose deployment summary for {{ compose_project_name | default('service') }}"
+      ansible.builtin.debug:
+        msg:
+          - "=== Docker Compose Deployment Summary ==="
+          - "Project: {{ compose_project_name | default('service') }}"
+          - "Source Directory: {{ compose_project_src }}"
+          - "State: {{ compose_state | default('present') }}"
+          - "Changed: {{ _compose_result.changed | default('N/A') }}"
+          - "Services: {{ _compose_result.services | default({}) | length }} service(s)"
+          - "Actions Taken: {{ _compose_result.actions | default([]) | length }} action(s)"
+      when: show_compose_deployment_summary | default(true)
+
+# Usage examples:
+#
+# Basic deployment:
+# - include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+#   vars:
+#     compose_project_name: "prometheus"
+#     compose_project_src: "/opt/prometheus"
+#
+# Advanced deployment with build:
+# - include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+#   vars:
+#     compose_project_name: "jenkins"
+#     compose_project_src: "/opt/jenkins"
+#     compose_build: true
+#     compose_recreate: "always"
+#     compose_profiles: ["development"]
+#
+# Teardown:
+# - include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+#   vars:
+#     compose_project_name: "old_service"
+#     compose_project_src: "/opt/old_service"
+#     compose_state: "absent"

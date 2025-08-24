@@ -20,6 +20,20 @@ all:
       traefik_certificate_type: "none"
       traefik_dashboard_domain: "localhost"
       traefik_dashboard_insecure: true
+    node-2-nl:
+      ansible_host: 143.47.189.82
+      ansible_user: ubuntu
+      ansible_become: true
+      ansible_become_method: sudo
+      tailscale_auth_key: ""
+      iptables_allowed_tcp_ports: [22, 80, 443, 41641]
+      tailscale_enable_route_advertisement: true
+      tailscale_advertise_routes:
+        - "10.0.0.0/24"
+        - "172.16.0.0/12"
+        - "169.254.169.254/32"
+      
+
     infra-01: # gitlab server
       ansible_host: 5.188.158.83
       ansible_port: 2222 

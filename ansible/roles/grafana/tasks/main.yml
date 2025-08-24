@@ -1,73 +1,70 @@
 ---
 # tasks file for grafana
 
-- name: Setup Grafana
-  block:
-    - name: Create grafana group
-      group:
-        name: "{{ grafana_group }}"
-        gid: "{{ grafana_group_id }}"
-      become: true
+# Validate required variables for Grafana
+- name: Validate Grafana configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
+  vars:
+    role_name: "grafana"
+    required_variables:
+      - "grafana_data_dir"
+      - "grafana_user"
+      - "grafana_group"
+    sensitive_variables:
+      - "GF_SECURITY_ADMIN_PASSWORD"
+    custom_validations:
+      - name: "grafana_data_dir"
+        validation: "grafana_data_dir | regex_search('^/')"
+        error_message: "grafana_data_dir must be an absolute path starting with '/'"
+      - name: "GF_SECURITY_ADMIN_PASSWORD"
+        condition: "grafana_env.GF_SECURITY_ADMIN_PASSWORD is defined"
+        validation: "grafana_env.GF_SECURITY_ADMIN_PASSWORD | length >= 8"
+        error_message: "GF_SECURITY_ADMIN_PASSWORD must be at least 8 characters long for security"
 
-    - name: Create grafana user
-      user:
-        name: "{{ grafana_user }}"
-        group: "{{ grafana_group }}"
-        uid: "{{ grafana_user_id }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-
-    - name: Create grafana data directory
-      file:
-        path: "{{ grafana_data_dir }}"
-        state: directory
-        owner: "0"
-        group: "0"
-        mode: '0755'
-      become: true
-
-    - name: Create grafana provisioning directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "0"
-        group: "0"
-        mode: '0755'
-      loop:
-        - "{{ grafana_data_dir }}/provisioning"
-        - "{{ grafana_data_dir }}/provisioning/datasources"
-      become: true
-
-
+- name: Setup Grafana (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "grafana"
+    service_user: "{{ grafana_user }}"
+    service_group: "{{ grafana_group }}"
+    service_uid: "{{ grafana_user_id | default(omit) }}"
+    service_gid: "{{ grafana_group_id | default(omit) }}"
+    service_directories:
+      - "{{ grafana_data_dir }}"
+      - "{{ grafana_data_dir }}/provisioning"
+      - "{{ grafana_data_dir }}/provisioning/datasources"
+    directory_mode: "0755"
+    # Use proper Grafana user ownership instead of root
+    directory_owner: "{{ grafana_user_id }}"
+    directory_group: "{{ grafana_group_id }}"
   when: not ansible_check_mode
 
 - name: Deploy docker-compose.yml for grafana
   template:
     src: docker-compose.yml.j2
     dest: "{{ grafana_data_dir }}/docker-compose.yml"
-    owner: "0"
-    group: "0"
+    owner: "{{ grafana_user_id }}"
+    group: "{{ grafana_group_id }}"
     mode: '0644'
   become: true
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 - name: Start grafana with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ grafana_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_data_dir }}"
+    state: present
   become: true
   notify: restart grafana
   when: not ansible_check_mode
-  tags: [deploy, start]
+  tags: [deploy, docker, web]
 
 - name: Deploy Grafana provisioning for Prometheus datasource
   template:
     src: provisioning/datasources/prometheus.yml.j2
     dest: "{{ grafana_data_dir }}/provisioning/datasources/prometheus.yml"
-    owner: "0"
-    group: "0"
+    owner: "{{ grafana_user_id }}"
+    group: "{{ grafana_group_id }}"
     mode: '0644'
   become: true
   notify: restart grafana 

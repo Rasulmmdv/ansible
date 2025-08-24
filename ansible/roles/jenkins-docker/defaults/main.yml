@@ -96,6 +96,17 @@ jenkins_lts: true
 minimum_disk_space_gb: 10
 minimum_memory_mb: 2048
 
+# Health check and verification configuration
+jenkins_verification:
+  enabled: true
+  login_check:
+    max_retries: 5
+    retry_delay: 5  # Reduced from hardcoded 10 seconds
+  api_check:
+    max_retries: 10
+    retry_delay: 10  # Reduced from hardcoded 15 seconds
+  timeout: 300  # Total timeout in seconds
+
 # Default security settings (internal)
 jenkins_security_realm: "HudsonPrivateSecurityRealm"
 jenkins_authorization_strategy: "FullControlOnceLoggedInAuthorizationStrategy"

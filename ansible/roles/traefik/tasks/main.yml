@@ -1,20 +1,90 @@
 ---
 # tasks file for traefik
 
+# Validate required variables for Traefik
+- name: Validate Traefik configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
+  vars:
+    role_name: "traefik"
+    required_variables:
+      - "traefik_domain"
+      - "traefik_dashboard_domain"
+      - "traefik_data_dir"
+      - "traefik_config_dir"
+      - "traefik_certs_dir"
+      - "traefik_logs_dir"
+      - "traefik_user"
+      - "traefik_group"
+      - "traefik_network_name"
+    sensitive_variables:
+      - "traefik_dashboard_password"
+    conditional_variables:
+      - condition: "traefik_acme_enabled | default(false)"
+        variables: 
+          - "traefik_acme_email"
+          - "traefik_acme_ca_server"
+      - condition: "traefik_dashboard_auth_enabled | default(false)"
+        variables:
+          - "traefik_dashboard_password"
+          - "traefik_dashboard_username"
+      - condition: "traefik_certificate_type == 'custom'"
+        variables:
+          - "traefik_certificate_files"
+    custom_validations:
+      - name: "traefik_domain"
+        validation: "traefik_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "traefik_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "traefik_dashboard_domain"
+        validation: "traefik_dashboard_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "traefik_dashboard_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "traefik_acme_email"
+        condition: "traefik_acme_enabled | default(false)"
+        validation: "traefik_acme_email | regex_search('@')"
+        error_message: "traefik_acme_email must be a valid email address when ACME is enabled"
+      - name: "traefik_data_dir"
+        validation: "traefik_data_dir | regex_search('^/')"
+        error_message: "traefik_data_dir must be an absolute path starting with '/'"
+      - name: "traefik_config_dir"
+        validation: "traefik_config_dir | regex_search('^/')"
+        error_message: "traefik_config_dir must be an absolute path starting with '/'"
+      - name: "traefik_certs_dir"
+        validation: "traefik_certs_dir | regex_search('^/')"
+        error_message: "traefik_certs_dir must be an absolute path starting with '/'"
+      - name: "traefik_logs_dir"
+        validation: "traefik_logs_dir | regex_search('^/')"
+        error_message: "traefik_logs_dir must be an absolute path starting with '/'"
+      - name: "traefik_web_port"
+        validation: "traefik_web_port | int > 0 and traefik_web_port | int <= 65535"
+        error_message: "traefik_web_port must be a valid port number (1-65535)"
+      - name: "traefik_websecure_port"
+        validation: "traefik_websecure_port | int > 0 and traefik_websecure_port | int <= 65535"
+        error_message: "traefik_websecure_port must be a valid port number (1-65535)"
+      - name: "traefik_dashboard_port"
+        validation: "traefik_dashboard_port | int > 0 and traefik_dashboard_port | int <= 65535"
+        error_message: "traefik_dashboard_port must be a valid port number (1-65535)"
+      - name: "traefik_certificate_type"
+        validation: "traefik_certificate_type in ['acme', 'custom', 'none']"
+        error_message: "traefik_certificate_type must be one of: acme, custom, none"
+      - name: "traefik_log_level"
+        validation: "traefik_log_level in ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL', 'PANIC']"
+        error_message: "traefik_log_level must be one of: DEBUG, INFO, WARN, ERROR, FATAL, PANIC"
+
 # Prerequisites installation
 - name: Install system prerequisites
   package:
     name: "{{ traefik_system_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
   become: true
   when: not ansible_check_mode
+  tags: [install, prereq]
 
 - name: Try to install Python dependencies via system packages
   package:
     name: "{{ traefik_system_python_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
   become: true
   register: system_packages_result
   ignore_errors: true
@@ -43,16 +113,42 @@
   when: traefik_pip_packages is defined and traefik_pip_packages | length > 0 and not ansible_check_mode
 
 - name: Verify Python bcrypt installation
-  command: python3 -c "import bcrypt; print('bcrypt is available')"
-  register: bcrypt_check
-  changed_when: false
-  ignore_errors: true
+  block:
+    - name: Test bcrypt import
+      ansible.builtin.command: python3 -c "import bcrypt; print('bcrypt is available')"
+      register: bcrypt_check
+      changed_when: false
+  rescue:
+    - name: Handle bcrypt verification failure
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Python bcrypt verification"
+        error_message: "bcrypt library is not available"
+        troubleshooting_steps:
+          - "Install bcrypt: pip3 install bcrypt"
+          - "Or install via system package: apt install python3-bcrypt"
+          - "Verify Python version compatibility"
+        should_fail: true
 
 - name: Verify Python docker installation
-  command: python3 -c "import docker; print('docker is available')"
-  register: docker_python_check
-  changed_when: false
-  ignore_errors: true
+  block:
+    - name: Test docker import
+      ansible.builtin.command: python3 -c "import docker; print('docker is available')"
+      register: docker_python_check
+      changed_when: false
+  rescue:
+    - name: Handle docker verification failure
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Python docker verification"
+        error_message: "docker library is not available"
+        troubleshooting_steps:
+          - "Install docker: pip3 install docker"
+          - "Or install via system package: apt install python3-docker"
+          - "Verify Docker daemon is running"
+        should_fail: true
 
 - name: Setup Docker and verify services
   block:
@@ -65,7 +161,7 @@
       systemd:
         name: docker
         state: started
-        enabled: yes
+        enabled: true
       become: true
       when: traefik_ensure_docker_installed | default(true)
 
@@ -101,84 +197,50 @@
       - "  - Docker Compose: {{ 'OK' if docker_compose_check.json is defined and docker_compose_check.rc == 0 else 'SKIPPED' if not traefik_ensure_docker_installed | default(true) else 'FAILED' }}"
       - "  - Required ports configured: {{ traefik_web_port }}, {{ traefik_websecure_port }}, {{ traefik_dashboard_port }}"
 
-- name: Setup Traefik user and directories
+- name: Setup Traefik user and directories (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  tags: [configure, security]
+  vars:
+    service_name: "traefik"
+    service_user: "{{ traefik_user }}"
+    service_group: "{{ traefik_group }}"
+    service_home: "{{ traefik_data_dir }}"
+    service_shell: "/bin/bash"
+    additional_groups: ["docker"]
+    service_directories:
+      - "{{ traefik_data_dir }}"
+      - "{{ traefik_config_dir }}"
+      - "{{ traefik_certs_dir }}"
+      - "{{ traefik_logs_dir }}"
+    directory_mode: "0755"
+    
+- name: Set Traefik UID and GID variables for backward compatibility
+  ansible.builtin.set_fact:
+    traefik_uid: "{{ traefik_user_info.uid }}"
+    traefik_gid: "{{ traefik_user_info.gid }}"
+
+- name: Set ownership of Traefik directories
+  file:
+    path: "{{ item }}"
+    owner: "{{ traefik_user }}"
+    group: "{{ traefik_group }}"
+    recurse: true
+  loop:
+    - "{{ traefik_data_dir }}"
+    - "{{ traefik_config_dir }}"
+    - "{{ traefik_certs_dir }}"
+    - "{{ traefik_logs_dir }}"
+  become: true
+
+- name: Set special permissions for certificates directory
+  file:
+    path: "{{ traefik_certs_dir }}"
+    mode: '0600'
+    state: directory
+  become: true
+
+- name: Create Docker network and configure Traefik
   block:
-    - name: Create Traefik group
-      group:
-        name: "{{ traefik_group }}"
-        state: present
-        system: true
-      become: true
-
-    - name: Create Traefik user
-      user:
-        name: "{{ traefik_user }}"
-        group: "{{ traefik_group }}"
-        system: true
-        shell: /bin/bash
-        home: "{{ traefik_data_dir }}"
-        create_home: false
-        state: present
-      become: true
-
-    - name: Ensure Traefik directories exist
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ traefik_user }}"
-        group: "{{ traefik_group }}"
-        mode: '0755'
-      loop:
-        - "{{ traefik_data_dir }}"
-        - "{{ traefik_config_dir }}"
-        - "{{ traefik_certs_dir }}"
-        - "{{ traefik_logs_dir }}"
-      become: true
-
-    - name: Add Traefik user to docker group
-      user:
-        name: "{{ traefik_user }}"
-        groups: docker
-        append: true
-      become: true
-
-    - name: Get Traefik user UID and GID
-      shell: "id -u {{ traefik_user }}"
-      register: traefik_uid_result
-      changed_when: false
-      become: true
-
-    - name: Get Traefik user GID
-      shell: "id -g {{ traefik_user }}"
-      register: traefik_gid_result
-      changed_when: false
-      become: true
-
-    - name: Set Traefik UID and GID variables
-      set_fact:
-        traefik_uid: "{{ traefik_uid_result.stdout | int }}"
-        traefik_gid: "{{ traefik_gid_result.stdout | int }}"
-
-    - name: Set ownership of Traefik directories
-      file:
-        path: "{{ item }}"
-        owner: "{{ traefik_user }}"
-        group: "{{ traefik_group }}"
-        recurse: true
-      loop:
-        - "{{ traefik_data_dir }}"
-        - "{{ traefik_config_dir }}"
-        - "{{ traefik_certs_dir }}"
-        - "{{ traefik_logs_dir }}"
-      become: true
-
-    - name: Set special permissions for certificates directory
-      file:
-        path: "{{ traefik_certs_dir }}"
-        mode: '0600'
-        state: directory
-      become: true
-
     - name: Create Docker network for Traefik
       community.docker.docker_network:
         name: "{{ traefik_network_name }}"
@@ -309,16 +371,20 @@
     state: present
   register: traefik_service
   when: not ansible_check_mode
+  tags: [deploy, docker, web]
 
-- name: Wait for Traefik to be ready
-  uri:
-    url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"
-    method: GET
-    status_code: 200
-  register: traefik_ready_check
-  retries: 30
-  delay: 10
-  until: traefik_ready_check.status == 200
+- name: Wait for Traefik to be ready (standardized health check)
+  include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  tags: [validate, web]
+  vars:
+    service_name: "traefik"
+    service_url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"
+    service_port: "{{ traefik_dashboard_port }}"
+    expected_status_codes: [200]
+    max_retries: 30
+    retry_delay: 10
+    service_container_name: "traefik"
+    ignore_health_check_failures: false
   when: not ansible_check_mode
 
 - name: Display Traefik status

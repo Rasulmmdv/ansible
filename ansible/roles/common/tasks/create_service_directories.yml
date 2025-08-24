@@ -1,0 +1,86 @@
+---
+# Reusable service directory creation with proper ownership
+# Usage: include this task with variables:
+#   - service_name: "prometheus" (required)
+#   - service_directories: ["/opt/prometheus/data", "/opt/prometheus/config"] (required)
+#   - directory_owner: "prometheus" (optional, defaults to service user from service_name_user_info)
+#   - directory_group: "prometheus" (optional, defaults to service group from service_name_user_info)
+#   - directory_mode: "0755" (optional, default: 0755)
+#   - create_parents: true (optional, default: true)
+
+- name: "Create service directories for {{ service_name | default('service') }}"
+  block:
+    - name: "Validate required variables for {{ service_name | default('service') }}"
+      ansible.builtin.assert:
+        that:
+          - service_name is defined
+          - service_directories is defined
+          - service_directories | length > 0
+        fail_msg: "service_name and service_directories are required for directory creation"
+        
+    - name: "Set directory ownership defaults for {{ service_name | default('service') }}"
+      ansible.builtin.set_fact:
+        _directory_owner: "{{ directory_owner | default(_service_user_info.username) }}"
+        _directory_group: "{{ directory_group | default(_service_user_info.groupname) }}"
+        _directory_mode: "{{ directory_mode | default('0755') }}"
+        _create_parents: "{{ create_parents | default(true) }}"
+      vars:
+        _service_user_info: "{{ vars[service_name + '_user_info'] | default({}) }}"
+        
+    - name: "Validate user info is available for {{ service_name | default('service') }}"
+      ansible.builtin.assert:
+        that:
+          - _directory_owner is defined and _directory_owner != ""
+          - _directory_group is defined and _directory_group != ""
+        fail_msg: |
+          User info not available for {{ service_name | default('service') }}. 
+          Please run create_service_user.yml first or provide directory_owner and directory_group explicitly.
+          
+    - name: "Create service directories for {{ service_name | default('service') }}"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ _directory_owner }}"
+        group: "{{ _directory_group }}"
+        mode: "{{ _directory_mode }}"
+        recurse: "{{ _create_parents }}"
+      loop: "{{ service_directories }}"
+      become: true
+      register: directory_creation_results
+      
+    - name: "Set directory creation facts for {{ service_name | default('service') }}"
+      ansible.builtin.set_fact:
+        "{{ service_name | default('service') }}_directories_info":
+          directories: "{{ service_directories }}"
+          owner: "{{ _directory_owner }}"
+          group: "{{ _directory_group }}"
+          mode: "{{ _directory_mode }}"
+          created_count: "{{ directory_creation_results.results | selectattr('changed', 'equalto', true) | list | length }}"
+          total_count: "{{ service_directories | length }}"
+          
+  rescue:
+    - name: "Handle directory creation failure for {{ service_name | default('service') }}"
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Service directory creation for {{ service_name | default('service') }}"
+        error_message: "Failed to create service directories"
+        troubleshooting_steps:
+          - "Check filesystem permissions for parent directories"
+          - "Verify user {{ _directory_owner | default('unknown') }} exists"
+          - "Check available disk space"
+          - "Validate directory paths: {{ service_directories | join(', ') }}"
+        should_fail: true
+        
+  always:
+    - name: "Display directory creation summary for {{ service_name | default('service') }}"
+      ansible.builtin.debug:
+        msg:
+          - "=== Service Directory Creation Summary ==="
+          - "Service: {{ service_name | default('service') }}"
+          - "Owner: {{ _directory_owner | default('unknown') }}"
+          - "Group: {{ _directory_group | default('unknown') }}"
+          - "Mode: {{ _directory_mode | default('unknown') }}"
+          - "Directories: {{ service_directories | join(', ') }}"
+          - "Created: {{ directory_creation_results.results | selectattr('changed', 'equalto', true) | list | length }}/{{ service_directories | length }}"
+      when: show_directory_creation_summary | default(true)

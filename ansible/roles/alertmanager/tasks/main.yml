@@ -1,35 +1,56 @@
 ---
 # tasks file for alertmanager
 
+# Validate required variables for Alertmanager
+- name: Validate Alertmanager configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "alertmanager"
+    required_variables:
+      - "alertmanager_data_dir"
+      - "alertmanager_user"
+      - "alertmanager_group"
+      - "alertmanager_email_from"
+      - "alertmanager_email_to"
+    sensitive_variables:
+      - "alertmanager_email_auth_password"
+      - "alertmanager_telegram_bot_token"
+    conditional_variables:
+      - condition: "alertmanager_email_auth_username != ''"
+        variables:
+          - "alertmanager_email_auth_password"
+      - condition: "alertmanager_telegram_bot_token != ''"
+        variables:
+          - "alertmanager_telegram_chat_id"
+    custom_validations:
+      - name: "alertmanager_email_from"
+        validation: "alertmanager_email_from | regex_search('@')"
+        error_message: "alertmanager_email_from must be a valid email address"
+      - name: "alertmanager_email_to"
+        validation: "alertmanager_email_to | regex_search('@')"
+        error_message: "alertmanager_email_to must be a valid email address"
+      - name: "alertmanager_data_dir"
+        validation: "alertmanager_data_dir | regex_search('^/')"
+        error_message: "alertmanager_data_dir must be an absolute path starting with '/'"
+      - name: "alertmanager_telegram_chat_id"
+        condition: "alertmanager_telegram_bot_token != ''"
+        validation: "alertmanager_telegram_chat_id | int != 0"
+        error_message: "alertmanager_telegram_chat_id must be a non-zero integer when using Telegram notifications"
+
 - name: Setup Alertmanager
   block:
-    - name: Create alertmanager group
-      group:
-        name: "{{ alertmanager_group }}"
-        gid: "{{ alertmanager_group_id }}"
-      become: true
-
-    - name: Create alertmanager user
-      user:
-        name: "{{ alertmanager_user }}"
-        group: "{{ alertmanager_group }}"
-        uid: "{{ alertmanager_user_id }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-
-    - name: Create alertmanager directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ alertmanager_user_id }}"
-        group: "{{ alertmanager_group_id }}"
-        mode: '0755'
-      loop:
-        - "{{ alertmanager_data_dir }}"
-        - "{{ alertmanager_data_dir }}/data"
-      become: true
+    - name: Setup Alertmanager user and directories (standardized)
+      include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+      vars:
+        service_name: "alertmanager"
+        service_user: "{{ alertmanager_user }}"
+        service_group: "{{ alertmanager_group }}"
+        service_uid: "{{ alertmanager_user_id | default(omit) }}"
+        service_gid: "{{ alertmanager_group_id | default(omit) }}"
+        service_directories:
+          - "{{ alertmanager_data_dir }}"
+          - "{{ alertmanager_data_dir }}/data"
+        directory_mode: "0755"
 
 
 
@@ -74,12 +95,13 @@
   become: true
   tags: [configure, deploy]
 
-- name: Start alertmanager with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ alertmanager_data_dir }}"
-  become: true
-  notify: restart alertmanager
+- name: Deploy Alertmanager with standardized Docker Compose
+  include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+  vars:
+    compose_project_name: "alertmanager"
+    compose_project_src: "{{ alertmanager_data_dir }}"
+    compose_pull: true
+    compose_remove_orphans: true
   when: not ansible_check_mode
   tags: [deploy, start]
 
