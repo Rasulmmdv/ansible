@@ -45,6 +45,29 @@ loki_ports:
   - "3100:3100"
 ```
 
+### Ingestion Rate Limits
+
+Loki is configured with ingestion rate limits to prevent resource exhaustion:
+
+```yaml
+# Global ingestion rate limit (default: 8 MB/sec)
+loki_ingestion_rate_mb_per_sec: 8
+loki_ingestion_burst_mb: 16
+
+# Per-user rate limits (default: 4 MB/sec per user)
+loki_per_user_rate_mb_per_sec: 4
+loki_per_user_burst_mb: 8
+```
+
+**Note**: The error "Ingestion rate limit exceeded" indicates that log volume has exceeded the configured limits. You can increase these values based on your log volume requirements.
+
+### Log Retention
+
+```yaml
+# Log retention period (default: 30 days)
+alloy_log_retention_days: 30
+```
+
 ### Storage Configuration
 
 Loki is configured with:
@@ -114,6 +137,19 @@ ls -la /opt/loki/tsdb-index/
 
 ### Common Issues
 
-1. **No logs appearing**: Check if Alloy is running and forwarding logs
-2. **Storage issues**: Verify disk space and permissions
-3. **Network issues**: Ensure containers are on the same Docker network 
+1. **Ingestion rate limit exceeded**: Increase the rate limits in your configuration:
+   ```yaml
+   loki_ingestion_rate_mb_per_sec: 16  # Increase from default 8
+   loki_per_user_rate_mb_per_sec: 8    # Increase from default 4
+   ```
+
+2. **No logs appearing**: Check if Alloy is running and forwarding logs
+3. **Storage issues**: Verify disk space and permissions
+4. **Network issues**: Ensure containers are on the same Docker network
+
+### Rate Limit Monitoring
+
+Monitor Loki's rate limiting metrics:
+- `loki_ingester_rate_limited_lines_total` - Total number of rate-limited log lines
+- `loki_ingester_rate_limited_bytes_total` - Total number of rate-limited bytes
+- Check these metrics at `http://localhost:3100/metrics` to tune your rate limits 

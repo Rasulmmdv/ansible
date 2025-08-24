@@ -17,10 +17,22 @@ limits_config:
   # Reject old samples - allow up to 30 days old
   reject_old_samples: true
   reject_old_samples_max_age: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
-  
+
   # Log retention configuration - keep data for 30 days
   retention_period: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
   max_query_lookback: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
+
+  # Ingestion rate limits
+  ingestion_rate_mb: {{ loki_ingestion_rate_mb_per_sec | default(8) }}
+  ingestion_burst_size_mb: {{ loki_ingestion_burst_mb | default(16) }}
+
+  # Per-user rate limits
+  per_stream_rate_limit: {{ loki_per_user_rate_mb_per_sec | default(4) * 1024 * 1024 }}
+  per_stream_rate_limit_burst: {{ loki_per_user_burst_mb | default(8) * 1024 * 1024 }}
+
+  # Maximum line size and other ingestion limits
+  max_line_size: 262144  # 256KB per log line
+  max_line_size_truncate: true
 
 schema_config:
   configs:
