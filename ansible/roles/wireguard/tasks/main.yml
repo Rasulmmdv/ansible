@@ -1,6 +1,32 @@
 ---
 # Tasks for WireGuard setup using traditional wg-quick
 
+# Validate required variables for WireGuard
+- name: Validate WireGuard configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "wireguard"
+    required_variables:
+      - "wireguard_address"
+      - "wireguard_private_key"
+      - "wireguard_port"
+      - "wireguard_interface"
+    sensitive_variables:
+      - "wireguard_private_key"
+    custom_validations:
+      - name: "wireguard_port"
+        validation: "wireguard_port | int > 0 and wireguard_port | int <= 65535"
+        error_message: "wireguard_port must be a valid port number (1-65535)"
+      - name: "wireguard_address"
+        validation: "wireguard_address | regex_search('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$')"
+        error_message: "wireguard_address must be a valid IP address with optional CIDR notation (e.g., 10.0.0.1/24)"
+      - name: "wireguard_interface"
+        validation: "wireguard_interface | regex_search('^wg[0-9]+$')"
+        error_message: "wireguard_interface must be a valid WireGuard interface name (e.g., wg0, wg1)"
+      - name: "wireguard_private_key"
+        validation: "wireguard_private_key | length == 44"
+        error_message: "wireguard_private_key must be a valid WireGuard private key (44 characters base64)"
+
 - name: Clear any cached host errors
   ansible.builtin.meta: clear_host_errors
 
@@ -32,7 +58,11 @@
   register: existing_wg_config
 
 - name: Extract private key from existing config if it exists
-  ansible.builtin.shell: "grep -oP 'PrivateKey\\s*=\\s*\\K.*' \"/etc/wireguard/{{ wireguard_interface }}.conf\""
+  ansible.builtin.shell: |
+    set -eo pipefail
+    grep -oP 'PrivateKey\s*=\s*\K.*' "/etc/wireguard/{{ wireguard_interface }}.conf" || echo ""
+  args:
+    executable: /bin/bash
   register: existing_private_key
   when: existing_wg_config.stat.exists
   changed_when: false
@@ -55,14 +85,14 @@
 - name: Generate WireGuard private key if needed
   ansible.builtin.command: wg genkey
   register: wg_private_key_result
-  when: wireguard_private_key_needed
+  when: wireguard_private_key_needed | bool
   changed_when: false
   no_log: true
 
 - name: Set WireGuard private key fact if generated
   ansible.builtin.set_fact:
     wireguard_private_key: "{{ wg_private_key_result.stdout }}"
-  when: wireguard_private_key_needed
+  when: wireguard_private_key_needed | bool
   no_log: true
 
 - name: Show whether using existing or new private key

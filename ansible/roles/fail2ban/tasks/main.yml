@@ -2,14 +2,14 @@
 # tasks file for fail2ban
 
 - name: Setup fail2ban
+  tags: [install, configure, security]
   block:
     - name: Install fail2ban
       apt:
         name: fail2ban
         state: present
       become: true
-      tags:
-        - fail2ban
+      tags: [install, security]
 
     - name: Ensure fail2ban is running and enabled
       systemd:
@@ -17,16 +17,14 @@
         state: started
         enabled: true
       become: true
-      tags:
-        - fail2ban
+      tags: [install, security]
 
     - name: Restart fail2ban
       systemd:
         name: fail2ban
         state: restarted
       become: true
-      tags:
-        - fail2ban
+      tags: [install, security]
   when: not ansible_check_mode
 
 - name: Deploy fail2ban jail.local configuration

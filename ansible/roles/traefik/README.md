@@ -19,6 +19,43 @@ This Ansible role installs and configures Traefik as a reverse proxy using Docke
 - The `community.docker` collection for Ansible
 - SSH access to the target system with sudo privileges
 
+## Tags
+
+This role implements the standardized tagging strategy for selective execution:
+
+### Lifecycle Tags
+- `prereq` - Prerequisites and validation tasks
+- `install` - Package installation and system setup
+- `configure` - Configuration and user setup
+- `deploy` - Service deployment
+- `validate` - Health checks and validation
+
+### Functional Tags
+- `security` - Security configuration (users, permissions, certificates)
+- `networking` - Network setup and firewall configuration
+
+### Component Tags
+- `docker` - Docker-related operations
+- `web` - Web service deployment and validation
+
+### Usage Examples
+```bash
+# Full deployment
+ansible-playbook site.yml --tags "traefik"
+
+# Install and configure only (no deployment)
+ansible-playbook site.yml --tags "install,configure" --limit traefik_hosts
+
+# Deploy and validate only
+ansible-playbook site.yml --tags "deploy,validate" --limit traefik_hosts
+
+# Security configuration only
+ansible-playbook site.yml --tags "security" --limit traefik_hosts
+
+# Validation and health checks only
+ansible-playbook site.yml --tags "validate" --limit traefik_hosts
+```
+
 **Note**: The role automatically installs all required dependencies including:
 - Docker and Docker Compose
 - Python3 with bcrypt and docker libraries (via system packages when available)

@@ -1,0 +1,114 @@
+---
+# Reusable package operation with retry logic
+# Usage: include this task with variables:
+#   - package_name: "docker-ce" or ["pkg1", "pkg2"]
+#   - package_state: "present" (optional, default: present)
+#   - package_manager: "apt" (optional, default: apt)
+#   - max_retries: 3 (optional, default: 3)
+#   - retry_delay: 5 (optional, default: 5)
+#   - update_cache: true (optional, default: true)
+
+- name: "Package operation for {{ package_name if package_name is string else package_name | join(', ') }}"
+  block:
+    - name: "Update package cache"
+      ansible.builtin.package:
+        update_cache: true
+        cache_valid_time: 3600
+      when: update_cache | default(true)
+      retries: "{{ cache_update_retries | default(3) }}"
+      delay: "{{ cache_update_delay | default(5) }}"
+      register: cache_update_result
+      
+    - name: "Install/manage packages: {{ package_name if package_name is string else package_name | join(', ') }}"
+      ansible.builtin.package:
+        name: "{{ package_name }}"
+        state: "{{ package_state | default('present') }}"
+        update_cache: false  # Already done above
+      register: package_operation_result
+      retries: "{{ max_retries | default(3) }}"
+      delay: "{{ retry_delay | default(5) }}"
+      until: package_operation_result is succeeded
+      
+    - name: "Verify package installation"
+      ansible.builtin.package_facts:
+        manager: auto
+      when: 
+        - package_state | default('present') == 'present'
+        - verify_installation | default(true)
+        
+    - name: "Display package operation success"
+      ansible.builtin.debug:
+        msg: 
+          - "✅ Package operation completed successfully"
+          - "Packages: {{ package_name if package_name is string else package_name | join(', ') }}"
+          - "Action: {{ package_state | default('present') }}"
+          - "Changed: {{ package_operation_result.changed }}"
+          
+  rescue:
+    - name: "Gather package failure diagnostics"
+      block:
+        - name: "Check available disk space"
+          ansible.builtin.command: "df -h"
+          register: disk_space_check
+          failed_when: false
+          changed_when: false
+          
+        - name: "Check package manager lock status"
+          ansible.builtin.stat:
+            path: "{{ lock_file_path | default('/var/lib/dpkg/lock-frontend') }}"
+          register: lock_file_check
+          
+        - name: "Check repository configuration"
+          ansible.builtin.command: "{{ package_manager | default('apt') }} list {{ package_name if package_name is string else package_name[0] }}"
+          register: repo_check
+          failed_when: false
+          changed_when: false
+          when: package_state | default('present') == 'present'
+          
+      rescue:
+        - name: "Limited diagnostic information available"
+          ansible.builtin.debug:
+            msg: "Could not gather complete diagnostic information"
+            
+    - name: "Display package operation failure details"
+      ansible.builtin.debug:
+        msg:
+          - "❌ Package operation failed for: {{ package_name if package_name is string else package_name | join(', ') }}"
+          - "Action: {{ package_state | default('present') }}"
+          - "Error: {{ package_operation_result.msg | default('Unknown error') }}"
+          - "Package manager: {{ package_manager | default('apt') }}"
+          - "Lock file exists: {{ lock_file_check.stat.exists | default('Unknown') }}"
+          - "Retries attempted: {{ max_retries | default(3) }}"
+          
+    - name: "Fail package operation"
+      ansible.builtin.fail:
+        msg: |
+          Package operation failed for: {{ package_name if package_name is string else package_name | join(', ') }}
+          
+          Troubleshooting steps:
+          1. Check available disk space: df -h
+          2. Verify repository configuration: {{ package_manager | default('apt') }} update
+          3. Check for package manager locks: lsof /var/lib/dpkg/lock*
+          4. Verify package exists in repositories: {{ package_manager | default('apt') }} search {{ package_name if package_name is string else package_name[0] }}
+          5. Check network connectivity to repositories
+          
+          {% if disk_space_check is defined and disk_space_check.stdout %}
+          Disk space status:
+          {{ disk_space_check.stdout }}
+          {% endif %}
+          
+          {% if repo_check is defined and repo_check.stdout %}
+          Repository check:
+          {{ repo_check.stdout }}
+          {% endif %}
+      when: not (ignore_package_failures | default(false))
+      
+  always:
+    - name: "Set package operation result fact"
+      ansible.builtin.set_fact:
+        last_package_operation:
+          packages: "{{ package_name if package_name is string else package_name | join(', ') }}"
+          action: "{{ package_state | default('present') }}"
+          status: "{{ 'success' if package_operation_result is succeeded else 'failed' }}"
+          changed: "{{ package_operation_result.changed | default(false) }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"

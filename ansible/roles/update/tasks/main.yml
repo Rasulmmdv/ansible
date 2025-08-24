@@ -3,31 +3,26 @@
 
 - name: Update apt cache
   ansible.builtin.apt:
-    update_cache: yes
-  tags:
-    - update
-    - always
+    update_cache: true
+  tags: [prereq, maintain, always]
 
 - name: Upgrade all packages
   ansible.builtin.apt:
     upgrade: dist
-    autoremove: yes
-    autoclean: yes
-  tags:
-    - update
+    autoremove: true
+    autoclean: true
+  tags: [maintain, security]
 
 - name: Check if reboot is required
   ansible.builtin.stat:
     path: /var/run/reboot-required
   register: reboot_required_file
-  tags:
-    - update
+  tags: [maintain, security]
 
 - name: Set reboot_required fact
   ansible.builtin.set_fact:
     reboot_required: "{{ reboot_required_file.stat.exists }}"
-  tags:
-    - update
+  tags: [maintain, security]
 
 - name: Handle system updates and reboot
   block:
@@ -49,7 +44,7 @@
       ansible.builtin.systemd:
         name: docker
         state: started
-        enabled: yes
+        enabled: true
       when:
         - update_reboot | bool
         - reboot_required | bool

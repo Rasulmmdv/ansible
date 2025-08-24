@@ -10,7 +10,7 @@
         shell: /usr/sbin/nologin
         create_home: no
       become: true
-      tags: [install]
+      tags: [install, security]
 
     - name: Download node_exporter binary
       get_url:
@@ -20,7 +20,7 @@
         owner: root
         group: root
       become: true
-      tags: [install]
+      tags: [install, security]
 
     - name: Extract node_exporter binary
       unarchive:
@@ -28,14 +28,14 @@
         dest: "/tmp/"
         remote_src: yes
       become: true
-      tags: [install]
+      tags: [install, security]
 
     - name: Find and move node_exporter binary
       shell: |
         find /tmp -name "node_exporter" -type f -executable | head -1
       register: node_exporter_path
       become: true
-      tags: [install]
+      tags: [install, security]
 
     - name: Move node_exporter binary to /usr/local/bin
       copy:
@@ -46,7 +46,7 @@
         group: root
         remote_src: yes
       become: true
-      tags: [install]
+      tags: [install, security]
 
     - name: Clean up temporary files
       file:
@@ -56,7 +56,7 @@
         - "/tmp/node_exporter.tar.gz"
         - "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}"
       become: true
-      tags: [install]
+      tags: [install, security]
 
     - name: Create systemd service file for node_exporter
       copy:
@@ -78,21 +78,21 @@
           WantedBy=multi-user.target
         mode: '0644'
       become: true
-      tags: [install, configure]
+      tags: [install, configure, monitoring]
 
     - name: Reload systemd
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
       become: true
-      tags: [install, configure]
+      tags: [install, configure, monitoring]
 
     - name: Enable and start node_exporter
       systemd:
         name: node_exporter
         state: started
-        enabled: yes
+        enabled: true
       become: true
-      tags: [install, configure]
+      tags: [install, configure, monitoring]
   when: not ansible_check_mode
 
 - name: Try to get monitoring network details
@@ -102,37 +102,37 @@
   failed_when: false
   become: true
   when: node_exporter_service_discovery_enabled
-  tags: [configure]
+  tags: [configure, systemd]
 
 - name: Set node_exporter host IP and subnet facts (if network exists)
   set_fact:
     node_exporter_host_ip: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Gateway }}"
     node_exporter_monitoring_subnet: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Subnet }}"
   when: node_exporter_service_discovery_enabled and monitoring_network_inspect.stdout is defined and (monitoring_network_inspect.stdout | length) > 2
-  tags: [configure]
+  tags: [configure, systemd]
 
 # Create service discovery file for Prometheus (only on Prometheus host)
 - name: Ensure Prometheus targets directory exists
   file:
     path: "{{ node_exporter_prometheus_config_dir }}/targets"
     state: directory
-    owner: "65533"
-    group: "65533"
+    owner: "{{ node_exporter_prometheus_user_id }}"
+    group: "{{ node_exporter_prometheus_group_id }}"
     mode: '0755'
   become: true
   when: node_exporter_service_discovery_enabled and node_exporter_generate_prometheus_targets and not ansible_check_mode
-  tags: [configure]
+  tags: [configure, systemd]
 
 - name: Create node_exporter targets service discovery file
   template:
     src: node_exporter_targets.yml.j2
     dest: "{{ node_exporter_prometheus_config_dir }}/targets/node_exporter.yml"
-    owner: "65533"
-    group: "65533"
+    owner: "{{ node_exporter_prometheus_user_id }}"
+    group: "{{ node_exporter_prometheus_group_id }}"
     mode: '0644'
   become: true
   when: node_exporter_service_discovery_enabled and node_exporter_generate_prometheus_targets and not ansible_check_mode
-  tags: [configure]
+  tags: [configure, systemd]
 
 # Firewall rules: allow from monitoring subnet if known
 - name: Allow monitoring subnet to reach node_exporter (INPUT)
@@ -146,7 +146,7 @@
     comment: "Allow monitoring subnet to reach node_exporter on the host."
   become: true
   when: node_exporter_manage_firewall and node_exporter_monitoring_subnet is defined and not ansible_check_mode
-  tags: [configure]
+  tags: [configure, systemd]
 
 # Firewall rules: allow explicit allowed sources
 - name: Allow explicit sources to reach node_exporter (INPUT)
@@ -163,4 +163,4 @@
     label: "{{ item }}"
   become: true
   when: node_exporter_manage_firewall and node_exporter_allowed_sources | length > 0 and not ansible_check_mode
-  tags: [configure] 
+  tags: [configure, systemd] 

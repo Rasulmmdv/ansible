@@ -6,42 +6,29 @@
     msg: "Running in check mode - Docker service checks and network creation will be skipped. These tasks require actual execution."
   when: ansible_check_mode
 
-- name: Create nginx_exporter group
-  group:
-    name: "{{ nginx_exporter_group }}"
-    gid: "{{ nginx_exporter_group_id }}"
-  become: true
-
-- name: Create nginx_exporter user
-  user:
-    name: "{{ nginx_exporter_user }}"
-    group: "{{ nginx_exporter_group }}"
-    uid: "{{ nginx_exporter_user_id }}"
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
-  become: true
-
-- name: Create nginx_exporter data directory
-  file:
-    path: "{{ nginx_exporter_data_dir }}"
-    state: directory
-    owner: "{{ nginx_exporter_user }}"
-    group: "{{ nginx_exporter_group }}"
-    mode: '0755'
-  become: true
+- name: Setup nginx_exporter user and directories (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "nginx_exporter"
+    service_user: "{{ nginx_exporter_user }}"
+    service_group: "{{ nginx_exporter_group }}"
+    service_uid: "{{ nginx_exporter_user_id | default(omit) }}"
+    service_gid: "{{ nginx_exporter_group_id | default(omit) }}"
+    service_directories:
+      - "{{ nginx_exporter_data_dir }}"
+    directory_mode: "0755"
 
 - name: Ensure Docker is running
   systemd:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
   become: true
   when: not ansible_check_mode
 
 - name: Create monitoring network if it doesn't exist
   command: docker network create {{ docker_network_name }}
   become: true
-  ignore_errors: yes  # Network might already exist
+  ignore_errors: true  # Network might already exist
   when: not ansible_check_mode
   changed_when: false 

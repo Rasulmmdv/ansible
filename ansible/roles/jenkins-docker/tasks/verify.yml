@@ -23,8 +23,8 @@
     status_code: 200
     validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
   register: jenkins_login_check
-  retries: 5
-  delay: 10
+  retries: "{{ jenkins_verification.login_check.max_retries }}"
+  delay: "{{ jenkins_verification.login_check.retry_delay }}"
   when: not ansible_check_mode
 
 - name: Wait for Jenkins to be fully ready
@@ -37,8 +37,8 @@
     status_code: 200
     validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
   register: jenkins_readiness_check
-  retries: 10
-  delay: 15
+  retries: "{{ jenkins_verification.api_check.max_retries }}"
+  delay: "{{ jenkins_verification.api_check.retry_delay }}"
   until: jenkins_readiness_check.status == 200
   ignore_errors: true
   when: not ansible_check_mode
@@ -66,14 +66,32 @@
     - "'Permission denied' in jenkins_recent_logs.stdout"
   when: not ansible_check_mode
 
+- name: Handle verification timeouts
+  include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+  vars:
+    notification_type: "warning"
+    operation_name: "Jenkins verification timeout"
+    error_message: "Jenkins verification timed out after {{ jenkins_verification.timeout }} seconds"
+    troubleshooting_steps:
+      - "Check Jenkins container status: docker logs {{ jenkins_container_name }}"
+      - "Verify Jenkins domain configuration: {{ jenkins_domain }}"
+      - "Check memory and CPU resources for Jenkins container"
+      - "Increase timeout values in jenkins_verification configuration"
+      - "Check SSL certificate configuration if using HTTPS"
+    should_fail: false
+  when:
+    - not ansible_check_mode
+    - jenkins_login_check.failed | default(false) or jenkins_readiness_check.failed | default(false)
+
 - name: Display verification success
   debug:
     msg:
       - "✅ Jenkins verification completed successfully"
       - "Container: {{ jenkins_container_name }} ({{ jenkins_health_info.container.State.Status }})"
-      - "Login Page: Accessible ({{ jenkins_login_check.status }})"
+      - "Login Page: Accessible ({{ jenkins_login_check.status | default('TIMEOUT') }})"
       - "API: {{ 'Authenticated access working (' + (jenkins_api_check.status|string) + ')' if jenkins_api_check.status is defined else 'Not yet ready - may need more time' }}"
       - "Logs: No critical errors detected"
+      - "Configuration: Login retry delay={{ jenkins_verification.login_check.retry_delay }}s, API retry delay={{ jenkins_verification.api_check.retry_delay }}s"
   when: 
     - not ansible_check_mode
-    - jenkins_verification_enabled | default(false)
+    - jenkins_verification.enabled | default(true)

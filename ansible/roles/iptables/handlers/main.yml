@@ -29,13 +29,13 @@
   listen: "commit iptables rules"
   debug:
     msg: "iptables rules changed. Notifying Docker to restart and recreate its firewall chains to avoid conflicts."
-  when: docker_installed
+  when: docker_installed | bool
 
 - name: Restart docker to recreate its chains
   listen: "commit iptables rules"
   systemd:
     name: docker
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   become: true
-  when: docker_installed
+  when: docker_installed | bool

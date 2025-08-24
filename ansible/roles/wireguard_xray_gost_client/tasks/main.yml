@@ -7,7 +7,7 @@
       - wireguard
       - resolvconf
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Install Xray
   shell: |
@@ -75,18 +75,18 @@
     - name: Ensure Xray service is enabled and started
       systemd:
         name: xray
-        enabled: yes
+        enabled: true
         state: started
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Reload systemd for gost
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Enable and start gost service
       systemd:
         name: gost
-        enabled: yes
+        enabled: true
         state: started
 
     - name: Add iptables rule for UDP port 51820 to 51821
@@ -103,6 +103,6 @@
     - name: Ensure WireGuard (wg-quick@wg0) service is enabled and started
       systemd:
         name: wg-quick@wg0
-        enabled: yes
+        enabled: true
         state: started
   when: not ansible_check_mode

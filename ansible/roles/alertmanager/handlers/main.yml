@@ -2,26 +2,29 @@
 # handlers file for alertmanager
 
 - name: restart alertmanager
-  command: docker compose restart
-  args:
-    chdir: "{{ alertmanager_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "alertmanager"
+    project_src: "{{ alertmanager_data_dir }}"
+    restarted: true
   become: true
   listen: restart alertmanager
   when: not ansible_check_mode
 
 - name: stop alertmanager
-  command: docker compose down
-  args:
-    chdir: "{{ alertmanager_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "alertmanager"
+    project_src: "{{ alertmanager_data_dir }}"
+    state: present
+    stopped: true
   become: true
   listen: stop alertmanager
   when: not ansible_check_mode
 
 - name: start alertmanager
-  command: docker compose up -d
-  args:
-    chdir: "{{ alertmanager_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "alertmanager"
+    project_src: "{{ alertmanager_data_dir }}"
+    state: present
   become: true
   listen: start alertmanager
   when: not ansible_check_mode
-

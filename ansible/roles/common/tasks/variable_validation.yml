@@ -1,0 +1,205 @@
+---
+# Standardized variable validation system
+# This provides consistent validation patterns across all roles
+# Usage: include this task with variables:
+#   - role_name: "prometheus" (required)
+#   - required_variables: ["prometheus_domain", "prometheus_admin_password"] (required)
+#   - sensitive_variables: ["prometheus_admin_password"] (optional - for security validation)
+#   - conditional_variables: (optional - for advanced validation)
+#       - condition: "prometheus_auth_enabled | default(false)"
+#         variables: ["prometheus_admin_username", "prometheus_admin_password"]
+#   - custom_validations: (optional - for complex validation rules)
+#       - name: "prometheus_retention"
+#         condition: "prometheus_retention is defined"
+#         validation: "prometheus_retention | regex_search('^[0-9]+[dwmy]$')"
+#         error_message: "prometheus_retention must be in format like '30d', '2w', '6m', '1y'"
+
+- name: "Variable validation for {{ role_name | default('role') }}"
+  block:
+    - name: "Validate role_name parameter"
+      ansible.builtin.assert:
+        that:
+          - role_name is defined
+          - role_name != ""
+        fail_msg: "role_name is required for variable validation"
+        
+    - name: "Validate required_variables parameter"
+      ansible.builtin.assert:
+        that:
+          - required_variables is defined
+          - required_variables | length > 0
+        fail_msg: "required_variables list is required for variable validation"
+        
+    - name: "Check for required variables in {{ role_name }}"
+      ansible.builtin.assert:
+        that:
+          - vars[item] is defined
+          - vars[item] != ""
+          - vars[item] != None
+        fail_msg: |
+          ❌ MISSING REQUIRED VARIABLE: {{ item }}
+          
+          Role: {{ role_name }}
+          Missing Variable: {{ item }}
+          
+          This variable must be defined in:
+          - Your playbook variables
+          - Group variables (group_vars/)
+          - Host variables (host_vars/)
+          - Inventory variables
+          - Extra variables (-e flag)
+          
+          Example in playbook:
+          vars:
+            {{ item }}: "your_value_here"
+            
+          Example in inventory:
+          [your_group]
+          your_host {{ item }}="your_value_here"
+          
+          Example with ansible-playbook:
+          ansible-playbook -e "{{ item }}=your_value_here" playbook.yml
+        quiet: false
+      loop: "{{ required_variables }}"
+      
+    - name: "Check for insecure default values in {{ role_name }}"
+      ansible.builtin.assert:
+        that:
+          - vars[item] != "changeme"
+          - vars[item] != "password"
+          - vars[item] != "admin123" 
+          - vars[item] != "secret"
+          - vars[item] != "default"
+        fail_msg: |
+          ⚠️  INSECURE DEFAULT VALUE DETECTED: {{ item }}
+          
+          Role: {{ role_name }}
+          Variable: {{ item }}
+          Current Value: {{ vars[item] }}
+          
+          This variable contains an insecure default value that must be changed for security.
+          
+          Please set a secure value for this variable:
+          - Use a strong password/secret
+          - Consider using Ansible Vault for sensitive data
+          - Generate random values where appropriate
+          
+          Example with Ansible Vault:
+          ansible-vault encrypt_string 'your_secure_value' --name '{{ item }}'
+        quiet: false
+      loop: "{{ sensitive_variables | default([]) }}"
+      when: 
+        - sensitive_variables is defined
+        - vars[item] is defined
+        
+    - name: "Check conditional variables for {{ role_name }}"
+      ansible.builtin.assert:
+        that:
+          - vars[item] is defined
+          - vars[item] != ""
+          - vars[item] != None
+        fail_msg: |
+          ❌ MISSING CONDITIONAL VARIABLE: {{ item }}
+          
+          Role: {{ role_name }}
+          Missing Variable: {{ item }}
+          Condition: {{ conditional_item.condition }}
+          
+          This variable is required when: {{ conditional_item.condition }}
+          
+          Please define this variable or adjust the condition.
+        quiet: false
+      loop: "{{ conditional_item.variables }}"
+      when:
+        - conditional_variables is defined
+        - conditional_item.condition | bool
+      vars:
+        conditional_item: "{{ outer_item }}"
+      loop: "{{ conditional_variables | default([]) }}"
+      loop_control:
+        loop_var: outer_item
+        
+    - name: "Perform custom validations for {{ role_name }}"
+      ansible.builtin.assert:
+        that:
+          - custom_validation.validation | bool
+        fail_msg: |
+          ❌ VALIDATION FAILED: {{ custom_validation.name }}
+          
+          Role: {{ role_name }}
+          Variable: {{ custom_validation.name }}
+          Current Value: {{ vars[custom_validation.name] | default('undefined') }}
+          
+          {{ custom_validation.error_message }}
+        quiet: false
+      loop: "{{ custom_validations | default([]) }}"
+      loop_control:
+        loop_var: custom_validation
+      when:
+        - custom_validations is defined
+        - custom_validation.condition | default(true) | bool
+        
+  rescue:
+    - name: "Handle variable validation failure for {{ role_name }}"
+      include_tasks: failure_notification.yml
+      vars:
+        notification_type: "error"
+        operation_name: "Variable validation for {{ role_name }}"
+        error_message: "Required variables are missing or invalid"
+        troubleshooting_steps:
+          - "Review the error messages above for specific missing variables"
+          - "Check your playbook, inventory, and variable files"
+          - "Ensure all required variables are defined with valid values"
+          - "Use 'ansible-inventory --list' to verify variable assignments"
+          - "Consider using 'ansible-playbook --check' to validate before running"
+          - "Review role documentation for variable requirements"
+        should_fail: true
+        
+  always:
+    - name: "Display variable validation summary for {{ role_name }}"
+      ansible.builtin.debug:
+        msg:
+          - "=== Variable Validation Summary ==="
+          - "Role: {{ role_name }}"
+          - "Required Variables: {{ required_variables | length }} (✅ All present)"
+          - "Sensitive Variables: {{ sensitive_variables | default([]) | length }} (✅ All secure)"
+          - "Conditional Variables: {{ conditional_variables | default([]) | length }} group(s)"
+          - "Custom Validations: {{ custom_validations | default([]) | length }} rule(s)"
+          - "Status: ✅ All validations passed"
+      when: show_validation_summary | default(true)
+
+# Usage examples:
+#
+# Basic validation:
+# - include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+#   vars:
+#     role_name: "prometheus"
+#     required_variables:
+#       - "prometheus_domain"
+#       - "prometheus_admin_password"
+#
+# Advanced validation with security checks:
+# - include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+#   vars:
+#     role_name: "restic"
+#     required_variables:
+#       - "restic_aws_access_key_id"
+#       - "restic_aws_secret_access_key"
+#       - "restic_password"
+#     sensitive_variables:
+#       - "restic_aws_secret_access_key"
+#       - "restic_password"
+#     custom_validations:
+#       - name: "restic_repository"
+#         validation: "restic_repository | regex_search('^(s3:|local:|sftp:)')"
+#         error_message: "restic_repository must start with s3:, local:, or sftp:"
+#
+# Conditional validation:
+# - include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+#   vars:
+#     role_name: "traefik"
+#     required_variables:
+#       - "traefik_domain"
+#     conditional_variables:
+#       - condition: "traefik_acme_enabled | default(false)"
+#         variables: ["traefik_acme_email", "traefik_acme_ca_server"]

@@ -1,4 +1,27 @@
 ---
+# Validate required variables for Restic
+- name: Validate Restic configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
+  vars:
+    role_name: "restic"
+    required_variables:
+      - "restic_aws_access_key_id"
+      - "restic_aws_secret_access_key"
+      - "restic_password"
+      - "project_name"
+    sensitive_variables:
+      - "restic_aws_access_key_id"
+      - "restic_aws_secret_access_key"
+      - "restic_password"
+    custom_validations:
+      - name: "restic_repository"
+        validation: "restic_repository | regex_search('^(s3:|local:|sftp:|rest:|azure:|gs:|swift:)')"
+        error_message: "restic_repository must start with a valid backend: s3:, local:, sftp:, rest:, azure:, gs:, or swift:"
+      - name: "restic_repository_type"
+        validation: "restic_repository_type in ['s3', 'local', 'sftp', 'rest', 'azure', 'gs', 'swift']"
+        error_message: "restic_repository_type must be one of: s3, local, sftp, rest, azure, gs, swift"
+
 # Install system packages
 - name: Check mode notice for restic
   debug:
@@ -7,24 +30,28 @@
 
 - name: Install system packages
   apt:
+  tags: [install, prereq]
     name: "{{ restic_system_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
 
-# Create restic user and group
-- name: Create restic group
-  group:
-    name: "{{ restic_group }}"
-    state: present
-
-- name: Create restic user
-  user:
-    name: "{{ restic_user }}"
-    group: "{{ restic_group }}"
-    system: yes
-    shell: /bin/bash
-    home: "{{ restic_base_dir }}"
-    create_home: no
+# Create restic user and directories (standardized)
+- name: Setup restic user and directories (standardized)
+  include_tasks:
+  tags: [configure, security] "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "restic"
+    service_user: "{{ restic_user }}"
+    service_group: "{{ restic_group }}"
+    service_shell: "/bin/bash"
+    service_home: "{{ restic_base_dir }}"
+    service_directories:
+      - "{{ restic_base_dir }}"
+      - "{{ restic_config_dir }}"
+      - "{{ restic_log_dir }}"
+      - "{{ restic_cache_dir }}"
+      - "{{ restic_scripts_dir }}"
+    directory_mode: "0750"
 
 # Configure sudo permissions for restic user
 - name: Allow restic user to run restic with sudo
@@ -37,47 +64,6 @@
     group: root
     mode: "0440"
     validate: /usr/sbin/visudo -cf %s
-
-# Create directories
-- name: Create restic base directory
-  file:
-    path: "{{ restic_base_dir }}"
-    state: directory
-    owner: "{{ restic_user }}"
-    group: "{{ restic_group }}"
-    mode: "0755"
-
-- name: Create restic config directory
-  file:
-    path: "{{ restic_config_dir }}"
-    state: directory
-    owner: "{{ restic_user }}"
-    group: "{{ restic_group }}"
-    mode: "0750"
-
-- name: Create restic logs directory
-  file:
-    path: "{{ restic_log_dir }}"
-    state: directory
-    owner: "{{ restic_user }}"
-    group: "{{ restic_group }}"
-    mode: "0750"
-
-- name: Create restic cache directory
-  file:
-    path: "{{ restic_cache_dir }}"
-    state: directory
-    owner: "{{ restic_user }}"
-    group: "{{ restic_group }}"
-    mode: "0750"
-
-- name: Create restic scripts directory
-  file:
-    path: "{{ restic_scripts_dir }}"
-    state: directory
-    owner: "{{ restic_user }}"
-    group: "{{ restic_group }}"
-    mode: "0750"
 
 # Setup Selectel CA certificate if using Selectel S3
 - name: Download Selectel root CA certificate
@@ -251,28 +237,48 @@
 
 # Initialize repository if it doesn't exist
 - name: Check if restic repository is initialized
-  become: yes
-  become_user: "{{ restic_user }}"
-  command: restic snapshots
-  environment: "{{ restic_environment }}"
-  vars:
-    restic_environment: "{{ restic_base_env | combine(restic_s3_env if restic_repository_type == 's3' else {}) }}"
-    restic_base_env:
-      RESTIC_REPOSITORY: "{{ restic_repository }}"
-      RESTIC_PASSWORD: "{{ restic_password }}"
-    restic_s3_env: >-
-      {{
-        {
-          'AWS_ACCESS_KEY_ID': restic_aws_access_key_id,
-          'AWS_SECRET_ACCESS_KEY': restic_aws_secret_access_key,
-          'AWS_DEFAULT_REGION': restic_aws_region
-        } |
-        combine({'AWS_S3_ENDPOINT': restic_s3_endpoint_url} if (restic_s3_endpoint_url is defined and restic_s3_endpoint_url) else {}) |
-        combine({'AWS_CA_BUNDLE': restic_s3_ca_bundle} if (restic_s3_ca_bundle is defined and restic_s3_ca_bundle and restic_setup_selectel_ca | bool) else {})
-      }}
-  register: restic_init_check
-  failed_when: false
-  changed_when: false
+  block:
+    - name: Test restic repository access
+      become: yes
+      become_user: "{{ restic_user }}"
+      ansible.builtin.command: restic snapshots
+      environment: "{{ restic_environment }}"
+      vars:
+        restic_environment: "{{ restic_base_env | combine(restic_s3_env if restic_repository_type == 's3' else {}) }}"
+        restic_base_env:
+          RESTIC_REPOSITORY: "{{ restic_repository }}"
+          RESTIC_PASSWORD: "{{ restic_password }}"
+        restic_s3_env: >-
+          {{
+            {
+              'AWS_ACCESS_KEY_ID': restic_aws_access_key_id,
+              'AWS_SECRET_ACCESS_KEY': restic_aws_secret_access_key,
+              'AWS_DEFAULT_REGION': restic_aws_region
+            } |
+            combine({'AWS_S3_ENDPOINT': restic_s3_endpoint_url} if (restic_s3_endpoint_url is defined and restic_s3_endpoint_url) else {}) |
+            combine({'AWS_CA_BUNDLE': restic_s3_ca_bundle} if (restic_s3_ca_bundle is defined and restic_s3_ca_bundle and restic_setup_selectel_ca | bool) else {})
+          }}
+      register: restic_init_check
+      failed_when: false
+      changed_when: false
+      retries: 3
+      delay: 5
+  rescue:
+    - name: Handle repository access failure
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "warning"
+        operation_name: "Restic repository access check"
+        error_message: "Cannot access restic repository, will attempt initialization"
+        troubleshooting_steps:
+          - "Verify repository URL and credentials"
+          - "Check network connectivity to repository"
+          - "Verify S3/storage service is accessible"
+        should_fail: false
+    - name: Set failed check result
+      ansible.builtin.set_fact:
+        restic_init_check:
+          rc: 1
   when: not ansible_check_mode
 
 - name: Initialize restic repository
@@ -303,25 +309,25 @@
 - name: Enable and start backup timer
   systemd:
     name: "{{ restic_service_name }}.timer"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: not ansible_check_mode
 
 - name: Enable and start prune timer
   systemd:
     name: "{{ restic_service_name }}_prune.timer"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: not ansible_check_mode
 
 - name: Enable and start check timer
   systemd:
     name: "{{ restic_service_name }}_check.timer"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: not ansible_check_mode
 
 # Verify restic is working

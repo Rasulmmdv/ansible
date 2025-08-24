@@ -7,18 +7,44 @@
     state: present
   become: true
   when: not ansible_check_mode
-  tags: [install, configure]
+  tags: [install, configure, docker]
 
 - name: Detect Docker gateway IP for node_exporter connectivity
-  shell: |
-    # Try to get the gateway IP of the monitoring network
-    docker network inspect {{ monitoring_stack.network_name }} --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
-    # Fallback to default bridge network gateway
-    docker network inspect bridge --format '{% raw %}{{range .IPAM.Config}}{{.Gateway}}{{end}}{% endraw %}' 2>/dev/null || \
-    # Final fallback
-    echo "172.17.0.1"
-  register: docker_gateway_ip
-  become: true
+  block:
+    - name: Inspect monitoring network for gateway IP
+      community.docker.docker_network_info:
+        name: "{{ monitoring_stack.network_name }}"
+      register: monitoring_network_info
+      failed_when: false
+      
+    - name: Extract monitoring network gateway IP
+      ansible.builtin.set_fact:
+        monitoring_gateway_ip: "{{ monitoring_network_info.network.IPAM.Config[0].Gateway | default('') }}"
+      when: 
+        - monitoring_network_info is succeeded
+        - monitoring_network_info.network.IPAM.Config is defined
+        - monitoring_network_info.network.IPAM.Config | length > 0
+        
+    - name: Inspect default bridge network for gateway IP
+      community.docker.docker_network_info:
+        name: "bridge"
+      register: bridge_network_info
+      failed_when: false
+      when: monitoring_gateway_ip is not defined or monitoring_gateway_ip == ''
+      
+    - name: Extract bridge network gateway IP
+      ansible.builtin.set_fact:
+        bridge_gateway_ip: "{{ bridge_network_info.network.IPAM.Config[0].Gateway | default('') }}"
+      when: 
+        - bridge_network_info is defined
+        - bridge_network_info is succeeded
+        - bridge_network_info.network.IPAM.Config is defined
+        - bridge_network_info.network.IPAM.Config | length > 0
+        
+    - name: Set final Docker gateway IP
+      ansible.builtin.set_fact:
+        docker_gateway_ip:
+          stdout: "{{ monitoring_gateway_ip | default(bridge_gateway_ip | default('172.17.0.1')) }}"
   when: not ansible_check_mode
   tags: [configure]
 
@@ -31,52 +57,22 @@
 # Note: Firewall configuration is handled centrally by the monitoring-stack role
 # to ensure proper iptables rules and avoid conflicts between individual roles.
 
-- name: Setup Prometheus user and directories
-  block:
-    - name: Create Prometheus group
-      group:
-        name: "{{ prometheus_group }}"
-        gid: "{{ prometheus_group_id }}"
-      become: true
-      tags: [install, configure]
-
-    - name: Create Prometheus user
-      user:
-        name: "{{ prometheus_user }}"
-        group: "{{ prometheus_group }}"
-        uid: "{{ prometheus_user_id }}"
-        system: yes
-        shell: /usr/sbin/nologin
-        create_home: no
-      become: true
-      tags: [install, configure]
-
-    - name: Create Prometheus directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ prometheus_user_id }}"
-        group: "{{ prometheus_group_id }}"
-        mode: '0755'
-      loop:
-        - "{{ prometheus_data_dir }}"
-        - "{{ prometheus_data_dir }}/data"
-        - "{{ prometheus_config_dir }}"
-        - "{{ prometheus_rules_dir }}"
-        - "{{ prometheus_alerts_dir }}"
-        - "{{ prometheus_config_dir }}/targets"  # For file-based service discovery
-      become: true
-      tags: [install, configure]
-
-    - name: Ensure data directory has correct permissions
-      file:
-        path: "{{ prometheus_data_dir }}/data"
-        owner: "{{ prometheus_user_id }}"
-        group: "{{ prometheus_group_id }}"
-        mode: '0755'
-        recurse: yes
-      become: true
-      tags: [install, configure]
+- name: Setup Prometheus user and directories (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "prometheus"
+    service_user: "{{ prometheus_user }}"
+    service_group: "{{ prometheus_group }}"
+    service_uid: "{{ prometheus_user_id | default(omit) }}"
+    service_gid: "{{ prometheus_group_id | default(omit) }}"
+    service_directories:
+      - "{{ prometheus_data_dir }}"
+      - "{{ prometheus_data_dir }}/data"
+      - "{{ prometheus_config_dir }}"
+      - "{{ prometheus_rules_dir }}"
+      - "{{ prometheus_alerts_dir }}"
+      - "{{ prometheus_config_dir }}/targets"
+    directory_mode: "0755"
   when: not ansible_check_mode
   tags: [install, configure]
 
@@ -88,7 +84,7 @@
     group: "{{ prometheus_group_id }}"
     mode: '0644'
   become: true
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 - name: Deploy prometheus.yml config
   template:
@@ -98,7 +94,7 @@
     group: "{{ prometheus_group_id }}"
     mode: '0644'
   become: true
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 - name: Deploy Loki targets for file-based service discovery
   template:
@@ -108,7 +104,7 @@
     group: "{{ prometheus_group_id }}"
     mode: '0644'
   notify: reload prometheus
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 # Deploy retention monitoring and management
 - name: Deploy retention alert rules
@@ -119,12 +115,12 @@
     group: "{{ prometheus_group_id }}"
     mode: '0644'
   notify: reload prometheus
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 - name: Start Prometheus with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ prometheus_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ prometheus_data_dir }}"
+    state: present
   become: true
   notify: restart prometheus
   when: not ansible_check_mode
@@ -138,7 +134,7 @@
     group: "{{ prometheus_group_id }}"
     mode: '0755'
   become: true
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 - name: Create retention cleanup symlink
   file:
@@ -147,7 +143,7 @@
     state: link
   become: true
   when: not ansible_check_mode
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 # Create retention monitoring cron job
 - name: Create retention monitoring cron job
@@ -159,31 +155,35 @@
     user: "{{ prometheus_user }}"
   become: true
   when: prometheus_retention.cleanup.enabled | default(true) and not ansible_check_mode
-  tags: [configure, deploy]
+  tags: [configure, deploy, monitoring]
 
 # Verify retention configuration
-- name: Wait for Prometheus to be ready
-  uri:
-    url: "http://localhost:9090/-/ready"
-    method: GET
-    status_code: 200
-  register: prometheus_ready
-  until: prometheus_ready.status == 200
-  retries: 30
-  delay: 10
-  ignore_errors: true
+- name: Wait for Prometheus to be ready (standardized health check)
+  include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+  vars:
+    service_name: "prometheus"
+    service_url: "http://localhost:9090/-/ready"
+    service_port: 9090
+    expected_status_codes: [200]
+    max_retries: 30
+    retry_delay: 10
+    service_container_name: "prometheus"
+    ignore_health_check_failures: true  # This is a validation step
   when: not ansible_check_mode
-  tags: [validate]
+  tags: [validate, monitoring]
 
 - name: Check Prometheus retention configuration
-  uri:
-    url: "http://localhost:9090/api/v1/status/runtimeinfo"
-    method: GET
-    status_code: 200
+  include_tasks: "{{ role_path }}/../common/tasks/network_retry.yml"
+  vars:
+    operation_name: "Prometheus runtime info query"
+    operation_url: "http://localhost:9090/api/v1/status/runtimeinfo"
+    operation_method: "GET"
+    max_retries: 5
+    retry_delay: 5
+    ignore_network_failures: true  # This is validation, not critical
   register: prometheus_runtime_info
-  ignore_errors: true
   when: not ansible_check_mode
-  tags: [validate]
+  tags: [validate, monitoring]
 
 - name: Display Prometheus retention settings
   debug:
@@ -193,4 +193,4 @@
       - "Size retention: {{ prometheus_retention.size }}"
       - "Runtime retention: {{ prometheus_runtime_info.json.data.storageRetention | default('Not available') }}"
   when: prometheus_runtime_info.json is defined and not ansible_check_mode
-  tags: [validate] 
+  tags: [validate, monitoring] 

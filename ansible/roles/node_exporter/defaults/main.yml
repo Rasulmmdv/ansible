@@ -2,6 +2,9 @@
 # defaults file for node_exporter (systemd version)
  
 node_exporter_user: "node_exporter"
+node_exporter_group: "node_exporter"
+node_exporter_user_id: 9100
+node_exporter_group_id: 9100
 node_exporter_version: "1.9.0"
 
 # Architecture detection and mapping
@@ -18,6 +21,9 @@ node_exporter_extra_args: ""
 # Service discovery configuration
 node_exporter_service_discovery_enabled: true
 node_exporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+# Prometheus user IDs for file ownership when creating service discovery files
+node_exporter_prometheus_user_id: "65533"
+node_exporter_prometheus_group_id: "65533"
 # Whether this host should generate Prometheus file_sd targets locally (usually only the Prometheus host)
 node_exporter_generate_prometheus_targets: false
 
