@@ -5,7 +5,7 @@
   community.docker.docker_compose_v2:
     project_name: "prometheus"
     project_src: "{{ prometheus_data_dir }}"
-    restarted: true
+    state: restarted
   become: true
   listen: restart prometheus
   when: not ansible_check_mode
@@ -14,8 +14,7 @@
   community.docker.docker_compose_v2:
     project_name: "prometheus"
     project_src: "{{ prometheus_data_dir }}"
-    state: present
-    stopped: true
+    state: stopped
   become: true
   listen: stop prometheus
   when: not ansible_check_mode

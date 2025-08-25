@@ -18,7 +18,7 @@
       vars:
         compose_project_name: "nginx_exporter"
         compose_project_src: "{{ nginx_exporter_data_dir }}"
-        compose_pull: true
+        compose_pull: always
         compose_remove_orphans: true
         compose_recreate: "always"  # Force recreate to ensure clean deployment
       notify: restart nginx_exporter

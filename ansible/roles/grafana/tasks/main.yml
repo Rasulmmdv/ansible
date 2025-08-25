@@ -21,6 +21,14 @@
         condition: "grafana_env.GF_SECURITY_ADMIN_PASSWORD is defined"
         validation: "grafana_env.GF_SECURITY_ADMIN_PASSWORD | length >= 8"
         error_message: "GF_SECURITY_ADMIN_PASSWORD must be at least 8 characters long for security"
+      - name: "grafana_traefik_domain"
+        condition: "grafana_enable_traefik | default(false)"
+        validation: "grafana_traefik_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "grafana_traefik_domain must be a valid domain name when Traefik integration is enabled"
+      - name: "grafana_traefik_port"
+        condition: "grafana_enable_traefik | default(false)"
+        validation: "grafana_traefik_port | int > 0 and grafana_traefik_port | int <= 65535"
+        error_message: "grafana_traefik_port must be a valid port number when Traefik integration is enabled"
 
 - name: Setup Grafana (standardized)
   include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"

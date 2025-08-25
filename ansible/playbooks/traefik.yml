@@ -1,7 +1,7 @@
 ---
 # Example playbook for deploying Traefik reverse proxy
 - name: Deploy Traefik Reverse Proxy
-  hosts: prod-01
+  hosts: all
   become: true
   vars:
     # REQUIRED: Set your Traefik domain
@@ -11,7 +11,7 @@
     # traefik_acme_dns_provider: "cloudflare"
 
     # Basic Traefik configuration
-    traefik_dashboard_domain: "" # TODO: add domain name
+    #traefik_dashboard_domain: "" # TODO: add domain name
     # REQUIRED: Set your Traefik dashboard password
     # traefik_dashboard_password: "supersecret"
     
@@ -22,12 +22,12 @@
     # traefik_acme_use_staging: false  # Set to true for testing
     
     # Option 2: Use custom certificates (uncomment and configure)
-    traefik_certificate_type: "custom"
-    traefik_certificate_files:
-      - cert: "/opt/traefik/certs/cert.pem"
-        key: "/opt/traefik/certs/key.pem"
-        stores:
-          - default
+    # traefik_certificate_type: "custom"
+    # traefik_certificate_files:
+    #   - cert: "/opt/traefik/certs/cert.pem"
+    #     key: "/opt/traefik/certs/key.pem"
+    #     stores:
+    #       - default
     
     # Security settings
     traefik_hsts_enabled: true

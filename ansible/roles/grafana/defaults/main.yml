@@ -14,4 +14,13 @@ grafana_volumes:
   - "{{ grafana_data_dir }}/data:/var/lib/grafana"
 grafana_env:
   GF_SECURITY_ADMIN_USER: "admin"
-  GF_SECURITY_ADMIN_PASSWORD: "admin" 
+  GF_SECURITY_ADMIN_PASSWORD: "admin"
+
+# Traefik integration settings
+grafana_enable_traefik: false  # Enable/disable Traefik reverse proxy integration
+grafana_traefik_router_name: "grafana"  # Router name for Traefik
+grafana_traefik_domain: "grafana.local"  # Domain for Grafana access
+grafana_traefik_port: "3000"  # Internal port Grafana listens on
+grafana_traefik_entrypoints: ["websecure"]  # Traefik entrypoints to use
+grafana_traefik_tls: true  # Enable TLS for Grafana
+grafana_traefik_middlewares: ["vpn-whitelist"]  # Middlewares to apply 

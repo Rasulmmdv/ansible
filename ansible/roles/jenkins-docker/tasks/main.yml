@@ -122,7 +122,7 @@
       vars:
         compose_project_name: "jenkins"
         compose_project_src: "{{ jenkins_data_dir }}"
-        compose_pull: true
+        compose_pull: always
         compose_remove_orphans: true
 
     - name: Wait for Jenkins to be ready (standardized health check)

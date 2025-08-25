@@ -7,7 +7,7 @@
   community.docker.docker_compose_v2:
     project_name: "{{ compose_service_name }}"
     project_src: "{{ compose_service_directory }}"
-    restarted: true
+    state: restarted
   become: true
   when: 
     - compose_service_name is defined
@@ -17,8 +17,7 @@
   community.docker.docker_compose_v2:
     project_name: "{{ compose_service_name }}"
     project_src: "{{ compose_service_directory }}"
-    state: present
-    stopped: true
+    state: stopped
   become: true
   when: 
     - compose_service_name is defined

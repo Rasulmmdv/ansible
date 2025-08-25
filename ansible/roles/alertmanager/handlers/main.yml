@@ -5,7 +5,7 @@
   community.docker.docker_compose_v2:
     project_name: "alertmanager"
     project_src: "{{ alertmanager_data_dir }}"
-    restarted: true
+    state: restarted
   become: true
   listen: restart alertmanager
   when: not ansible_check_mode
@@ -14,8 +14,7 @@
   community.docker.docker_compose_v2:
     project_name: "alertmanager"
     project_src: "{{ alertmanager_data_dir }}"
-    state: present
-    stopped: true
+    state: stopped
   become: true
   listen: stop alertmanager
   when: not ansible_check_mode

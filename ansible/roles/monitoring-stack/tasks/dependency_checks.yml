@@ -56,25 +56,41 @@
           - At least 20% available memory for monitoring services
         success_msg: "✅ All system requirements validated successfully"
         
-    - name: "Check for conflicting services"
-      ansible.builtin.command: "{{ item.command }}"
-      register: "{{ item.register }}"
+    - name: "Check Prometheus port (9090)"
+      ansible.builtin.command: "ss -tlnp | grep :9090"
+      register: prometheus_port_check
       failed_when: false
       changed_when: false
-      loop:
-        - { command: "ss -tlnp | grep :9090", register: "prometheus_port_check" }
-        - { command: "ss -tlnp | grep :3000", register: "grafana_port_check" }
-        - { command: "ss -tlnp | grep :9093", register: "alertmanager_port_check" }
-        - { command: "ss -tlnp | grep :3100", register: "loki_port_check" }
-        - { command: "ss -tlnp | grep :9100", register: "node_exporter_port_check" }
-      loop_control:
-        loop_var: item
-        
+
+    - name: "Check Grafana port (3000)"
+      ansible.builtin.command: "ss -tlnp | grep :3000"
+      register: grafana_port_check
+      failed_when: false
+      changed_when: false
+
+    - name: "Check Alertmanager port (9093)"
+      ansible.builtin.command: "ss -tlnp | grep :9093"
+      register: alertmanager_port_check
+      failed_when: false
+      changed_when: false
+
+    - name: "Check Loki port (3100)"
+      ansible.builtin.command: "ss -tlnp | grep :3100"
+      register: loki_port_check
+      failed_when: false
+      changed_when: false
+
+    - name: "Check Node Exporter port (9100)"
+      ansible.builtin.command: "ss -tlnp | grep :9100"
+      register: node_exporter_port_check
+      failed_when: false
+      changed_when: false
+
     - name: "Warn about port conflicts"
       ansible.builtin.debug:
         msg: |
           ⚠️  WARNING: Port conflicts detected
-          
+
           The following ports are already in use:
           {% if prometheus_port_check.rc == 0 %}
           - 9090 (Prometheus): {{ prometheus_port_check.stdout }}
@@ -91,14 +107,14 @@
           {% if node_exporter_port_check.rc == 0 %}
           - 9100 (Node Exporter): {{ node_exporter_port_check.stdout }}
           {% endif %}
-          
+
           Existing services may be stopped and replaced during deployment.
       when: >
-        prometheus_port_check.rc == 0 or 
-        grafana_port_check.rc == 0 or 
-        alertmanager_port_check.rc == 0 or
-        loki_port_check.rc == 0 or
-        node_exporter_port_check.rc == 0
+        (prometheus_port_check.rc == 0) or
+        (grafana_port_check.rc == 0) or
+        (alertmanager_port_check.rc == 0) or
+        (loki_port_check.rc == 0) or
+        (node_exporter_port_check.rc == 0)
         
     - name: "Check network connectivity for external dependencies"
       ansible.builtin.uri:
@@ -155,5 +171,5 @@
           - "Docker Compose: {{ '✅ Available' if docker_compose_check.rc == 0 else '❌ Not Available' }}"
           - "Disk Space: {{ available_space.stdout | default('Unknown') }}GB available"
           - "Available Memory: {{ available_memory.stdout | default('Unknown') }}%"
-          - "Port Conflicts: {{ 'Detected' if (prometheus_port_check.rc == 0 or grafana_port_check.rc == 0 or alertmanager_port_check.rc == 0 or loki_port_check.rc == 0 or node_exporter_port_check.rc == 0) else 'None' }}"
+          - "Port Conflicts: {{ 'Detected' if ((prometheus_port_check.rc == 0) or (grafana_port_check.rc == 0) or (alertmanager_port_check.rc == 0) or (loki_port_check.rc == 0) or (node_exporter_port_check.rc == 0)) else 'None' }}"
           - "Status: {{ '✅ All checks passed' if (docker_check.rc == 0 and docker_compose_check.rc == 0 and available_space.stdout | int >= 10 and available_memory.stdout | int >= 20) else '⚠️  Issues detected' }}"

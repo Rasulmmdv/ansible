@@ -98,15 +98,20 @@ http:
         port: "443"
         permanent: true
 
-    # VPN whitelist middleware
+    # VPN whitelist middleware (dynamic based on traefik_dashboard_allow_network)
     vpn-whitelist:
       ipAllowList:
         sourceRange:
-          - "{{ traefik_vpn_network | default('10.0.0.0/24') }}"
-          - "127.0.0.1/32"  # Allow localhost for health checks
-          - "172.16.0.0/12"  # Allow Docker internal networks
-          - "192.168.0.0/16"  # Allow local networks
-          - "10.0.0.0/16"   # Allow all WireGuard networks (test + prod) 
+{% if traefik_dashboard_allow_network == "tailscale" %}
+          - "{{ traefik_tailscale_network }}"  # Tailscale overlay network (100.64.0.0/10)
+{% elif traefik_dashboard_allow_network == "wireguard" %}
+          - "{{ traefik_wireguard_network }}"  # WireGuard network (10.0.0.0/16)
+{% else %}
+          - "{{ traefik_tailscale_network }}"  # Default to Tailscale
+{% endif %}
+          - "127.0.0.1/32"    # Allow localhost for health checks
+          - "172.16.0.0/12"   # Allow Docker internal networks
+          - "192.168.0.0/16"  # Allow local networks 
 
 {% if traefik_domain != "localhost" %}
     # WWW redirect middleware - redirects www to non-www for both dev and prod

@@ -4,8 +4,7 @@
 - name: restart grafana
   community.docker.docker_compose_v2:
     project_src: "{{ grafana_data_dir }}"
-    state: present
-    restarted: true
+    state: restarted
   become: true
   listen: restart grafana
   when: not ansible_check_mode
