@@ -17,9 +17,31 @@ services:
       - {{ key }}={{ value }}
 {% endfor %}
     user: '0'
+{% if grafana_enable_traefik %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network={{ traefik_network_name | default('traefik-network') }}"
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.rule=Host(`{{ grafana_traefik_domain }}`)"
+{% for entrypoint in grafana_traefik_entrypoints %}
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.entrypoints={{ entrypoint }}"
+{% endfor %}
+{% if grafana_traefik_tls %}
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.tls=true"
+{% endif %}
+{% if grafana_traefik_middlewares is defined and grafana_traefik_middlewares %}
+{% for middleware in grafana_traefik_middlewares %}
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.middlewares={{ middleware }}@file"
+{% endfor %}
+{% endif %}
+      - "traefik.http.services.{{ grafana_traefik_router_name }}.loadbalancer.server.port={{ grafana_traefik_port }}"
+{% endif %}
     networks:
       - monitoring
+      - {{ traefik_network_name | default('traefik-network') }}
 
 networks:
   monitoring:
+    external: true
+  {{ traefik_network_name | default('traefik-network') }}:
+    name: "{{ traefik_network_name | default('traefik-network') }}"
     external: true 

@@ -69,6 +69,9 @@
       - name: "traefik_log_level"
         validation: "traefik_log_level in ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL', 'PANIC']"
         error_message: "traefik_log_level must be one of: DEBUG, INFO, WARN, ERROR, FATAL, PANIC"
+      - name: "traefik_dashboard_allow_network"
+        validation: "traefik_dashboard_allow_network in ['wireguard', 'tailscale']"
+        error_message: "traefik_dashboard_allow_network must be one of: wireguard, tailscale"
 
 # Prerequisites installation
 - name: Install system prerequisites
@@ -373,19 +376,32 @@
   when: not ansible_check_mode
   tags: [deploy, docker, web]
 
+- name: Wait for Traefik to be ready (dashboard disabled - basic container check)
+  block:
+    - name: Verify Traefik container is running when dashboard is disabled
+      command: docker ps --filter "name=traefik" --filter "status=running" -q
+      register: traefik_container_check
+      failed_when: traefik_container_check.stdout == ""
+      changed_when: false
+
+    - name: Confirm Traefik container health
+      debug:
+        msg: "✅ Traefik container is running (dashboard disabled mode)"
+  when: not (traefik_dashboard_enabled | default(true)) and not ansible_check_mode
+
 - name: Wait for Traefik to be ready (standardized health check)
   include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
   tags: [validate, web]
   vars:
     service_name: "traefik"
-    service_url: "http://localhost:{{ traefik_dashboard_port }}/api/rawdata"
+    service_url: "http://localhost:{{ traefik_dashboard_port }}/ping"
     service_port: "{{ traefik_dashboard_port }}"
     expected_status_codes: [200]
     max_retries: 30
     retry_delay: 10
     service_container_name: "traefik"
     ignore_health_check_failures: false
-  when: not ansible_check_mode
+  when: traefik_dashboard_enabled | default(true) and not ansible_check_mode
 
 - name: Display Traefik status
   debug:

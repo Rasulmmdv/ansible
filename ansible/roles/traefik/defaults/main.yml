@@ -138,6 +138,14 @@ traefik_vpn_network: "10.0.0.0/24"  # Default WireGuard network (test environmen
 # Note: For production environments, this should be set to "10.0.1.0/24"
 # For multi-environment setups, consider using a broader range like "10.0.0.0/16"
 
+# VPN network configuration
+traefik_dashboard_allow_network: "tailscale"  # Options: "wireguard" or "tailscale"
+# Controls which VPN whitelist is used for dashboard/API access
+
+# Network ranges for different VPN types
+traefik_tailscale_network: "100.64.0.0/10"  # Tailscale overlay network
+traefik_wireguard_network: "10.0.0.0/16"    # WireGuard network range
+
 # System requirements
 minimum_disk_space_gb: 2
 minimum_memory_mb: 256

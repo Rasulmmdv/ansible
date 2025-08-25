@@ -5,7 +5,7 @@
   community.docker.docker_compose_v2:
     project_name: "alloy"
     project_src: "{{ alloy_data_dir }}"
-    restarted: true
+    state: restarted
   become: true
   listen: restart alloy
   when: not ansible_check_mode
@@ -14,8 +14,7 @@
   community.docker.docker_compose_v2:
     project_name: "alloy"
     project_src: "{{ alloy_data_dir }}"
-    state: present
-    stopped: true
+    state: stopped
   become: true
   listen: stop alloy
   when: not ansible_check_mode

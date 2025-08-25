@@ -5,10 +5,10 @@
 #   - compose_project_name: "prometheus" (required)
 #   - compose_project_src: "/opt/prometheus" (required - directory containing docker-compose.yml)
 #   - compose_state: "present" (optional, default: present)
-#   - compose_build: false (optional, default: false)
-#   - compose_pull: true (optional, default: true)
+#   - compose_build: never (optional, default: never)
+#   - compose_pull: always (optional, default: always)
 #   - compose_recreate: "auto" (optional, default: auto)
-#   - compose_restarted: false (optional, default: false)
+#   - compose_restarted: no (optional, default: no)
 #   - compose_remove_orphans: true (optional, default: true)
 #   - compose_files: ["docker-compose.yml"] (optional, default: auto-detect)
 #   - compose_profiles: [] (optional, default: [])
@@ -38,11 +38,10 @@
       community.docker.docker_compose_v2:
         project_name: "{{ compose_project_name }}"
         project_src: "{{ compose_project_src }}"
-        state: "{{ compose_state | default('present') }}"
-        build: "{{ compose_build | default(false) }}"
-        pull: "{{ compose_pull | default(true) }}"
+        state: "{{ 'restarted' if compose_restarted | default('no') == 'yes' else compose_state | default('present') }}"
+        build: "{{ compose_build | default('never') }}"
+        pull: "{{ compose_pull | default('always') }}"
         recreate: "{{ compose_recreate | default('auto') }}"
-        restarted: "{{ compose_restarted | default(false) }}"
         remove_orphans: "{{ compose_remove_orphans | default(true) }}"
         files: "{{ compose_files | default(['docker-compose.yml']) }}"
         profiles: "{{ compose_profiles | default([]) }}"

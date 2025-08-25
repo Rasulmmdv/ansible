@@ -1,6 +1,15 @@
 ---
 # tasks file for iptables
+
+# Skip all iptables configuration if firewall management is disabled
+- name: Check if iptables management is disabled
+  ansible.builtin.debug:
+    msg: "🛑 iptables role disabled - skipping all firewall configuration"
+  when: not (iptables_manage_firewall | default(true))
+  tags: [always]
+
 - name: Check if Docker role has been applied
+  when: iptables_manage_firewall | default(true)
   become: true
   tags: [prereq, validate, docker]
   block:
@@ -24,14 +33,21 @@
       ansible.builtin.set_fact:
         docker_installed: false
 
+- name: Set default docker_installed fact when firewall is disabled
+  when: not (iptables_manage_firewall | default(true))
+  set_fact:
+    docker_installed: false
+
 
 - name: Configure iptables
+  when: iptables_manage_firewall | default(true)
   tags: [configure, security, networking]
   block:
     - name: Install iptables and at packages
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.package:
-        name: 
+        name:
           - iptables
           - at
           - iptables-persistent
@@ -39,6 +55,7 @@
 
     - name: Ensure /etc/iptables directory exists for saving rules
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.file:
         path: /etc/iptables
         state: directory
@@ -46,6 +63,7 @@
 
     - name: Create emergency iptables recovery script
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.copy:
         dest: /usr/local/bin/emergency-iptables-recovery.sh
         mode: '0755'
@@ -53,26 +71,27 @@
           #!/bin/bash
           # Emergency iptables recovery script
           echo "$(date): Emergency iptables recovery activated" >> /var/log/iptables-recovery.log
-          
+
           # Flush all rules and set permissive policies
           iptables -F
           iptables -X
           iptables -P INPUT ACCEPT
           iptables -P FORWARD ACCEPT
           iptables -P OUTPUT ACCEPT
-          
+
           # Add basic SSH rule
           iptables -A INPUT -p tcp --dport 22 -j ACCEPT
           iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
           iptables -A INPUT -i lo -j ACCEPT
-          
+
           echo "$(date): Emergency recovery completed - SSH should be accessible" >> /var/log/iptables-recovery.log
-          
+
           # Send notification if possible
           wall "EMERGENCY: iptables rules have been reset due to connectivity loss"
 
     - name: Schedule emergency recovery (runs in 3 minutes if not cancelled)
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.shell: |
         set -euo pipefail
         # Cancel any existing emergency recovery jobs
@@ -81,10 +100,10 @@
             atrm "$job" 2>/dev/null || true
           fi
         done
-        
+
         # Schedule new emergency recovery in 3 minutes
         printf '%s\n' "/usr/local/bin/emergency-iptables-recovery.sh" | at now + 3 minutes
-        
+
         # Show scheduled job
         atq
       args:
@@ -93,16 +112,18 @@
       changed_when: true
 
     - name: Show emergency recovery job info
+      when: iptables_manage_firewall | default(true)
       debug:
         msg: |
           SAFETY MECHANISM ACTIVATED:
           Emergency iptables recovery job scheduled: {{ emergency_job.stdout }}
-          
+
           This job will run in 3 minutes and restore SSH access if you get disconnected.
           The job will be cancelled automatically at the end of the playbook if successful.
 
     - name: Reset iptables to a permissive state before applying new rules
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.shell: |
         set -euo pipefail
         # Set permissive policies first (critical for SSH access)
@@ -117,13 +138,14 @@
       notify: commit iptables rules
 
     - name: Set Ansible port rules if custom port is used
+      when: iptables_manage_firewall | default(true) and (ansible_port | default(22)) != 22
       set_fact:
-        iptables_ansible_port_rules: 
+        iptables_ansible_port_rules:
           - { chain: 'INPUT', protocol: 'tcp', destination_port: '{{ ansible_port }}', comment: 'Allow Ansible SSH traffic' }
-      when: (ansible_port | default(22)) != 22
 
     - name: Apply essential iptables rules first (before changing policies)
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.iptables:
         chain: "{{ item.chain }}"
         ctstate: "{{ item.ctstate | default(omit) }}"
@@ -137,6 +159,7 @@
 
     - name: Set iptables policies (ONLY after allowing essential traffic)
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.iptables:
         chain: "{{ item.chain }}"
         policy: "{{ item.policy }}"
@@ -148,6 +171,7 @@
 
     - name: Allow configured TCP ports
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.iptables:
         chain: 'INPUT'
         protocol: 'tcp'
@@ -159,6 +183,7 @@
 
     - name: Allow configured UDP ports
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.iptables:
         chain: 'INPUT'
         protocol: 'udp'
@@ -170,25 +195,30 @@
 
     - name: Configure container access control with DOCKER-USER chain
       become: true
+      when: iptables_manage_firewall | default(true)
       block:
         - name: Check if DOCKER-USER chain exists
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.command: iptables -L DOCKER-USER
           register: docker_user_check
           changed_when: false
           failed_when: false
 
         - name: Create DOCKER-USER chain if it does not exist
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.command: iptables -N DOCKER-USER
           when: docker_user_check.rc != 0
           notify: commit iptables rules
 
         - name: Flush DOCKER-USER chain to ensure a clean state
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.iptables:
             chain: DOCKER-USER
             flush: true
           notify: commit iptables rules
 
         - name: Allow established and related traffic to containers
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.iptables:
             chain: DOCKER-USER
             ctstate: ESTABLISHED,RELATED
@@ -197,6 +227,7 @@
           notify: commit iptables rules
 
         - name: Allow whitelisted sources to access Docker containers
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.iptables:
             chain: DOCKER-USER
             source: "{{ item }}"
@@ -206,6 +237,7 @@
           notify: commit iptables rules
 
         - name: Allow publicly exposed TCP ports for containers
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.iptables:
             chain: DOCKER-USER
             protocol: tcp
@@ -216,6 +248,7 @@
           notify: commit iptables rules
 
         - name: Block all other external traffic to containers
+          when: iptables_manage_firewall | default(true)
           ansible.builtin.iptables:
             chain: DOCKER-USER
             jump: DROP
@@ -228,10 +261,12 @@
 
     # Handlers will now save the rules, so we need to ensure they are flushed at the end
     - name: Flush handlers to save rules if changed
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.meta: flush_handlers
 
     - name: Cancel emergency recovery job (deployment succeeded)
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.shell: |
         # Cancel all at jobs (emergency recovery)
         for job in $(atq | awk '{print $1}'); do
@@ -244,16 +279,18 @@
 
     - name: Remove emergency recovery script
       become: true
+      when: iptables_manage_firewall | default(true)
       ansible.builtin.file:
         path: /usr/local/bin/emergency-iptables-recovery.sh
         state: absent
       changed_when: true
 
     - name: Confirm emergency job cancellation
+      when: iptables_manage_firewall | default(true)
       debug:
         msg: |
           SUCCESS: Emergency recovery job cancelled!
           {{ cancel_result.stdout }}
-          
+
           Your iptables configuration has been applied successfully without triggering emergency recovery.
   when: not ansible_check_mode
