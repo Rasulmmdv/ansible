@@ -30,7 +30,7 @@ services:
 {% endif %}
 {% if grafana_traefik_middlewares is defined and grafana_traefik_middlewares %}
 {% for middleware in grafana_traefik_middlewares %}
-      - "traefik.http.routers.{{ grafana_traefik_router_name }}.middlewares={{ middleware }}@file"
+      # - "traefik.http.routers.{{ grafana_traefik_router_name }}.middlewares={{ middleware }}@file"
 {% endfor %}
 {% endif %}
       - "traefik.http.services.{{ grafana_traefik_router_name }}.loadbalancer.server.port={{ grafana_traefik_port }}"

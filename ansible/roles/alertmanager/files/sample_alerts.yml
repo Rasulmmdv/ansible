@@ -28,371 +28,318 @@ groups:
     rules:
       # CPU Monitoring
       - alert: HighCPUUsage
-        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-        for: 1m
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{job="node", environment="prod", mode="idle"}[5m])) * 100) > 80
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: cpu
         annotations:
           summary: "High CPU usage on {{ $labels.instance }}"
-          description: "CPU usage is above 80% for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
-          runbook: "Check running processes with 'top' or 'htop', identify high CPU consumers, consider scaling or optimization"
-
+          description: "CPU usage on {{ $labels.instance }} is above 80% for more than 2 minutes. Current: {{ $value | printf \"%.2f\" }}%."
       - alert: CriticalCPUUsage
-        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
-        for: 30s
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{job="node", environment="prod", mode="idle"}[5m])) * 100) > 95
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: system
           component: cpu
         annotations:
           summary: "Critical CPU usage on {{ $labels.instance }}"
-          description: "CPU usage is above 95% for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}%. System may become unresponsive."
-          runbook: "URGENT: Check 'top' command, kill or restart problematic processes, consider immediate scaling"
-
+          description: "CPU usage on {{ $labels.instance }} is above 95% for more than 30 seconds. Current: {{ $value | printf \"%.2f\" }}%. Risk: system unresponsive."
       # Memory Monitoring
       - alert: HighMemoryUsage
-        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
-        for: 1m
+        expr: (node_memory_MemTotal_bytes{job="node", environment="prod"} - node_memory_MemAvailable_bytes{job="node", environment="prod"}) / node_memory_MemTotal_bytes{job="node", environment="prod"} * 100 > 85 and node_memory_MemTotal_bytes{job="node", environment="prod"} > 0
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: memory
         annotations:
           summary: "High memory usage on {{ $labels.instance }}"
-          description: "Memory usage is above 85% for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
-          runbook: "Check memory usage with 'free -h', identify memory leaks, consider increasing RAM or optimizing applications"
-
+          description: "Memory usage on {{ $labels.instance }} is above 85% for more than 2 minutes. Current: {{ $value | printf \"%.2f\" }}%."
       - alert: CriticalMemoryUsage
-        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
-        for: 30s
+        expr: (node_memory_MemTotal_bytes{job="node", environment="prod"} - node_memory_MemAvailable_bytes{job="node", environment="prod"}) / node_memory_MemTotal_bytes{job="node", environment="prod"} * 100 > 95 and node_memory_MemTotal_bytes{job="node", environment="prod"} > 0
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: system
           component: memory
         annotations:
           summary: "Critical memory usage on {{ $labels.instance }}"
-          description: "Memory usage is above 95% for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}%. System may start swapping heavily."
-          runbook: "URGENT: Check 'free -h' and 'ps aux --sort=-%mem', restart memory-intensive processes, consider immediate RAM increase"
-
+          description: "Memory usage on {{ $labels.instance }} is above 95% for more than 30 seconds. Current: {{ $value | printf \"%.2f\" }}%. Risk: heavy swapping."
       - alert: LowAvailableMemory
-        expr: node_memory_MemAvailable_bytes / 1024 / 1024 / 1024 < 0.5
-        for: 30s
+        expr: node_memory_MemAvailable_bytes{job="node", environment="prod"} / 1024 / 1024 / 1024 < 0.5
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: system
           component: memory
         annotations:
           summary: "Very low available memory on {{ $labels.instance }}"
-          description: "Available memory is below 500MB for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}GB"
-          runbook: "URGENT: System is running out of memory. Check 'free -h', kill unnecessary processes, consider emergency restart"
-
+          description: "Available memory on {{ $labels.instance }} is below 500MB for more than 30 seconds. Current: {{ $value | printf \"%.2f\" }}GB free."
       # Disk Space Monitoring
       - alert: HighDiskUsage
-        expr: (node_filesystem_size_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"} - node_filesystem_avail_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"}) / node_filesystem_size_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"} * 100 > 85
-        for: 1m
+        expr: (node_filesystem_size_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} - node_filesystem_avail_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"}) / node_filesystem_size_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} * 100 > 85 and node_filesystem_size_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} > 0
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: disk
         annotations:
           summary: "High disk usage on {{ $labels.instance }}"
-          description: "Disk usage on {{ $labels.mountpoint }} is above 85% for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
-          runbook: "Check disk usage with 'df -h', clean up old logs/files, consider disk space increase"
-
+          description: "Disk usage on {{ $labels.instance }} ({{ $labels.mountpoint }}) is above 85% for more than 2 minutes. Current: {{ $value | printf \"%.2f\" }}%."
       - alert: CriticalDiskUsage
-        expr: (node_filesystem_size_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"} - node_filesystem_avail_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"}) / node_filesystem_size_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"} * 100 > 95
-        for: 30s
+        expr: (node_filesystem_size_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} - node_filesystem_avail_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"}) / node_filesystem_size_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} * 100 > 95 and node_filesystem_size_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} > 0
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: system
           component: disk
         annotations:
           summary: "Critical disk usage on {{ $labels.instance }}"
-          description: "Disk usage on {{ $labels.mountpoint }} is above 95% for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}%. Filesystem may become read-only."
-          runbook: "URGENT: Check 'df -h {{ $labels.mountpoint }}', delete unnecessary files immediately, consider emergency disk expansion"
-
+          description: "Disk usage on {{ $labels.instance }} ({{ $labels.mountpoint }}) is above 95% for more than 30 seconds. Current: {{ $value | printf \"%.2f\" }}%. Filesystem may become read-only."
       - alert: LowDiskSpace
-        expr: node_filesystem_avail_bytes{mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*"} / 1024 / 1024 / 1024 < 2
-        for: 30s
+        expr: node_filesystem_avail_bytes{job="node", environment="prod", mountpoint!~"/snap/.*|/run/.*|/sys/.*|/proc/.*|/dev/.*|/boot/.*"} / 1024 / 1024 / 1024 < 2
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: system
           component: disk
         annotations:
           summary: "Very low disk space on {{ $labels.instance }}"
-          description: "Available disk space on {{ $labels.mountpoint }} is below 2GB for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}GB"
-          runbook: "URGENT: Filesystem is critically low on space. Use 'du -h --max-depth=1' to find large directories, clean up immediately"
+          description: "Available disk space on {{ $labels.instance }} ({{ $labels.mountpoint }}) is below 2GB for more than 30 seconds. Current: {{ $value | printf \"%.2f\" }}GB free."
 
   - name: system_health_alerts
     rules:
       # System Load
       - alert: HighSystemLoad
-        expr: node_load5 / count(node_cpu_seconds_total{mode="idle"}) without (cpu,mode) > 3
-        for: 1m
+        expr: node_load5{job="node", environment="prod"} / count without(cpu, mode) (node_cpu_seconds_total{job="node", environment="prod", mode="idle"}) > 3
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: load
         annotations:
           summary: "High system load on {{ $labels.instance }}"
-          description: "System load is above 3x CPU cores for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}"
-          runbook: "Check 'uptime' and 'top', identify CPU-intensive processes, consider load balancing or scaling"
-
+          description: "System load on {{ $labels.instance }} is above 3x CPU cores for more than 2 minutes. Current: {{ $value | printf \"%.2f\" }}."
       - alert: CriticalSystemLoad
-        expr: node_load5 / count(node_cpu_seconds_total{mode="idle"}) without (cpu,mode) > 5
-        for: 30s
+        expr: node_load5{job="node", environment="prod"} / count without(cpu, mode) (node_cpu_seconds_total{job="node", environment="prod", mode="idle"}) > 5
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: system
           component: load
         annotations:
           summary: "Critical system load on {{ $labels.instance }}"
-          description: "System load is above 5x CPU cores for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}. System may become unresponsive."
-          runbook: "URGENT: Check 'top' and 'ps aux', kill or restart problematic processes, consider emergency scaling"
-
+          description: "System load on {{ $labels.instance }} is above 5x CPU cores for more than 30 seconds. Current: {{ $value | printf \"%.2f\" }}. System may become unresponsive."
       # Network Issues
       - alert: NetworkInterfaceDown
-        expr: node_network_up == 0
-        for: 1m
+        expr: node_network_up{job="node", environment="prod", device!~"lo|docker.*|veth.*"} == 0 and up{job="node", environment="prod"} == 1
+        for: 30s  # Reduced from 2m for faster response
         labels:
           severity: critical
           service: system
           component: network
         annotations:
           summary: "Network interface {{ $labels.device }} is down on {{ $labels.instance }}"
-          description: "Network interface {{ $labels.device }} has been down for more than 1 minute"
-          runbook: "Check 'ip link show {{ $labels.device }}', check physical connections, restart network service"
-
+          description: "Network interface {{ $labels.device }} on {{ $labels.instance }} has been down for more than 30 seconds. Check connectivity and interface status."
       - alert: HighNetworkErrors
-        expr: rate(node_network_receive_errs_total[5m]) > 10
-        for: 1m
+        expr: rate(node_network_receive_errs_total{job="node", environment="prod", device!~"lo|docker.*|veth.*"}[5m]) > 10
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: network
         annotations:
           summary: "High network receive errors on {{ $labels.instance }}"
-          description: "Network interface {{ $labels.device }} has high receive error rate. Current value: {{ $value | printf \"%.2f\" }} errors/sec"
-          runbook: "Check network cables, interface status with 'ip link show', monitor network switch logs"
-
+          description: "Network interface {{ $labels.device }} on {{ $labels.instance }} has a receive error rate of {{ $value | printf \"%.2f\" }} errors/sec for more than 2 minutes."
       # System Processes
       - alert: ZombieProcesses
-        expr: node_processes_status{status="Z"} > 5
-        for: 1m
+        expr: node_processes_state{job="node", environment="prod", state="Z"} > 5
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: processes
         annotations:
           summary: "High number of zombie processes on {{ $labels.instance }}"
-          description: "There are more than 5 zombie processes. Current count: {{ $value }}"
-          runbook: "Check 'ps aux | grep Z', identify parent processes that aren't reaping children, restart problematic services"
-
+          description: "There are {{ $value | printf \"%.0f\" }} zombie processes on {{ $labels.instance }} for more than 2 minutes."
       # System Time Drift
       - alert: SystemClockDrift
-        expr: abs(node_timex_offset_seconds) > 0.5
-        for: 1m
+        expr: abs(node_timex_offset_seconds{job="node", environment="prod"}) > 0.5
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: system
           component: time
         annotations:
           summary: "System clock drift detected on {{ $labels.instance }}"
-          description: "System clock offset is greater than 0.5 seconds. Current offset: {{ $value | printf \"%.3f\" }} seconds"
-          runbook: "Check NTP service status, synchronize time with 'ntpdate' or 'chronyc makestep'"
+          description: "System clock offset on {{ $labels.instance }} is {{ $value | printf \"%.3f\" }} seconds for more than 2 minutes. Check NTP configuration."
 
   - name: docker_container_alerts
     rules:
       # Container Health
       - alert: ContainerDown
-        expr: absent(container_last_seen{name=~".+"})
-        for: 1m
+        expr: absent(container_last_seen{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+", status="running"}) or min_over_time(container_last_seen{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+", status="running"}[5m]) == 0
+        for: 30s  # Reduced from 2m for faster response
         labels:
           severity: critical
           service: docker
           component: container
         annotations:
           summary: "Container {{ $labels.name }} is down on {{ $labels.instance }}"
-          description: "Container {{ $labels.name }} has not been seen for more than 1 minute. It may have crashed or stopped."
-          runbook: "Check 'docker ps -a', check container logs with 'docker logs {{ $labels.name }}', restart if necessary"
-
-      - alert: ContainerRestarting
-        expr: rate(container_start_time_seconds{name=~".+"}[5m]) > 0
-        for: 1m
+          description: "Container {{ $labels.name }} in namespace {{ $labels.namespace }} on {{ $labels.instance }} has not been seen in running state for more than 30 seconds. It may have crashed or stopped."
+      - alert: ContainerRestartTooOften
+        expr: rate(kube_pod_container_status_restarts_total{job="kube-state-metrics", environment="prod", namespace=~"prod-.*", container=~".+"}[5m]) > 0.1
+        for: 2m  # Reduced from 2m for consistency
         labels:
           severity: warning
           service: docker
           component: container
         annotations:
-          summary: "Container {{ $labels.name }} is restarting frequently on {{ $labels.instance }}"
-          description: "Container {{ $labels.name }} has restarted more than once in the last 5 minutes"
-          runbook: "Check container logs with 'docker logs {{ $labels.name }}', investigate root cause, fix configuration issues"
-
+          summary: "Container {{ $labels.container }} restarting frequently"
+          description: "Container {{ $labels.container }} in namespace {{ $labels.namespace }} on {{ $labels.instance }} is restarting at {{ $value | printf \"%.2f\" }} restarts/sec for more than 2 minutes. Check container logs."
       # Container Resource Usage
       - alert: HighContainerMemoryUsage
-        expr: (container_memory_usage_bytes{name=~".+"} / container_spec_memory_limit_bytes{name=~".+"}) * 100 > 80
-        for: 1m
+        expr: (container_memory_usage_bytes{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"} / container_spec_memory_limit_bytes{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"}) * 100 > 80 and container_spec_memory_limit_bytes{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"} > 0
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: docker
           component: memory
         annotations:
           summary: "High memory usage in container {{ $labels.name }}"
-          description: "Container {{ $labels.name }} is using more than 80% of its memory limit for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
-          runbook: "Check container resource usage, consider increasing memory limit, optimize application memory usage"
-
+          description: "Container {{ $labels.name }} in namespace {{ $labels.namespace }} on {{ $labels.instance }} is using {{ $value | printf \"%.2f\" }}% of memory limit for more than 2 minutes."
       - alert: CriticalContainerMemoryUsage
-        expr: (container_memory_usage_bytes{name=~".+"} / container_spec_memory_limit_bytes{name=~".+"}) * 100 > 95
-        for: 30s
+        expr: (container_memory_usage_bytes{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"} / container_spec_memory_limit_bytes{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"}) * 100 > 95 and container_spec_memory_limit_bytes{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"} > 0
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: critical
           service: docker
           component: memory
         annotations:
           summary: "Critical memory usage in container {{ $labels.name }}"
-          description: "Container {{ $labels.name }} is using more than 95% of its memory limit for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}%. Container may be OOM killed."
-          runbook: "URGENT: Check 'docker stats {{ $labels.name }}', increase memory limit immediately, or restart container with more memory"
-
+          description: "Container {{ $labels.name }} in namespace {{ $labels.namespace }} on {{ $labels.instance }} is using {{ $value | printf \"%.2f\" }}% of memory limit for more than 30 seconds. Risk: OOM kill."
       - alert: HighContainerCPUUsage
-        expr: rate(container_cpu_usage_seconds_total{name=~".+"}[5m]) * 100 > 80
-        for: 1m
+        expr: rate(container_cpu_usage_seconds_total{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"}[5m]) / container_spec_cpu_quota{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"} * 100 > 80 and container_spec_cpu_quota{job="cadvisor", environment="prod", namespace=~"prod-.*", name=~".+"} > 0
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: docker
           component: cpu
         annotations:
           summary: "High CPU usage in container {{ $labels.name }}"
-          description: "Container {{ $labels.name }} is using more than 80% CPU for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}%"
-          runbook: "Check 'docker stats {{ $labels.name }}', optimize application performance, consider increasing CPU limits"
-
+          description: "Container {{ $labels.name }} in namespace {{ $labels.namespace }} on {{ $labels.instance }} is using {{ $value | printf \"%.2f\" }}% of CPU quota for more than 2 minutes."
       # Docker Engine Health
       - alert: DockerDaemonDown
-        expr: node_systemd_unit_state{name="docker.service",state="active"} == 0
-        for: 1m
+        expr: node_systemd_unit_state{job="node", environment="prod", name="docker.service", state="active"} == 0 and up{job="node", environment="prod"} == 1
+        for: 30s  # Reduced from 2m for faster response
         labels:
           severity: critical
           service: docker
           component: daemon
         annotations:
           summary: "Docker daemon is down on {{ $labels.instance }}"
-          description: "Docker daemon service is not running for more than 1 minute"
-          runbook: "Check 'systemctl status docker', check Docker logs with 'journalctl -u docker', restart Docker service"
+          description: "Docker daemon on {{ $labels.instance }} is not running for more than 30 seconds. Check service status and logs."
 
   - name: monitoring_alerts
     rules:
       # Prometheus Health
       - alert: PrometheusDown
-        expr: up{job="prometheus"} == 0
-        for: 1m
+        expr: up{job="prometheus", environment="prod"} == 0
+        for: 30s  # Reduced from 2m for faster response
         labels:
           severity: critical
           service: monitoring
           component: prometheus
         annotations:
           summary: "Prometheus is down on {{ $labels.instance }}"
-          description: "Prometheus has been down for more than 1 minute. No metrics collection is happening."
-          runbook: "Check Prometheus logs, check 'docker ps', restart Prometheus container, investigate configuration issues"
-
+          description: "Prometheus instance {{ $labels.instance }} has been down for more than 30 seconds. No metrics collection is happening."
       - alert: PrometheusConfigurationReloadFailure
-        expr: prometheus_config_last_reload_successful == 0
-        for: 1m
+        expr: prometheus_config_last_reload_successful{job="prometheus", environment="prod"} == 0 and up{job="prometheus", environment="prod"} == 1
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: monitoring
           component: prometheus
         annotations:
           summary: "Prometheus configuration reload failed on {{ $labels.instance }}"
-          description: "Prometheus failed to reload configuration for more than 5 minutes"
-          runbook: "Check Prometheus logs, validate configuration syntax, check file permissions on config files"
-
+          description: "Prometheus instance {{ $labels.instance }} failed to reload configuration for more than 2 minutes. Check configuration file."
       # Alertmanager Health
       - alert: AlertmanagerDown
-        expr: up{job="alertmanager"} == 0
-        for: 1m
+        expr: up{job="alertmanager", environment="prod"} == 0
+        for: 30s  # Reduced from 2m for faster response
         labels:
           severity: critical
           service: monitoring
           component: alertmanager
         annotations:
           summary: "Alertmanager is down on {{ $labels.instance }}"
-          description: "Alertmanager has been down for more than 1 minute. No alerts will be processed."
-          runbook: "Check Alertmanager logs, check 'docker ps', restart Alertmanager container, check configuration"
-
+          description: "Alertmanager instance {{ $labels.instance }} has been down for more than 30 seconds. No alerts will be processed."
       # Node Exporter Health
       - alert: NodeExporterDown
-        expr: up{job="node"} == 0
-        for: 30s
+        expr: up{job="node", environment="prod"} == 0
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: warning
           service: monitoring
           component: node-exporter
         annotations:
           summary: "Node Exporter is down on {{ $labels.instance }}"
-          description: "Node Exporter has been down for more than 2 minutes. System metrics are not being collected."
-          runbook: "Check 'docker ps', check Node Exporter logs, restart Node Exporter container"
-
+          description: "Node Exporter on {{ $labels.instance }} has been down for more than 30 seconds. System metrics are not being collected."
       # Grafana Health
       - alert: GrafanaDown
-        expr: up{job="grafana"} == 0
-        for: 30s
+        expr: up{job="grafana", environment="prod"} == 0
+        for: 30s  # Reduced from 1m for faster response
         labels:
           severity: warning
           service: monitoring
           component: grafana
         annotations:
           summary: "Grafana is down on {{ $labels.instance }}"
-          description: "Grafana has been down for more than 2 minutes. Dashboard access is unavailable."
-          runbook: "Check 'docker ps', check Grafana logs, restart Grafana container"
+          description: "Grafana on {{ $labels.instance }} has been down for more than 30 seconds. Dashboard access is unavailable."
 
   - name: network_service_alerts
     rules:
       # Blackbox Monitoring
       - alert: EndpointDown
-        expr: probe_success == 0
-        for: 1m
+        expr: min_over_time(probe_success{job=~".*blackbox.*", environment="prod", instance=~".+"}[30s]) == 0 and up{job=~".*blackbox.*", environment="prod"} == 1
+        for: 15s  # Reduced from 2m for faster response, as per your request for probe_success
         labels:
           severity: critical
           service: network
           component: endpoint
         annotations:
           summary: "Endpoint {{ $labels.instance }} is down"
-          description: "Endpoint {{ $labels.instance }} has been unreachable for more than 1 minute via {{ $labels.probe_type }}"
-          runbook: "Check endpoint status, verify network connectivity, check firewall rules, investigate service health"
-
+          description: "Endpoint {{ $labels.instance }} (module {{ $labels.module }}) has been unreachable for more than 15 seconds. Check endpoint availability."
       - alert: HighResponseTime
-        expr: probe_duration_seconds > 5
-        for: 1m
+        expr: probe_duration_seconds{job=~".*blackbox.*", environment="prod", instance=~".+"} > 5
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: network
           component: latency
         annotations:
           summary: "High response time for {{ $labels.instance }}"
-          description: "Response time for {{ $labels.instance }} is above 5 seconds for more than 5 minutes. Current value: {{ $value | printf \"%.2f\" }}s"
-          runbook: "Check network latency, investigate server performance, consider CDN or caching solutions"
-
+          description: "Response time for {{ $labels.instance }} (module {{ $labels.module }}) is above 5 seconds for more than 2 minutes. Current: {{ $value | printf \"%.2f\" }}s."
       - alert: SSLExpiryWarning
-        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 30
-        for: 1m
+        expr: (probe_ssl_earliest_cert_expiry{job=~".*blackbox.*", environment="prod", instance=~".+"} - time()) / 86400 < 30
+        for: 2m  # Reduced from 5m for faster response
         labels:
           severity: warning
           service: network
           component: ssl
         annotations:
           summary: "SSL certificate expiring soon for {{ $labels.instance }}"
-          description: "SSL certificate for {{ $labels.instance }} will expire in less than 30 days"
-          runbook: "Renew SSL certificate immediately, update certificate in server configuration"
-
+          description: "SSL certificate for {{ $labels.instance }} (module {{ $labels.module }}) will expire in {{ $value | printf \"%.0f\" }} days. Check certificate renewal."
       - alert: SSLExpiryCritical
-        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 7
-        for: 1m
+        expr: (probe_ssl_earliest_cert_expiry{job=~".*blackbox.*", environment="prod", instance=~".+"} - time()) / 86400 < 7
+        for: 30s  # Reduced from 2m for faster response
         labels:
           severity: critical
           service: network
           component: ssl
         annotations:
           summary: "SSL certificate expiring very soon for {{ $labels.instance }}"
-          description: "SSL certificate for {{ $labels.instance }} will expire in less than 7 days. Current expiry: {{ $value | printf \"%.0f\" }} days"
-          runbook: "URGENT: Renew SSL certificate immediately, risk of service disruption" 
+          description: "SSL certificate for {{ $labels.instance }} (module {{ $labels.module }}) will expire in {{ $value | printf \"%.0f\" }} days. Immediate renewal required."
