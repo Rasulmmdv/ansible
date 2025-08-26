@@ -10,8 +10,6 @@
       - "alertmanager_data_dir"
       - "alertmanager_user"
       - "alertmanager_group"
-      - "alertmanager_email_from"
-      - "alertmanager_email_to"
     sensitive_variables:
       - "alertmanager_email_auth_password"
       - "alertmanager_telegram_bot_token"
@@ -22,13 +20,11 @@
       - condition: "alertmanager_telegram_bot_token != ''"
         variables:
           - "alertmanager_telegram_chat_id"
+      - condition: "alertmanager_email_smtp != ''"
+        variables:
+          - "alertmanager_email_from"
+          - "alertmanager_email_to"
     custom_validations:
-      - name: "alertmanager_email_from"
-        validation: "alertmanager_email_from | regex_search('@')"
-        error_message: "alertmanager_email_from must be a valid email address"
-      - name: "alertmanager_email_to"
-        validation: "alertmanager_email_to | regex_search('@')"
-        error_message: "alertmanager_email_to must be a valid email address"
       - name: "alertmanager_data_dir"
         validation: "alertmanager_data_dir | regex_search('^/')"
         error_message: "alertmanager_data_dir must be an absolute path starting with '/'"
@@ -36,6 +32,14 @@
         condition: "alertmanager_telegram_bot_token != ''"
         validation: "alertmanager_telegram_chat_id | int != 0"
         error_message: "alertmanager_telegram_chat_id must be a non-zero integer when using Telegram notifications"
+      - name: "alertmanager_email_from"
+        condition: "alertmanager_email_smtp != ''"
+        validation: "alertmanager_email_from | regex_search('@')"
+        error_message: "alertmanager_email_from must be a valid email address when using email notifications"
+      - name: "alertmanager_email_to"
+        condition: "alertmanager_email_smtp != ''"
+        validation: "alertmanager_email_to | regex_search('@')"
+        error_message: "alertmanager_email_to must be a valid email address when using email notifications"
 
 - name: Setup Alertmanager
   block:
@@ -72,7 +76,6 @@
         group: "{{ alertmanager_prometheus_group_id }}"
         mode: '0644'
       become: true
-      notify: restart prometheus
   when: not ansible_check_mode
 
 - name: Deploy alertmanager configuration
