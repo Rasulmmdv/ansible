@@ -34,7 +34,9 @@ receivers:
       - to: "{{ alertmanager_email_to }}"
         send_resolved: true
 {% endif %}
+
 {% if alertmanager_telegram_bot_token %}
+  - name: 'telegram'
     telegram_configs:
       - bot_token: "{{ alertmanager_telegram_bot_token }}"
         chat_id: {{ alertmanager_telegram_chat_id }}
@@ -42,19 +44,43 @@ receivers:
         send_resolved: true
         parse_mode: "HTML"
         message: |-
-          🚨 <b>ALERT</b> 🚨
+          {% raw %}{{ $severity := "" }}{{ if gt (len .Alerts) 0 }}{{ $severity = (index .Alerts 0).Labels.severity }}{{ end }}{{ if eq .Status "firing" }}
+          {{ if eq $severity "critical" }}🔴 <b>Alert: {{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}</b>
+          {{ else if eq $severity "warning" }}🟠 <b>Alert: {{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}</b>
+          {{ else }}⚪ <b>Alert: {{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}</b>{{ end }}
 
-          <b>Alert:</b> {% raw %}{{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}{% endraw %}
-          <b>Severity:</b> {% raw %}{{ if .CommonLabels.severity }}{{ .CommonLabels.severity }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.severity }}{{ else }}unknown{{ end }}{% endraw %}
-          <b>Status:</b> {% raw %}{{ if .Status }}{{ .Status }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Status }}{{ else }}firing{{ end }}{% endraw %}
-          <b>Hostname:</b> {% raw %}{{ if .CommonLabels.hostname }}{{ .CommonLabels.hostname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.hostname }}{{ else }}unknown{{ end }}{% endraw %}
-          {% raw %}{{ if gt (len .Alerts) 1 }}<i>Grouped:</i> {{ len .Alerts }} alerts{{ end }}{% endraw %}
+          <b>Status:</b> 🔥 FIRING
+          <b>Severity:</b> {{ if eq $severity "critical" }}🔴 <b>Critical</b>{{ else if eq $severity "warning" }}🟠 <b>Warning</b>{{ else }}⚪ <b>Info</b>{{ end }}
 
-          {% raw %}{{ if or .CommonAnnotations.summary (and (gt (len .Alerts) 0) (index (index .Alerts 0).Annotations "summary")) }}<b>Summary:</b> {{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ (index .Alerts 0).Annotations.summary }}{{ end }}{{ end }}{% endraw %}
-          {% raw %}{{ if or .CommonAnnotations.description (and (gt (len .Alerts) 0) (index (index .Alerts 0).Annotations "description")) }}<b>Description:</b>
-          <pre>{{ if .CommonAnnotations.description }}{{ .CommonAnnotations.description }}{{ else }}{{ (index .Alerts 0).Annotations.description }}{{ end }}</pre>{{ end }}{% endraw %}
-          {% raw %}{{ if or .CommonAnnotations.runbook (and (gt (len .Alerts) 0) (index (index .Alerts 0).Annotations "runbook")) }}<b>Runbook:</b> {{ if .CommonAnnotations.runbook }}{{ .CommonAnnotations.runbook }}{{ else }}{{ (index .Alerts 0).Annotations.runbook }}{{ end }}{{ end }}{% endraw %}
-          {% raw %}{{ if and (gt (len .Alerts) 0) ((index .Alerts 0).GeneratorURL) }}<b>Details:</b> <a href="{{ (index .Alerts 0).GeneratorURL }}">Open in Prometheus</a>{{ end }}{% endraw %}
+          {{ range .Alerts }}
+          {{ if .Labels.instance }}<b>Instance:</b> <code>{{ .Labels.instance }}</code>{{ end }}
+          {{ if .Labels.namespace }}<b>Namespace:</b> <code>{{ .Labels.namespace }}</code>{{ end }}
+          {{ if .Labels.container }}<b>Container:</b> <code>{{ .Labels.container }}</code>{{ end }}
+          {{ if .Labels.pod }}<b>Pod:</b> <code>{{ .Labels.pod }}</code>{{ end }}
+          {{ if .Labels.hostname }}<b>Hostname:</b> <code>{{ .Labels.hostname }}</code>{{ end }}
+          <b>Summary:</b> {{ .Annotations.summary }}
+          <b>Description:</b> {{ .Annotations.description }}
+          {{ end }}
+          {{ else if eq .Status "resolved" }}
+          {{ if eq $severity "critical" }}🟢 <b>Alert: {{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}</b>
+          {{ else if eq $severity "warning" }}🟢 <b>Alert: {{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}</b>
+          {{ else }}⚪ <b>Alert: {{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}</b>{{ end }}
+
+          <b>Status:</b> ✅ RESOLVED
+          <b>Severity:</b> {{ if eq $severity "critical" }}🟢 <b>Critical</b>{{ else if eq $severity "warning" }}🟢 <b>Warning</b>{{ else }}⚪ <b>Info</b>{{ end }}
+
+          {{ range .Alerts }}
+          {{ if .Labels.instance }}<b>Instance:</b> <code>{{ .Labels.instance }}</code>{{ end }}
+          {{ if .Labels.namespace }}<b>Namespace:</b> <code>{{ .Labels.namespace }}</code>{{ end }}
+          {{ if .Labels.container }}<b>Container:</b> <code>{{ .Labels.container }}</code>{{ end }}
+          {{ if .Labels.pod }}<b>Pod:</b> <code>{{ .Labels.pod }}</code>{{ end }}
+          {{ if .Labels.hostname }}<b>Hostname:</b> <code>{{ .Labels.hostname }}</code>{{ end }}
+          <b>Summary:</b> {{ .Annotations.summary }}
+          <b>Description:</b> {{ .Annotations.description }}
+          
+          {{ end }}
+          {{ end }}
+          {{ if gt (len .Alerts) 1 }}<b>Grouped:</b> {{ len .Alerts }} alerts{{ end }}{% endraw %}
 {% endif %}
 
 {% if alertmanager_email_smtp and alertmanager_email_from %}
@@ -72,32 +98,9 @@ receivers:
           <p><strong>Hostname:</strong> {% raw %}{{ if .CommonLabels.hostname }}{{ .CommonLabels.hostname }}{{ else if $first.Labels.hostname }}{{ $first.Labels.hostname }}{{ else }}unknown{{ end }}{% endraw %}</p>
           {% raw %}{{ if or .CommonAnnotations.summary $first.Annotations.summary }}<p><strong>Summary:</strong> {{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ $first.Annotations.summary }}{{ end }}</p>{{ end }}{% endraw %}
           {% raw %}{{ if or .CommonAnnotations.description $first.Annotations.description }}<p><strong>Description:</strong> {{ if .CommonAnnotations.description }}{{ .CommonAnnotations.description }}{{ else }}{{ $first.Annotations.description }}{{ end }}</p>{{ end }}{% endraw %}
-          {% raw %}{{ if or .CommonAnnotations.runbook $first.Annotations.runbook }}<p><strong>Runbook:</strong> {{ if .CommonAnnotations.runbook }}{{ .CommonAnnotations.runbook }}{{ else }}{{ $first.Annotations.runbook }}{{ end }}</p>{{ end }}{% endraw %}
 {% endif %}
 
-{% if alertmanager_telegram_bot_token %}
-  - name: 'telegram'
-    telegram_configs:
-      - bot_token: "{{ alertmanager_telegram_bot_token }}"
-        chat_id: {{ alertmanager_telegram_chat_id }}
-        api_url: "{{ alertmanager_telegram_api_url }}"
-        send_resolved: true
-        parse_mode: "HTML"
-        message: |-
-          🚨 <b>CRITICAL ALERT</b> 🚨
 
-          <b>Alert:</b> {% raw %}{{ if .CommonLabels.alertname }}{{ .CommonLabels.alertname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.alertname }}{{ else }}Unknown Alert{{ end }}{% endraw %}
-          <b>Severity:</b> {% raw %}{{ if .CommonLabels.severity }}{{ .CommonLabels.severity }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.severity }}{{ else }}critical{{ end }}{% endraw %}
-          <b>Status:</b> {% raw %}{{ if .Status }}{{ .Status }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Status }}{{ else }}firing{{ end }}{% endraw %}
-          <b>Hostname:</b> {% raw %}{{ if .CommonLabels.hostname }}{{ .CommonLabels.hostname }}{{ else if gt (len .Alerts) 0 }}{{ (index .Alerts 0).Labels.hostname }}{{ else }}unknown{{ end }}{% endraw %}
-          {% raw %}{{ if gt (len .Alerts) 1 }}<i>Grouped:</i> {{ len .Alerts }} alerts{{ end }}{% endraw %}
-
-          {% raw %}{{ if or .CommonAnnotations.summary (and (gt (len .Alerts) 0) (index (index .Alerts 0).Annotations "summary")) }}<b>Summary:</b> {{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ (index .Alerts 0).Annotations.summary }}{{ end }}{{ end }}{% endraw %}
-          {% raw %}{{ if or .CommonAnnotations.description (and (gt (len .Alerts) 0) (index (index .Alerts 0).Annotations "description")) }}<b>Description:</b>
-          <pre>{{ if .CommonAnnotations.description }}{{ .CommonAnnotations.description }}{{ else }}{{ (index .Alerts 0).Annotations.description }}{{ end }}</pre>{{ end }}{% endraw %}
-          {% raw %}{{ if or .CommonAnnotations.runbook (and (gt (len .Alerts) 0) (index (index .Alerts 0).Annotations "runbook")) }}<b>Runbook:</b> {{ if .CommonAnnotations.runbook }}{{ .CommonAnnotations.runbook }}{{ else }}{{ (index .Alerts 0).Annotations.runbook }}{{ end }}{{ end }}{% endraw %}
-          {% raw %}{{ if and (gt (len .Alerts) 0) ((index .Alerts 0).GeneratorURL) }}<b>Details:</b> <a href="{{ (index .Alerts 0).GeneratorURL }}">Open in Prometheus</a>{{ end }}{% endraw %}
-{% endif %}
 
 inhibit_rules:
   - source_match:
