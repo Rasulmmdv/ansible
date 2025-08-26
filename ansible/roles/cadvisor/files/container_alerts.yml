@@ -11,7 +11,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} high CPU usage"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has CPU usage above 80% for more than 5 minutes. Current value: {{ $value }}%"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-cpu-high"
 
       - alert: ContainerCriticalCPUUsage
         expr: (rate(container_cpu_usage_seconds_total[5m]) * 100) > 95
@@ -22,7 +21,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} critical CPU usage"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has CPU usage above 95% for more than 2 minutes. Current value: {{ $value }}%"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-cpu-critical"
 
       # Container Memory Alerts
       - alert: ContainerHighMemoryUsage
@@ -34,7 +32,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} high memory usage"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has memory usage above 85% of limit for more than 5 minutes. Current value: {{ $value }}%"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-memory-high"
 
       - alert: ContainerCriticalMemoryUsage
         expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 95
@@ -45,7 +42,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} critical memory usage"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has memory usage above 95% of limit for more than 2 minutes. Current value: {{ $value }}%"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-memory-critical"
 
       # Container Memory Limit Alerts
       - alert: ContainerMemoryLimitReached
@@ -57,7 +53,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} memory limit reached"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has reached its memory limit and may be killed by OOMKiller"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-memory-limit"
 
       # Container Disk I/O Alerts
       - alert: ContainerHighDiskIO
@@ -69,7 +64,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} high disk I/O"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has high disk I/O for more than 5 minutes. Current value: {{ $value | humanize }}B/s"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-disk-io-high"
 
       # Container Network Alerts
       - alert: ContainerHighNetworkIO
@@ -81,7 +75,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} high network I/O"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has high network I/O for more than 5 minutes. Current value: {{ $value | humanize }}B/s"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-network-io-high"
 
   - name: container_availability_alerts
     rules:
@@ -95,7 +88,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} restarting frequently"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} is restarting frequently. Check container logs for issues."
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-restart-frequent"
 
       # Container Exit Code Alerts
       - alert: ContainerExitedWithError
@@ -107,7 +99,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} exited with error"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} exited with non-zero exit code {{ $labels.exit_code }}"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-exit-error"
 
       # Container State Alerts
       - alert: ContainerNotRunning
@@ -119,7 +110,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} not running"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has not been seen for more than 5 minutes"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-not-running"
 
   - name: container_performance_alerts
     rules:
@@ -133,7 +123,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} CPU throttling"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} is experiencing CPU throttling. Current throttling rate: {{ $value }}s/s"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-cpu-throttling"
 
       # Container File Descriptor Alerts
       - alert: ContainerHighFileDescriptorUsage
@@ -145,7 +134,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} high file descriptor usage"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has high file descriptor usage: {{ $value }}%"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-fd-high"
 
       # Container Socket Usage Alerts
       - alert: ContainerHighSocketUsage
@@ -157,7 +145,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} high socket usage"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has more than 1000 open sockets: {{ $value }}"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-socket-high"
 
   - name: container_security_alerts
     rules:
@@ -171,7 +158,6 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} running as root"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} has processes running as root user"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-root-user"
 
       # Container Privilege Escalation
       - alert: ContainerPrivilegedMode
@@ -183,4 +169,3 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} running without resource limits"
           description: "Container {{ $labels.name }} on {{ $labels.instance }} is running without CPU or memory limits"
-          runbook_url: "https://docs.monitoring.example.com/runbooks/container-no-limits"

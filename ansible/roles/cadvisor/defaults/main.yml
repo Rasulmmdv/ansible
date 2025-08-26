@@ -37,10 +37,10 @@ cadvisor_command:
 
 # Resource limits for cAdvisor container
 cadvisor_resources:
-  memory: "300M"  # Increased to handle more containers
-  memory_reservation: "150M"
-  cpus: "0.3"  # Reduced to be more conservative
-  cpu_reservation: "0.1"
+  memory: "1024M"
+  memory_reservation: "512M"
+  cpus: "0.5"
+  cpu_reservation: "0.2"
 
 # Enhanced monitoring configuration
 cadvisor_monitoring:
