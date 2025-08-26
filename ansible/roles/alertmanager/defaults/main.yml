@@ -14,10 +14,10 @@ alertmanager_volumes:
   - "{{ alertmanager_data_dir }}/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"
   - "{{ alertmanager_data_dir }}/data:/alertmanager"
 
-# Email configuration
-alertmanager_email_smtp: "smtp.gmail.com:587"
-alertmanager_email_from: "alertmanager@example.com"
-alertmanager_email_to: "admin@example.com"
+# Email configuration (leave empty to disable email notifications)
+alertmanager_email_smtp: ""
+alertmanager_email_from: ""
+alertmanager_email_to: ""
 alertmanager_email_auth_username: ""
 alertmanager_email_auth_password: ""
 

@@ -1,20 +1,20 @@
 ---
-- name: Deploy Alertmanager with Email and Telegram Notifications
+- name: Deploy Alertmanager with Telegram Notifications
   hosts: monitoring_servers
   become: true
-  
+
   vars:
-    # Email configuration
-    alertmanager_email_smtp: "smtp.gmail.com:587"
-    alertmanager_email_from: "alertmanager@yourdomain.com"
-    alertmanager_email_to: "admin@yourdomain.com"
-    alertmanager_email_auth_username: "your-email@gmail.com"
-    alertmanager_email_auth_password: "your-app-password"
-    
+    # Email configuration - disabled (leave empty to use only Telegram)
+    alertmanager_email_smtp: ""
+    alertmanager_email_from: ""
+    alertmanager_email_to: ""
+    alertmanager_email_auth_username: ""
+    alertmanager_email_auth_password: ""
+
     # Telegram configuration
     alertmanager_telegram_bot_token: "your_bot_token"
     alertmanager_telegram_chat_id: "your_chat_id"
-    
+
     # Alert routing configuration
     alertmanager_route_group_wait: "30s"
     alertmanager_route_group_interval: "5m"
