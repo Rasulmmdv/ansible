@@ -1,0 +1,50 @@
+---
+# defaults file for pgexporter (PostgreSQL metrics exporter for Prometheus)
+# PostgreSQL Exporter exports PostgreSQL metrics to Prometheus for monitoring
+
+# PostgreSQL connection details (must be provided by user)
+pgexporter_postgres_host: "localhost"
+pgexporter_postgres_port: 5432
+pgexporter_postgres_user: "postgres"
+pgexporter_postgres_password: "changeme"
+pgexporter_postgres_db: "postgres"
+
+# Exporter service configuration
+pgexporter_user: "pgexporter"
+pgexporter_group: "pgexporter"
+pgexporter_user_id: 9187
+pgexporter_group_id: 9187
+pgexporter_version: "0.17.1"
+
+# Architecture detection and mapping
+pgexporter_arch_map:
+  x86_64: "linux-amd64"
+  aarch64: "linux-arm64"
+
+
+pgexporter_arch: "{{ pgexporter_arch_map[ansible_architecture] | default('linux-amd64') }}"
+pgexporter_download_url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ pgexporter_version }}/postgres_exporter-{{ pgexporter_version }}.{{ pgexporter_arch }}.tar.gz"
+
+# Service configuration
+pgexporter_bind_address: "0.0.0.0"
+pgexporter_port: "9187"
+pgexporter_extra_args: ""
+
+# Data source name (DSN) - constructed from connection details
+pgexporter_dsn: "postgresql://{{ pgexporter_postgres_user }}:{{ pgexporter_postgres_password }}@{{ pgexporter_postgres_host }}:{{ pgexporter_postgres_port }}/{{ pgexporter_postgres_db }}?sslmode=disable"
+
+# Service discovery configuration
+pgexporter_service_discovery_enabled: true
+pgexporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+# Prometheus user IDs for file ownership when creating service discovery files
+pgexporter_prometheus_user_id: "65533"
+pgexporter_prometheus_group_id: "65533"
+# Whether this host should generate Prometheus file_sd targets locally (usually only the Prometheus host)
+pgexporter_generate_prometheus_targets: false
+
+# Networking / firewall configuration
+pgexporter_monitoring_network_name: "monitoring"
+pgexporter_manage_firewall: true
+# Explicit allowed source CIDRs for accessing pgexporter (e.g., Prometheus VPN IP)
+# Example: ['10.0.0.5/32']
+pgexporter_allowed_sources: [10.0.0.0/24]

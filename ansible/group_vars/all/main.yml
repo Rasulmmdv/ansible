@@ -44,7 +44,8 @@ roles_all:
   
   - remote_monitoring    # Remote probes (depends on blackbox / node exporter)
   - alloy                # Lightweight OTEL collector
-  - postgres             # PostgreSQL in docker
+  # - postgres             # PostgreSQL in docker - Disabled, we monitor existing databases
+  - pgexporter           # PostgreSQL metrics exporter
   - jenkins-docker       # Jenkins in docker
   - jenkins-ssh-agent-docker  # SSH agent for Jenkins builds
   - restic               # Backups
@@ -73,7 +74,8 @@ role_dependencies:
   remote_monitoring: [blackbox_exporter, node_exporter]
   alloy: [docker]
 
-  postgres: [docker]
+  # postgres: [docker]  # Disabled - we monitor existing databases only
+  pgexporter: []  # No dependencies - connects to existing PostgreSQL
   jenkins-docker: [docker]
   jenkins-ssh-agent-docker: [jenkins-docker]
 

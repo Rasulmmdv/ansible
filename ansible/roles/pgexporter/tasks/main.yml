@@ -1,0 +1,240 @@
+---
+# PostgreSQL Exporter role tasks
+# Exports PostgreSQL metrics to Prometheus for monitoring
+
+# Validate required variables for PostgreSQL Exporter
+- name: Validate PostgreSQL Exporter configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "pgexporter"
+    required_variables:
+      - "pgexporter_postgres_host"
+      - "pgexporter_postgres_port"
+      - "pgexporter_postgres_user"
+      - "pgexporter_postgres_password"
+      - "pgexporter_postgres_db"
+    sensitive_variables:
+      - "pgexporter_postgres_password"
+    custom_validations:
+      - name: "pgexporter_postgres_port"
+        validation: "pgexporter_postgres_port | int > 0 and pgexporter_postgres_port | int <= 65535"
+        error_message: "pgexporter_postgres_port must be a valid port number (1-65535)"
+      - name: "pgexporter_port"
+        validation: "pgexporter_port | int > 0 and pgexporter_port | int <= 65535"
+        error_message: "pgexporter_port must be a valid port number (1-65535)"
+      - name: "pgexporter_postgres_password"
+        validation: "pgexporter_postgres_password | length >= 8"
+        error_message: "pgexporter_postgres_password must be at least 8 characters long for security"
+
+# Systemd-based deployment (when not using Docker)
+- name: Ensure pgexporter user exists
+  user:
+    name: "{{ pgexporter_user }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+  become: true
+  when: not ansible_check_mode
+  tags: [install, security]
+
+- name: Download postgres_exporter binary
+  get_url:
+    url: "{{ pgexporter_download_url }}"
+    dest: "/tmp/postgres_exporter.tar.gz"
+    mode: '0644'
+    owner: root
+    group: root
+  become: true
+  when: not ansible_check_mode
+  tags: [install, security]
+
+- name: Extract postgres_exporter binary
+  unarchive:
+    src: "/tmp/postgres_exporter.tar.gz"
+    dest: "/tmp/"
+    remote_src: yes
+  become: true
+  when: not ansible_check_mode
+  tags: [install, security]
+
+- name: Find and move postgres_exporter binary
+  shell: |
+    find /tmp -name "postgres_exporter" -type f -executable | head -1
+  register: postgres_exporter_path
+  become: true
+  when: not ansible_check_mode
+  tags: [install, security]
+
+- name: Move postgres_exporter binary to /usr/local/bin
+  copy:
+    src: "{{ postgres_exporter_path.stdout }}"
+    dest: "/usr/local/bin/postgres_exporter"
+    mode: '0755'
+    owner: root
+    group: root
+    remote_src: yes
+  become: true
+  when: not ansible_check_mode
+  tags: [install, security]
+
+- name: Clean up temporary files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/postgres_exporter.tar.gz"
+    - "/tmp/postgres_exporter-{{ pgexporter_version }}.{{ pgexporter_arch }}"
+  become: true
+  when: not ansible_check_mode
+  tags: [install, security]
+
+- name: Create systemd service file for postgres_exporter
+  copy:
+    dest: /etc/systemd/system/postgres_exporter.service
+    content: |
+      [Unit]
+      Description=PostgreSQL Exporter for Prometheus
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      User={{ pgexporter_user }}
+      Group={{ pgexporter_group }}
+      Type=simple
+      Environment="DATA_SOURCE_NAME={{ pgexporter_dsn }}"
+      ExecStart=/usr/local/bin/postgres_exporter --web.listen-address={{ pgexporter_bind_address }}:{{ pgexporter_port }} {{ pgexporter_extra_args }}
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  become: true
+  when: not ansible_check_mode
+  tags: [install, configure, monitoring]
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+  become: true
+  when: not ansible_check_mode
+  tags: [install, configure, monitoring]
+
+- name: Enable and start postgres_exporter
+  systemd:
+    name: postgres_exporter
+    state: started
+    enabled: true
+  become: true
+  when: not ansible_check_mode
+  tags: [install, configure, monitoring]
+
+
+
+# Try to get monitoring network details
+- name: Try to get monitoring network details
+  command: docker network inspect {{ pgexporter_monitoring_network_name }}
+  register: monitoring_network_inspect
+  changed_when: false
+  failed_when: false
+  become: true
+  when: pgexporter_service_discovery_enabled
+  tags: [configure, monitoring]
+
+- name: Set pgexporter host IP and subnet facts (if network exists)
+  set_fact:
+    pgexporter_host_ip: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Gateway }}"
+    pgexporter_monitoring_subnet: "{{ (monitoring_network_inspect.stdout | from_json)[0].IPAM.Config[0].Subnet }}"
+  when: pgexporter_service_discovery_enabled and monitoring_network_inspect.stdout is defined and (monitoring_network_inspect.stdout | length) > 2
+  tags: [configure, monitoring]
+
+- name: Set default monitoring subnet (fallback if Docker network not found)
+  set_fact:
+    pgexporter_host_ip: "{{ ansible_default_ipv4.address }}"
+    pgexporter_monitoring_subnet: "{{ pgexporter_allowed_sources[0] | default('10.0.0.0/24') }}"
+  when: pgexporter_service_discovery_enabled and (monitoring_network_inspect.stdout is undefined or (monitoring_network_inspect.stdout | length) <= 2)
+  tags: [configure, monitoring]
+
+# Create service discovery file for Prometheus (only on Prometheus host)
+- name: Ensure Prometheus targets directory exists
+  file:
+    path: "{{ pgexporter_prometheus_config_dir }}/targets"
+    state: directory
+    owner: "{{ pgexporter_prometheus_user_id }}"
+    group: "{{ pgexporter_prometheus_group_id }}"
+    mode: '0755'
+  become: true
+  when: pgexporter_service_discovery_enabled and pgexporter_generate_prometheus_targets and not ansible_check_mode
+  tags: [configure, monitoring]
+
+- name: Create postgres_exporter targets service discovery file
+  template:
+    src: postgres_exporter_targets.yml.j2
+    dest: "{{ pgexporter_prometheus_config_dir }}/targets/postgres_exporter.yml"
+    owner: "{{ pgexporter_prometheus_user_id }}"
+    group: "{{ pgexporter_prometheus_group_id }}"
+    mode: '0644'
+  become: true
+  when: pgexporter_service_discovery_enabled and pgexporter_generate_prometheus_targets and not ansible_check_mode
+  tags: [configure, monitoring]
+
+# Firewall rules: allow from monitoring subnet if known
+- name: Allow monitoring subnet to reach postgres_exporter (INPUT)
+  iptables:
+    action: insert
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ pgexporter_port }}"
+    source: "{{ pgexporter_monitoring_subnet }}"
+    jump: ACCEPT
+    comment: "Allow monitoring subnet to reach postgres_exporter on the host."
+  become: true
+  when: pgexporter_manage_firewall and pgexporter_monitoring_subnet is defined and not ansible_check_mode
+  tags: [configure, monitoring]
+
+# Firewall rules: allow explicit allowed sources
+- name: Allow explicit sources to reach postgres_exporter (INPUT)
+  iptables:
+    action: insert
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ pgexporter_port }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    comment: "Allow explicit source to reach postgres_exporter on the host."
+  loop: "{{ pgexporter_allowed_sources }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
+  when: pgexporter_manage_firewall and pgexporter_allowed_sources | length > 0 and not ansible_check_mode
+  tags: [configure, monitoring]
+
+
+
+# Health check for systemd deployment
+- name: Verify postgres_exporter service is running (systemd)
+  systemd:
+    name: postgres_exporter
+    state: started
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, monitoring]
+
+
+
+# Test connectivity to postgres_exporter
+- name: Test postgres_exporter HTTP endpoint
+  uri:
+    url: "http://localhost:{{ pgexporter_port }}/metrics"
+    method: GET
+    status_code: 200
+  register: exporter_response
+  failed_when: false
+  when: not ansible_check_mode
+  tags: [configure, monitoring]
+
+- name: Validate postgres_exporter metrics endpoint
+  assert:
+    that: exporter_response.status == 200
+    fail_msg: "PostgreSQL Exporter metrics endpoint is not accessible on port {{ pgexporter_port }}"
+  when: exporter_response.status is defined and not ansible_check_mode
+  tags: [configure, monitoring]

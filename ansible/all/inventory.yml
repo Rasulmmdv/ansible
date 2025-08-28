@@ -6,7 +6,7 @@ all:
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-      tailscale_auth_key: "tskey-auth-kpQnKjDD9p11CNTRL-vdPxgHjfN5AtnmEQEAXk5AhinEiEyfQr"
+      tailscale_auth_key: "" # TODO: add tailscale auth key
       iptables_allowed_tcp_ports: [22, 80, 443, 41641, 8080, 9443, 9090, 9100]
       # iptables_install_when_docker_present: false  # Removed due to recursive templating issues
       tailscale_enable_route_advertisement: true
@@ -51,6 +51,25 @@ all:
       ansible_become_method: sudo
       iptables_allowed_tcp_ports:
         - 5432 # postgres
+        - 80
+        - 443
+        - 8061
+      iptables_docker_public_tcp_ports:
+        - 8061
+        - 80
+        - 443
+      pgexporter_postgres_host: "localhost"
+      pgexporter_postgres_port: 5432
+      pgexporter_postgres_user: "monitoring"
+      pgexporter_postgres_password: "" # TODO: add password
+      pgexporter_postgres_db: "postgres"
+      prometheus_pgexporter_hosts:
+        - "prod-01"      # Production database server
+
+      prometheus_pgexporter_labels:
+        job: "postgres_exporter"
+        service: "postgresql"
+
     test-01: # test server Fields
       ansible_host: 82.202.197.209
       ansible_user: root
