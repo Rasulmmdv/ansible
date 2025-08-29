@@ -20,7 +20,7 @@ all:
         job: "postgres_exporter"
         service: "postgresql"
         environment: "production"
-      wireguard_address: 10.0.0.6/24
+      wireguard_address: 10.0.0.5/24
     prod-01: # prod server
       ansible_host: 188.124.37.101
       ansible_user: root

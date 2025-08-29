@@ -1,0 +1,24 @@
+---
+# cAdvisor targets for Prometheus service discovery
+# This file is automatically updated by the cadvisor role
+# Prometheus will pick up changes within 30 seconds (refresh_interval)
+
+{% for host in groups['all'] %}
+- targets: ['{{ 'cadvisor:8080' if host == inventory_hostname else ((hostvars[host]['wireguard_address'] | default('') | split('/') | first) + ':8080') }}']
+  labels:
+    instance: '{{ hostvars[host]["ansible_host"] | default(host) }}'
+    hostname: '{{ host }}'
+    container_runtime: 'docker'
+    monitoring_type: 'container-resource'
+    scrape_interval: '30s'
+    # Resource monitoring configuration
+    cpu_warning_threshold: '80'
+    cpu_critical_threshold: '95'
+    memory_warning_threshold: '85'
+    memory_critical_threshold: '95'
+    disk_warning_threshold: '85'
+    disk_critical_threshold: '95'
+    job: 'cadvisor'
+    service: 'container-monitoring'
+    environment: 'production'
+{% endfor %}
