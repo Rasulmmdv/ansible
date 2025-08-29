@@ -28,30 +28,6 @@
           - "{{ cadvisor_data_dir }}"
         directory_mode: "0755"
       tags: [install, configure]
-
-    # Create prometheus targets directory
-    - name: Create prometheus targets directory
-      file:
-        path: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets"
-        state: directory
-        owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-        group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-        mode: '0755'
-      become: true
-      when: cadvisor_service_discovery_enabled | default(false)
-      tags: [configure, deploy]
-
-    # Create prometheus rules directory
-    - name: Create prometheus rules directory
-      file:
-        path: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/../rules"
-        state: directory
-        owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-        group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-        mode: '0755'
-      become: true
-      when: cadvisor_service_discovery_enabled | default(false)
-      tags: [configure, deploy]
   when: not ansible_check_mode
   tags: [install, configure]
 
@@ -63,31 +39,6 @@
     group: "{{ cadvisor_group }}"
     mode: '0644'
   become: true
-  tags: [configure, deploy]
-
-# Deploy service discovery file
-- name: Create cadvisor targets service discovery file
-  template:
-    src: cadvisor_targets.yml.j2
-    dest: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/targets/cadvisor.yml"
-    owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    mode: '0644'
-  become: true
-  when: cadvisor_service_discovery_enabled | default(false)
-  tags: [configure, deploy]
-
-# Deploy container monitoring alert rules
-- name: Deploy container monitoring alert rules
-  copy:
-    src: container_alerts.yml
-    dest: "{{ cadvisor_prometheus_config_dir | default('/opt/monitoring/prometheus/config') }}/../rules/container_alerts.yml"
-    owner: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    group: "{{ cadvisor_prometheus_user_id | default('65533') }}"
-    mode: '0644'
-  become: true
-  when: cadvisor_service_discovery_enabled | default(false)
-  notify: reload prometheus
   tags: [configure, deploy]
 
 - name: Deploy cAdvisor with standardized Docker Compose
