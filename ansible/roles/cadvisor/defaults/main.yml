@@ -39,8 +39,7 @@ cadvisor_command:
 cadvisor_resources:
   memory: "1024M"
   memory_reservation: "512M"
-  cpus: "0.5"
-  cpu_reservation: "0.2"
+  cpus: "0.8"
 
 # Enhanced monitoring configuration
 cadvisor_monitoring:

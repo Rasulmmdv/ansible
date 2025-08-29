@@ -67,15 +67,6 @@
         group: "{{ alertmanager_prometheus_group_id }}"
         mode: '0755'
       become: true
-
-    - name: Deploy sample alert rules
-      copy:
-        src: sample_alerts.yml
-        dest: "{{ alertmanager_prometheus_rules_dir }}/sample_alerts.yml"
-        owner: "{{ alertmanager_prometheus_user_id }}"
-        group: "{{ alertmanager_prometheus_group_id }}"
-        mode: '0644'
-      become: true
   when: not ansible_check_mode
 
 - name: Deploy alertmanager configuration
