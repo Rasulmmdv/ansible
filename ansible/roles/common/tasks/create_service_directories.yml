@@ -46,7 +46,20 @@
         recurse: "{{ _create_parents }}"
       loop: "{{ service_directories }}"
       become: true
+      when: not ansible_check_mode
       register: directory_creation_results
+      
+    - name: "Set mock directory creation results for {{ service_name | default('service') }} in check mode"
+      ansible.builtin.set_fact:
+        directory_creation_results:
+          results: []
+      when: ansible_check_mode
+      
+    - name: "Build mock results for {{ service_name | default('service') }} in check mode"
+      ansible.builtin.set_fact:
+        directory_creation_results: "{{ directory_creation_results | combine({'results': directory_creation_results.results + [{'changed': false, 'item': item}]}) }}"
+      loop: "{{ service_directories }}"
+      when: ansible_check_mode
       
     - name: "Set directory creation facts for {{ service_name | default('service') }}"
       ansible.builtin.set_fact:

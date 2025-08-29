@@ -40,6 +40,23 @@ prometheus_command:
 prometheus_blackbox_targets:
   - "https://google.com"
 
+# PostgreSQL exporter monitoring configuration
+# Array of hostnames/IPs that should have pgexporter targets generated
+# These should match the hosts where pgexporter is deployed
+prometheus_pgexporter_hosts: []
+  # Example:
+  # - "prod-01"
+  # - "test-server"
+  # - "db-host-01"
+
+# Default port for PostgreSQL exporters
+prometheus_pgexporter_port: "9187"
+
+# Labels to add to all PostgreSQL exporter targets
+prometheus_pgexporter_labels:
+  job: "postgres_exporter"
+  service: "postgresql"
+
 # Enhanced cAdvisor scraping configuration
 prometheus_cadvisor_config:
   scrape_interval: "30s"

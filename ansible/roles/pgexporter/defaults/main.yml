@@ -28,7 +28,7 @@ pgexporter_download_url: "https://github.com/prometheus-community/postgres_expor
 # Service configuration
 pgexporter_bind_address: "0.0.0.0"
 pgexporter_port: "9187"
-pgexporter_extra_args: ""
+pgexporter_extra_args: "--disable-settings-metrics --exclude-databases=template0,template1"
 
 # Data source name (DSN) - constructed from connection details
 pgexporter_dsn: "postgresql://{{ pgexporter_postgres_user }}:{{ pgexporter_postgres_password }}@{{ pgexporter_postgres_host }}:{{ pgexporter_postgres_port }}/{{ pgexporter_postgres_db }}?sslmode=disable"

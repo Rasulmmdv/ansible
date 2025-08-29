@@ -106,6 +106,41 @@
   notify: reload prometheus
   tags: [configure, deploy, monitoring]
 
+# Generate PostgreSQL exporter targets for each configured host
+- name: Generate PostgreSQL exporter target files
+  template:
+    src: postgres_exporter_targets.yml.j2
+    dest: "{{ prometheus_config_dir }}/targets/postgres_exporter_{{ item }}.yml"
+    owner: "{{ prometheus_user_id }}"
+    group: "{{ prometheus_group_id }}"
+    mode: '0644'
+  loop: "{{ prometheus_pgexporter_hosts | default([]) }}"
+  when: prometheus_pgexporter_hosts is defined and prometheus_pgexporter_hosts | length > 0
+  notify: reload prometheus
+  tags: [configure, deploy, monitoring]
+
+# Clean up old PostgreSQL exporter target files for hosts no longer in the list
+- name: Find existing PostgreSQL exporter target files
+  find:
+    paths: "{{ prometheus_config_dir }}/targets/"
+    patterns: "postgres_exporter_*.yml"
+    file_type: file
+  register: existing_pgexporter_targets
+  when: prometheus_pgexporter_hosts is defined
+  tags: [configure, cleanup]
+
+- name: Remove PostgreSQL exporter target files for hosts not in prometheus_pgexporter_hosts
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ existing_pgexporter_targets.files | default([]) }}"
+  when:
+    - prometheus_pgexporter_hosts is defined
+    - item.path is defined
+    - item.path | basename | regex_replace('postgres_exporter_(.*)\\.yml', '\\1') not in prometheus_pgexporter_hosts
+  notify: reload prometheus
+  tags: [configure, cleanup]
+
 # Deploy retention monitoring and management
 - name: Deploy retention alert rules
   copy:

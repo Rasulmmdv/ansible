@@ -2,11 +2,7 @@
 - name: Deploy Restic Backup Solution for Yandex Cloud S3 Storage
   hosts: all
   become: yes
-  
   vars:
-    # REQUIRED: Set your project name for backup naming
-    project_name: kimdev
-
     # REQUIRED for S3: Set your S3 credentials
     # restic_aws_access_key_id: ""
     # restic_aws_secret_access_key: ""

@@ -3,16 +3,16 @@
 # Do not edit manually - changes will be overwritten
 
 - targets:
-    - "{{ item }}:{{ prometheus_pgexporter_port }}"
+    - "{{ (hostvars[item]['wireguard_address'] | default('')).split('/')[0] or hostvars[item]['ansible_host'] | default(item) }}:{{ prometheus_pgexporter_port }}"
   labels:
     __meta_filepath: "{{ prometheus_config_dir }}/targets/postgres_exporter_{{ item }}.yml"
-    job: "postgres_exporter"
-    instance: "{{ item }}:{{ prometheus_pgexporter_port }}"
-    service: "postgresql"
+    instance: "{{ (hostvars[item]['wireguard_address'] | default('')).split('/')[0] or hostvars[item]['ansible_host'] | default(item) }}:{{ prometheus_pgexporter_port }}"
     postgres_host: "{{ item }}"
-    environment: "{{ prometheus_environment | default('production') }}"
-    {% if prometheus_pgexporter_labels is defined %}
-    {% for key, value in prometheus_pgexporter_labels.items() %}
+    postgres_host_public_ip: "{{ hostvars[item]['ansible_host'] | default(item) }}"
+    postgres_host_wireguard_ip: "{{ (hostvars[item]['wireguard_address'] | default('')).split('/')[0] }}"
+    wireguard_network: "{{ (hostvars[item]['wireguard_address'] | default('')).split('/')[1] | default('unknown') }}"
+{% if prometheus_pgexporter_labels is defined and prometheus_pgexporter_labels %}
+{% for key, value in prometheus_pgexporter_labels.items() %}
     {{ key }}: "{{ value }}"
-    {% endfor %}
-    {% endif %}
+{% endfor %}
+{% endif %}

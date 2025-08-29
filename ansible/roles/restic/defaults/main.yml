@@ -2,10 +2,11 @@
 # defaults file for restic
 # NOTE: Some variables must be set in your playbook or inventory (see playbook example)
 
-# Default project name - can be overridden in playbook or inventory
-project_name: "monitoring"
+# Default project name - must be set in playbook or inventory
+# project_name: "your-project-name"  # Set in playbook
 
-# Base directories
+# Base directories - these will be calculated from project_name and restic_instance_name
+# but can be overridden individually in playbook
 restic_instance_name: backup
 restic_base_dir: "/opt/{{ project_name }}/{{ restic_instance_name }}"
 restic_config_dir: "{{ restic_base_dir }}/config"
@@ -18,25 +19,27 @@ restic_user: "restic"
 restic_group: "restic"
 
 # Restic repository configuration
-restic_repository: "s3:s3.ru-7.storage.selcloud.ru/{{ project_name }}-backups-{{ inventory_hostname }}"
+# Default to Yandex Cloud - can be overridden in playbook
+restic_repository: "s3:https://storage.yandexcloud.net/backupsdi"
 restic_repository_type: "s3"  # Options: s3, local, sftp, rest, azure, gs, swift
 # restic_repository_path: ""  # For local repositories (set in playbook if needed)
 
-# AWS S3 configuration (when using S3 backend)
-# Default credentials for check mode - should be overridden in production
-restic_aws_access_key_id: "changeme"
-restic_aws_secret_access_key: "changeme"
-restic_aws_region: "ru-7"
-restic_aws_endpoint: "s3.ru-7.storage.selcloud.ru"
+# # AWS S3 configuration (when using S3 backend)
+# # Default credentials for check mode - should be overridden in production
+# restic_aws_access_key_id: "changeme"
+# restic_aws_secret_access_key: "changeme"
+restic_aws_region: "ru-central1"
+restic_aws_endpoint: "storage.yandexcloud.net"
 
-# Selectel S3 specific configuration
-restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
+# # Selectel S3 specific configuration
+# restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
+restic_s3_endpoint_url: "storage.yandexcloud.net"
 restic_s3_ca_bundle: "{{ restic_config_dir }}/selectel-ca.crt"
-restic_setup_selectel_ca: true
+# restic_setup_selectel_ca: true
 
 # Repository password (required for all repository types)
 # Default password - should be overridden in production for security
-restic_password: "changeme"
+# restic_password: "changeme"
 
 # Backup configuration
 restic_backup_paths:
