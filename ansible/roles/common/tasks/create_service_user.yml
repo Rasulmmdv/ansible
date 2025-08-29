@@ -56,6 +56,7 @@
         key: "{{ _service_group }}"
       register: existing_group
       failed_when: false
+      when: not ansible_check_mode
       
     - name: "Create {{ _service_group }} group"
       ansible.builtin.group:
@@ -64,7 +65,9 @@
         state: present
         system: "{{ _system_user }}"
       become: true
-      when: not existing_group.ansible_facts.getent_group is defined
+      when: 
+        - not existing_group.ansible_facts.getent_group is defined
+        - not ansible_check_mode
       
     - name: "Check if user {{ _service_user }} already exists"  
       ansible.builtin.getent:
@@ -72,6 +75,7 @@
         key: "{{ _service_user }}"
       register: existing_user
       failed_when: false
+      when: not ansible_check_mode
       
     - name: "Create {{ _service_user }} user"
       ansible.builtin.user:
@@ -86,7 +90,9 @@
         groups: "{{ _additional_groups }}"
         append: true
       become: true
-      when: not existing_user.ansible_facts.getent_passwd is defined
+      when: 
+        - not existing_user.ansible_facts.getent_passwd is defined
+        - not ansible_check_mode
       register: user_creation_result
       
     - name: "Update existing user {{ _service_user }} groups if needed"
@@ -98,6 +104,7 @@
       when: 
         - existing_user.ansible_facts.getent_passwd is defined
         - _additional_groups | length > 0
+        - not ansible_check_mode
       register: user_update_result
       
     - name: "Verify user {{ _service_user }} creation/update"
@@ -105,18 +112,34 @@
         database: passwd
         key: "{{ _service_user }}"
       register: final_user_info
+      when: not ansible_check_mode
       
     - name: "Set user creation facts for {{ service_name | default('service') }}"
       ansible.builtin.set_fact:
         "{{ service_name | default('service') }}_user_info":
           username: "{{ _service_user }}"
           groupname: "{{ _service_group }}"
-          uid: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][1] }}"
-          gid: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][2] }}"
-          home: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][4] }}"
-          shell: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][5] }}"
-          created: "{{ user_creation_result is changed }}"
+          uid: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][1] | default(_service_uid) }}"
+          gid: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][2] | default(_service_gid) }}"
+          home: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][4] | default(_service_home) }}"
+          shell: "{{ final_user_info.ansible_facts.getent_passwd[_service_user][5] | default(_service_shell) }}"
+          created: "{{ user_creation_result is changed | default(false) }}"
           updated: "{{ user_update_result is changed | default(false) }}"
+      when: not ansible_check_mode
+      
+    - name: "Set mock user creation facts for {{ service_name | default('service') }} in check mode"
+      ansible.builtin.set_fact:
+        "{{ service_name | default('service') }}_user_info":
+          username: "{{ _service_user }}"
+          groupname: "{{ _service_group }}"
+          uid: "{{ _service_uid }}"
+          gid: "{{ _service_gid }}"
+          home: "{{ _service_home }}"
+          shell: "{{ _service_shell }}"
+          created: false
+          updated: false
+          check_mode: true
+      when: ansible_check_mode
           
   rescue:
     - name: "Handle user creation failure for {{ service_name | default('service') }}"
