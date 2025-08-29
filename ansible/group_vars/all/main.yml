@@ -81,3 +81,6 @@ role_dependencies:
 
   restic: [docker]
 
+  # PostgreSQL backup configuration for restic role
+  restic_postgresql_backup_enabled: true
+

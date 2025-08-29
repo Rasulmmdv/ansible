@@ -45,22 +45,14 @@ restic_s3_ca_bundle: "{{ restic_config_dir }}/selectel-ca.crt"
 restic_backup_paths:
   - "/data"
   - "/opt"
-  - "/etc/wireguard"
-  - "/etc/portainer"
+  - "/etc"
+  - "/home"
+  - "/root"
 
 # PostgreSQL backup configuration
 restic_postgresql_backup_enabled: true
 restic_postgresql_backup_dir: "{{ restic_base_dir }}/db-dumps"
 restic_postgresql_retention_days: 7  # Keep database dumps for 7 days locally
-
-# Database configurations are now stored in {{ restic_config_dir }}/databases.conf
-# Example databases (will be templated to databases.conf):
-restic_postgresql_databases:
-  - container_name: "{{ project_name }}_postgres"
-    name: "postgres"
-    username: "postgres"
-    password: "password"
-    port: 5432
 
 # Additional backup paths (will be added to restic_backup_paths when PostgreSQL backup is enabled)
 restic_postgresql_backup_paths:
@@ -126,3 +118,14 @@ restic_system_packages:
   - postgresql-client
 # Python packages required
 restic_python_packages: [] 
+
+# PostgreSQL instances configuration
+restic_postgresql_instances: []
+  # Example:
+  # - container_name: "{{ project_name }}_postgres"  # Optional if not container
+  #   host: "localhost"  # Required if is_container: false
+  #   is_container: true  # Default: true
+  #   username: "postgres"
+  #   password: "password"
+  #   port: 5432
+  #   databases: 'all'  # Use 'all' to backup all non-template databases, or list specific ones: ['db1', 'db2'] 

@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# PostgreSQL Restore Script for Restic Backups
+# This script restores PostgreSQL database dumps from a restic snapshot
+
+set -euo pipefail
+
+# Source environment file if it exists
+if [ -f "{{ restic_config_dir }}/restic.env" ]; then
+    source "{{ restic_config_dir }}/restic.env"
+fi
+
+# Configuration
+DB_CONFIG_FILE="{{ restic_config_dir }}/databases.conf"
+RESTORE_DIR="/tmp/restic_restore"
+
+# Log function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a {{ restic_log_dir }}/restore.log
+}
+
+# Usage
+if [ $# -lt 1 ]; then
+    log "Usage: $0 <snapshot_id> [container_name] [database_name]"
+    log "  - If container_name and database_name are omitted, restores all configured databases"
+    log "  - Use 'all' for database_name to restore all databases in a container"
+    exit 1
+fi
+
+SNAPSHOT_ID="$1"
+SPECIFIC_CONTAINER="${2:-}"
+SPECIFIC_DB="${3:-}"
+
+# Create restore directory
+mkdir -p "$RESTORE_DIR"
+cd "$RESTORE_DIR"
+
+log "Starting PostgreSQL database restore from snapshot $SNAPSHOT_ID"
+
+# Restore the dump files from restic
+log "Restoring database dumps from restic"
+restic restore "$SNAPSHOT_ID" --target . --include "{{ restic_postgresql_backup_dir }}"
+
+# Process restorations
+while IFS='|' read -r CONTAINER_NAME DB_NAME DB_USER DB_PASSWORD DB_PORT; do
+    # Skip invalid lines
+    if [[ -z "$CONTAINER_NAME" || -z "$DB_NAME" || "$CONTAINER_NAME" =~ ^[[:space:]]*# ]]; then
+        continue
+    fi
+    
+    # Trim whitespace
+    CONTAINER_NAME=$(echo "$CONTAINER_NAME" | xargs)
+    DB_NAME=$(echo "$DB_NAME" | xargs)
+    DB_USER=$(echo "$DB_USER" | xargs)
+    DB_PASSWORD=$(echo "$DB_PASSWORD" | xargs)
+    DB_PORT=$(echo "$DB_PORT" | xargs)
+    
+    if [[ -z "$CONTAINER_NAME" || -z "$DB_NAME" || -z "$DB_USER" ]]; then
+        continue
+    fi
+    
+    # Filter if specific container/db specified
+    if [ -n "$SPECIFIC_CONTAINER" ] && [ "$CONTAINER_NAME" != "$SPECIFIC_CONTAINER" ]; then
+        continue
+    fi
+    
+    if [ "$DB_NAME" == "all" ]; then
+        if [ -n "$SPECIFIC_DB" ] && [ "$SPECIFIC_DB" != "all" ]; then
+            DBS="$SPECIFIC_DB"
+        else
+            # Find all restored dump files for this container
+            DBS=$(find "{{ restic_postgresql_backup_dir }}/$CONTAINER_NAME" -name "*.sql" -type f | sed 's/.*\/\(.*\)_.*/\1/' | sort -u)
+        fi
+    else
+        if [ -n "$SPECIFIC_DB" ] && [ "$DB_NAME" != "$SPECIFIC_DB" ]; then
+            continue
+        fi
+        DBS="$DB_NAME"
+    fi
+    
+    # Check container
+    if ! docker ps | grep -q "$CONTAINER_NAME"; then
+        log "WARNING: Container $CONTAINER_NAME is not running - skipping"
+        continue
+    fi
+    
+    for db in $DBS; do
+        # Find the latest dump file for this db
+        DUMP_FILE=$(find "{{ restic_postgresql_backup_dir }}/$CONTAINER_NAME" -name "${db}_*.sql" -type f | sort -r | head -1)
+        
+        if [ -z "$DUMP_FILE" ]; then
+            log "WARNING: No dump file found for $db in $CONTAINER_NAME - skipping"
+            continue
+        fi
+        
+        log "Restoring database $db from $DUMP_FILE"
+        
+        # Restore using pg_restore
+        if docker exec -i "$CONTAINER_NAME" pg_restore \
+            -h localhost \
+            -p "$DB_PORT" \
+            -U "$DB_USER" \
+            -d "$db" \
+            --verbose \
+            --no-password \
+            --clean \
+            --if-exists < "$DUMP_FILE"; then
+            log "Successfully restored $db in $CONTAINER_NAME"
+        else
+            log "ERROR: Failed to restore $db in $CONTAINER_NAME"
+        fi
+    done
+    
+done < "$DB_CONFIG_FILE"
+
+# Cleanup
+log "Cleaning up restore directory"
+rm -rf "$RESTORE_DIR"
+
+log "PostgreSQL database restore completed"

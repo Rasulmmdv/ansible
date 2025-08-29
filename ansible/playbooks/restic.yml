@@ -3,6 +3,7 @@
   hosts: all
   become: yes
   vars:
+    project_name: "kimdev"  # Set a default project name for paths
     # REQUIRED for S3: Set your S3 credentials
     # restic_aws_access_key_id: ""
     # restic_aws_secret_access_key: ""
@@ -96,22 +97,15 @@
     restic_log_level: "info"
     
     # PostgreSQL backup configuration
-    restic_postgresql_backup_enabled: false
+    restic_postgresql_backup_enabled: true
     restic_postgresql_retention_days: 7
-    # Example for database user password in restic_postgresql_databases:
-    # restic_postgresql_databases:
-    #   - container_name: "myproject_postgres"
-    #     name: "postgres"
-    #     username: "postgres"
-    #     password: "supersecret"  # REQUIRED
-    #     port: 5432
-    restic_postgresql_databases:
-      - name: "postgres"  # Default database name in containers  
-        host: "localhost"
+    restic_postgresql_instances:
+      - host: "localhost"
+        is_container: false
+        username: "" #TODO: add credentials
+        password: "" #TODO: add credentials
         port: 5432
-        username: "postgres"
-        password: "" # TODO: add credentials
-        container_name: "{{ project_name }}_postgres"
+        databases: ["all"]
 
   roles:
     - restic 
