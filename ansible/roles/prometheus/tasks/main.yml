@@ -118,10 +118,10 @@
   notify: reload prometheus
   tags: [configure, deploy, monitoring]
 
-- name: Deploy container monitoring alert rules
+- name: Deploy monitoring alert rules
   copy:
-    src: container_alerts.yml
-    dest: "{{ prometheus_rules_dir }}/container_alerts.yml"
+    src: alerts.yml
+    dest: "{{ prometheus_rules_dir }}/alerts.yml"
     owner: "{{ prometheus_user_id }}"
     group: "{{ prometheus_group_id }}"
     mode: '0644'
@@ -163,17 +163,6 @@
     - item.path | basename | regex_replace('postgres_exporter_(.*)\\.yml', '\\1') not in prometheus_pgexporter_hosts
   notify: reload prometheus
   tags: [configure, cleanup]
-
-# Deploy retention monitoring and management
-- name: Deploy retention alert rules
-  copy:
-    src: retention_alerts.yml
-    dest: "{{ prometheus_rules_dir }}/retention_alerts.yml"
-    owner: "{{ prometheus_user_id }}"
-    group: "{{ prometheus_group_id }}"
-    mode: '0644'
-  notify: reload prometheus
-  tags: [configure, deploy, monitoring]
 
 - name: Start Prometheus with Docker Compose
   community.docker.docker_compose_v2:

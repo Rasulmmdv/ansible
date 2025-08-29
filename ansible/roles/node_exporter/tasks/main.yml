@@ -9,6 +9,8 @@
         system: yes
         shell: /usr/sbin/nologin
         create_home: no
+        groups: systemd-journal
+        append: yes
       become: true
       tags: [install, security]
 
