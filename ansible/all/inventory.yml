@@ -1,42 +1,9 @@
 ---
 all:
   hosts:
-    test-server:
-      ansible_host: 192.168.1.10
-      ansible_user: root
-      ansible_become: true
-      ansible_become_method: sudo
-      tailscale_auth_key: "" # TODO: add tailscale auth key
-      iptables_allowed_tcp_ports: [22, 80, 443, 41641, 8080, 9443, 9090, 9100]
-      # iptables_install_when_docker_present: false  # Removed due to recursive templating issues
-      tailscale_enable_route_advertisement: true
-      tailscale_advertise_routes:
-        - "10.0.0.0/24"
-        - "169.254.169.254/32"
-      tailscale_advertise_exit_node: true
-      
-      # Traefik configuration for test environment
-      traefik_ssl_enabled: false
-      traefik_certificate_type: "none"
-      traefik_dashboard_domain: "localhost"
-      traefik_dashboard_insecure: true
-    node-2-nl:
-      ansible_host: 143.47.189.82
-      ansible_user: ubuntu
-      ansible_become: true
-      ansible_become_method: sudo
-      tailscale_auth_key: ""
-      iptables_allowed_tcp_ports: [22, 80, 443, 41641]
-      tailscale_enable_route_advertisement: true
-      tailscale_advertise_routes:
-        - "10.0.0.0/24"
-        - "172.16.0.0/12"
-        - "169.254.169.254/32"
-      
-
     infra-01: # gitlab server
       ansible_host: 5.188.158.83
-      ansible_port: 2222 
+      ansible_port: 2222
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
@@ -44,6 +11,16 @@ all:
         - 22 #gitlab-ce for git commands
         - 80 # gitlab-ce for web interface
         - 443 # gitlab-ce for web interface
+      # PostgreSQL exporter monitoring configuration
+      prometheus_pgexporter_hosts:
+        - "prod-01"      # Production database server
+      prometheus_pgexporter_port: "9187"
+      # Override default labels for PostgreSQL exporters
+      prometheus_pgexporter_labels:
+        job: "postgres_exporter"
+        service: "postgresql"
+        environment: "production"
+      wireguard_address: 10.0.0.6/24
     prod-01: # prod server
       ansible_host: 188.124.37.101
       ansible_user: root
@@ -61,20 +38,15 @@ all:
       pgexporter_postgres_host: "localhost"
       pgexporter_postgres_port: 5432
       pgexporter_postgres_user: "monitoring"
-      pgexporter_postgres_password: "" # TODO: add password
+      pgexporter_postgres_password: "" #TODO: add credentials
       pgexporter_postgres_db: "postgres"
-      prometheus_pgexporter_hosts:
-        - "prod-01"      # Production database server
-
-      prometheus_pgexporter_labels:
-        job: "postgres_exporter"
-        service: "postgresql"
-
+      wireguard_address: 10.0.0.6/24
     test-01: # test server Fields
       ansible_host: 82.202.197.209
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
+      wireguard_address: 10.0.0.3/24
     vpn-01: # vpn server Hetzner
       ansible_host: 159.69.207.188
       ansible_user: root
@@ -89,4 +61,12 @@ all:
     # Common variables for all hosts
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
     ansible_python_interpreter: /usr/bin/python3
+    restic_aws_access_key_id: "" #TODO: add credentials
+    restic_aws_secret_access_key: "" #TODO: add credentials
+    restic_password: "" #TODO: add credentials
+    restic_setup_selectel_ca: false
+    project_name: kimdev
+
+
+
 

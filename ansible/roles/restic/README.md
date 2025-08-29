@@ -210,6 +210,19 @@ sudo -u restic /opt/restic_backup/backup/scripts/pg_dump.sh
 
 **No Ansible deployment required** for adding new databases! ✨
 
+## Restoring PostgreSQL Backups
+
+To restore databases, use the `pg_restore.sh` script generated in `{{ restic_scripts_dir }}`.
+
+### Usage:
+- Restore all databases from a snapshot: `./pg_restore.sh <snapshot_id>`
+- Restore all databases for a specific container: `./pg_restore.sh <snapshot_id> <container_name> all`
+- Restore a specific database: `./pg_restore.sh <snapshot_id> <container_name> <db_name>`
+
+First, list available snapshots with `restic snapshots`. Then run the script as the restic user.
+
+Note: This restores from the latest matching dump files in the snapshot. Ensure the target databases exist or use --create if needed (modify script if required).
+
 ## Dependencies
 
 This role **automatically manages its dependencies**:

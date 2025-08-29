@@ -155,6 +155,22 @@
     mode: "0750"
   when: restic_postgresql_backup_enabled | bool
 
+# Create PostgreSQL restore script
+- name: Create PostgreSQL restore script
+  template:
+    src: pg_restore.sh.j2
+    dest: "{{ restic_scripts_dir }}/pg_restore.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_group }}"
+    mode: "0750"
+  when: restic_postgresql_backup_enabled | bool
+
+# Debug PostgreSQL instances configuration
+- name: Debug restic_postgresql_instances
+  debug:
+    var: restic_postgresql_instances
+    verbosity: 0
+
 # Create database configuration file
 - name: Create database configuration file
   template:
@@ -173,7 +189,7 @@
     append: yes
   when: 
     - restic_postgresql_backup_enabled | bool
-    - restic_postgresql_databases | selectattr('container_name', 'defined') | list | length > 0
+    - restic_postgresql_instances | selectattr('container_name', 'defined') | list | length > 0
 
 # Create systemd service files
 - name: Create backup service file
