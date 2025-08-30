@@ -12,6 +12,9 @@ cadvisor_ensure_docker_installed: true
 cadvisor_ports:
   - "8080:8080"
 
+# Docker network to attach cAdvisor to
+cadvisor_network_name: "monitoring"
+
 # Security options - configurable for different environments
 # Set to empty list for WSL2 or environments with AppArmor issues
 cadvisor_security_opts: []
@@ -34,10 +37,10 @@ cadvisor_command:
 
 # Resource limits for cAdvisor container
 cadvisor_resources:
-  memory: "300M"  # Increased to handle more containers
-  memory_reservation: "150M"
-  cpus: "0.3"  # Reduced to be more conservative
-  cpu_reservation: "0.1"
+  memory: "1024M"
+  memory_reservation: "512M"
+  cpus: "0.5"
+  cpu_reservation: "0.2"
 
 # Enhanced monitoring configuration
 cadvisor_monitoring:
@@ -82,4 +85,10 @@ cadvisor_prometheus_group_id: "65533"
 cadvisor_labels:
   job: "cadvisor"
   service: "container-monitoring"
-  environment: "{{ ansible_environment | default('production') }}" 
+  environment: "{{ ansible_environment | default('production') }}"
+
+# Health check configuration
+cadvisor_health_check:
+  max_retries: 30
+  retry_delay: 5  # Reduced from hardcoded 10 seconds
+  timeout: 300    # Total timeout in seconds (5 minutes) 

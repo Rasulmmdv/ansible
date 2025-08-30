@@ -238,5 +238,3 @@ def convert_uri_vless_ws_json(host: str, port: int, socksport: int, uri: str) ->
     except Exception as e:
         print(f"[ERROR] convert_uri_vless_ws_json: {e}")
         return ''
-
-# ... (You can continue this pattern for the other convert_uri_* functions, using the helpers above) ... 

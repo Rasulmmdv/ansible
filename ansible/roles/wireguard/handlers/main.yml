@@ -6,9 +6,11 @@
     name: "wg-quick@{{ wireguard_interface }}"
     state: restarted
   become: true
+  when: not ansible_check_mode
 
 - name: restart dnsmasq
   ansible.builtin.systemd:
     name: dnsmasq
     state: restarted
   become: true
+  when: not ansible_check_mode

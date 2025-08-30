@@ -42,6 +42,4 @@ prometheus_config:
 
 # Default blackbox monitoring targets
 prometheus_blackbox_targets:
-  - "http://example.com"
   - "https://google.com"
-  - "http://prometheus.io" 

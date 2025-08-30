@@ -4,7 +4,6 @@
   become: true
   vars:
     blackbox_enable_website_monitoring: true
-    blackbox_target_endpoint: "http://example.com"  # Replace with your actual website URL
   roles:
     - prometheus
     - blackbox_exporter 

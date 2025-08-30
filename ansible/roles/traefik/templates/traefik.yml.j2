@@ -7,12 +7,14 @@ global:
 entryPoints:
   web:
     address: ":80"
+{% if traefik_ssl_enabled %}
   websecure:
     address: ":443"
 {% if traefik_hsts_enabled %}
     http:
       tls:
         options: default
+{% endif %}
 {% endif %}
 {% if traefik_dashboard_enabled %}
   traefik:
@@ -60,7 +62,7 @@ certificatesResolvers:
         entryPoint: web
 {% elif traefik_acme_challenge_type == "tls" %}
       tlsChallenge: {}
-{% elif traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider %}
+{% elif traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider is defined and traefik_acme_dns_provider %}
       dnsChallenge:
         provider: "{{ traefik_acme_dns_provider }}"
         delayBeforeCheck: 0

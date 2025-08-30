@@ -8,7 +8,7 @@ traefik_container_name: "traefik"
 traefik_dashboard_port: 8080
 traefik_web_port: 80
 traefik_websecure_port: 443
-# traefik_domain: "" # Set in playbook or inventory
+traefik_domain: "localhost" # Default domain for local development/testing
 
 # Traefik directories
 traefik_data_dir: "/opt/traefik"
@@ -29,7 +29,8 @@ traefik_dashboard_insecure: false
 traefik_dashboard_domain: "traefik.local"
 traefik_dashboard_auth_enabled: true
 traefik_dashboard_username: "admin"
-# traefik_dashboard_password: ""  # Set in playbook or inventory (REQUIRED)
+# Default password - should be overridden in production for security
+traefik_dashboard_password: "changeme"
 
 # Whether to publish Traefik's internal port 8080 (dashboard/API) to the host.
 # If set to true the dashboard will be reachable at http://<host>:8080/.
@@ -40,7 +41,7 @@ traefik_dashboard_expose_port: true
 
 # SSL/TLS configuration
 traefik_ssl_enabled: true
-# Certificate type: "acme" for Let's Encrypt, "custom" for own certificates
+# Certificate type: "acme" for Let's Encrypt, "custom" for own certificates, "none" for no SSL
 traefik_certificate_type: "acme"
 traefik_ssl_certificate_resolver: "letsencrypt"
 
@@ -59,6 +60,9 @@ traefik_certificate_files:
     key: "/opt/traefik/certs/key.pem"
     stores:
       - default
+
+# No certificate configuration - automatically controlled by traefik_certificate_type
+traefik_no_certificates: "{{ traefik_certificate_type == 'none' }}"
 
 # Certificate paths inside the container (for Traefik config)
 traefik_certificate_files_container:
@@ -133,6 +137,14 @@ traefik_default_middlewares:
 traefik_vpn_network: "10.0.0.0/24"  # Default WireGuard network (test environment)
 # Note: For production environments, this should be set to "10.0.1.0/24"
 # For multi-environment setups, consider using a broader range like "10.0.0.0/16"
+
+# VPN network configuration
+traefik_dashboard_allow_network: "tailscale"  # Options: "wireguard" or "tailscale"
+# Controls which VPN whitelist is used for dashboard/API access
+
+# Network ranges for different VPN types
+traefik_tailscale_network: "100.64.0.0/10"  # Tailscale overlay network
+traefik_wireguard_network: "10.0.0.0/16"    # WireGuard network range
 
 # System requirements
 minimum_disk_space_gb: 2

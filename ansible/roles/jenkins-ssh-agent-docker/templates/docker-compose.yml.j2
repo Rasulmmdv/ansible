@@ -8,7 +8,11 @@ services:
     container_name: "{{ jenkins_ssh_agent_container_name }}"
     restart: "{{ jenkins_ssh_agent_restart_policy }}"
     environment:
+{% if not ansible_check_mode and jenkins_ssh_public_key != 'CHECK_MODE_PLACEHOLDER' %}
       - JENKINS_AGENT_SSH_PUBKEY={{ jenkins_ssh_public_key }}
+{% else %}
+      - JENKINS_AGENT_SSH_PUBKEY=CHECK_MODE_PLACEHOLDER
+{% endif %}
     volumes:
 {% for volume in jenkins_ssh_agent_volumes %}
       - {{ volume }}

@@ -1,6 +1,6 @@
 ---
-# Monitoring stack defaults
-# Default configuration for the monitoring stack meta-role
+# Enhanced monitoring stack defaults
+# Default configuration for the monitoring stack meta-role with dependency management
 
 # Stack-wide configuration
 monitoring_stack:
@@ -8,7 +8,27 @@ monitoring_stack:
   data_root: "/opt/monitoring"
   validation_enabled: true
   validation_timeout: 300  # seconds
-
+  
+  # Dependency validation settings
+  dependency_validation:
+    enabled: true
+    minimum_disk_space_gb: 10
+    minimum_available_memory_percent: 20
+    check_port_conflicts: true
+    check_network_connectivity: true
+    
+  # Rollback and recovery settings
+  rollback:
+    enabled: true
+    preserve_data: true  # Don't delete data directories during rollback
+    create_recovery_scripts: true
+    
+  # Incremental deployment settings
+  incremental_deployment:
+    enabled: true
+    continue_on_non_critical_failure: true
+    critical_services: ["prometheus", "grafana"]  # Must succeed for deployment to be considered successful
+    
 # Default monitoring configuration
 monitoring_config:
   # Enable/disable validation after deployment
@@ -19,8 +39,60 @@ monitoring_config:
     enabled: true
     timeout: 30
     retries: 3
+    prometheus_retries: 15  # Prometheus needs longer startup time
+    grafana_retries: 20     # Grafana needs longest startup time
+    loki_retries: 15        # Loki can be slow to start
     
   # Service discovery configuration
   service_discovery:
     enabled: true
     refresh_interval: "30s"
+    
+  # Deployment phases configuration
+  deployment_phases:
+    phase1_dependency_checks: true
+    phase2_rollback_setup: true
+    phase3_incremental_deployment: true
+    phase4_final_validation: true
+    
+# Service-specific configuration
+monitoring_services:
+  prometheus:
+    critical: true
+    startup_time_seconds: 60
+    health_endpoint: "/-/ready"
+    
+  grafana:
+    critical: true
+    startup_time_seconds: 90
+    health_endpoint: "/api/health"
+    
+  alertmanager:
+    critical: false
+    startup_time_seconds: 30
+    health_endpoint: "/-/healthy"
+    
+  loki:
+    critical: false
+    startup_time_seconds: 60
+    health_endpoint: "/ready"
+    
+  node_exporter:
+    critical: false
+    startup_time_seconds: 15
+    health_endpoint: "/metrics"
+    
+  cadvisor:
+    critical: false
+    startup_time_seconds: 20
+    health_endpoint: "/metrics"
+    
+  blackbox_exporter:
+    critical: false
+    startup_time_seconds: 15
+    health_endpoint: "/metrics"
+    
+  alloy:
+    critical: false
+    startup_time_seconds: 30
+    health_endpoint: "/-/ready"

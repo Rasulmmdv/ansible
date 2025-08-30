@@ -1,0 +1,81 @@
+---
+# Dynamic orchestration playbook
+#
+# Usage examples:
+#   Run every role in default order:
+#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e run_all_roles=true
+#
+#   Run a subset (roleA + roleB) and their dependencies:
+#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e "roles_enabled=['roleA','roleB']"
+#
+#   Run only installation steps for a subset:
+#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e "roles_enabled=['docker']" -t install
+#
+# -----------------------------------------------------
+- name: Orchestrate selected roles
+  hosts: "{{ target_hosts | default('all') }}"
+  gather_facts: true
+
+  # ------------- PRE-TASKS: VALIDATION & RESOLUTION -------------
+  pre_tasks:
+    - name: Load central orchestration variables
+      include_vars: "{{ playbook_dir }}/../group_vars/all/main.yml"
+      tags: always
+
+    - name: Determine requested roles
+      set_fact:
+        _roles_requested: "{{ (run_all_roles | default(false) | bool) | ternary(roles_all, roles_enabled | default([])) }}"
+      tags: always
+
+    # validation tasks continue here
+
+    - name: Fail fast when no roles are requested
+      assert:
+        that: _roles_requested | length > 0
+        fail_msg: "No roles specified. Use -e run_all_roles=true or -e \"roles_enabled=['roleA']\"."
+      tags: always
+
+    - name: Validate that requested roles exist in roles_all master list
+      vars:
+        _unknown_roles: "{{ _roles_requested | difference(roles_all) }}"
+      assert:
+        that: _unknown_roles | length == 0
+        fail_msg: "Unknown roles requested: {{ _unknown_roles }}. Check central config or role spelling."
+      tags: always
+
+    # Compute dependency closure (requested roles + their deps)
+    - name: Initialize dependency list with requested roles
+      set_fact:
+        _roles_needed: "{{ _roles_requested }}"
+      tags: always
+
+    - name: Expand dependencies
+      set_fact:
+        _roles_needed: "{{ ((_roles_needed | default([])) + (role_dependencies.get(item, []))) | unique }}"
+      loop: "{{ _roles_requested }}"
+      loop_control:
+        label: "deps_for_{{ item }}"
+      tags: always
+
+    # Preserve global execution order as defined by roles_all
+    - name: Order final role list based on roles_all sequence
+      set_fact:
+        final_roles: "{{ roles_all | select('in', _roles_needed) | list }}"
+      tags: always
+
+    - name: Show orchestration plan
+      debug:
+        var: final_roles
+      tags: always
+
+  # ------------- MAIN: INCLUDE ROLES IN ORDER -------------------
+  tasks:
+    - name: "Apply role: {{ item }}"
+      include_role:
+        name: "{{ item }}"
+        # Apply any tags passed on CLI to each role (inheritance)
+        apply:
+          tags: "{{ ansible_playbook_tags | default([]) }}"
+      loop: "{{ final_roles }}"
+      loop_control:
+        label: "{{ item }}"

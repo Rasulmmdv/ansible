@@ -36,21 +36,9 @@ blackbox_endpoints:
     module: "http_2xx"
     interval: "60s"
 
-# Legacy single endpoint support
-blackbox_target_endpoint: "http://your-website.com"
 ```
 
 ### Website Monitoring
-
-#### Single Endpoint (Legacy)
-```yaml
-- hosts: monitoring_servers
-  vars:
-    blackbox_enable_website_monitoring: true
-    blackbox_target_endpoint: "http://your-website.com"
-  roles:
-    - blackbox_exporter
-```
 
 #### Multiple Endpoints (Recommended)
 ```yaml

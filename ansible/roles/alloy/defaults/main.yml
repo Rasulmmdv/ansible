@@ -15,8 +15,26 @@ alloy_volumes:
   - "{{ alloy_data_dir }}/config.alloy:/etc/alloy/config.alloy:ro"
   - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
   - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  - "/var/log/journal:/var/log/journal:ro"
+  - "/run/log/journal:/run/log/journal:ro"
+  - "/etc/machine-id:/etc/machine-id:ro"
 alloy_command:
   - 'run'
   - '--server.http.listen-addr=0.0.0.0:12345'
   - '--storage.path=/var/lib/alloy/data'
-  - '/etc/alloy/config.alloy' 
+  - '--cluster.node-name={{ inventory_hostname }}'
+  - '/etc/alloy/config.alloy'
+
+# Docker network name to attach Alloy to
+alloy_network_name: "monitoring"
+
+# Loki push endpoint (override with central Loki URL)
+alloy_loki_write_url: "http://10.0.0.5:3100/loki/api/v1/push"
+# Optional: multi-tenant header
+alloy_loki_tenant_id: ""
+
+# Journald configuration
+alloy_enable_journald: true
+
+# Log retention configuration
+alloy_log_retention_days: 30  # Log retention period in days (configured in Loki) 

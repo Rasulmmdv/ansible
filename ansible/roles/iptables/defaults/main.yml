@@ -2,7 +2,7 @@
 
 # Control whether to install iptables when Docker is detected
 # Set to false in inventory to skip iptables installation
-iptables_install_when_docker_present: true
+# Note: This variable has been removed due to recursive templating issues
 
 iptables_allowed_tcp_ports:
   - 22   # SSH

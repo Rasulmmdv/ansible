@@ -1,0 +1,106 @@
+---
+# Reusable service health check with retry logic
+# Usage: include this task with variables:
+#   - service_name: "prometheus"
+#   - service_url: "http://localhost:9090/-/ready"
+#   - service_port: 9090 (optional, for port check)
+#   - health_check_path: "/-/ready" (optional, default: /)
+#   - max_retries: 30 (optional, default: 30)
+#   - retry_delay: 10 (optional, default: 10)
+#   - expected_status_codes: [200] (optional, default: [200])
+
+- name: "Health check for {{ service_name | default('service') }}"
+  block:
+    - name: "Wait for {{ service_name | default('service') }} port to be available"
+      ansible.builtin.wait_for:
+        host: "{{ service_host | default('127.0.0.1') }}"
+        port: "{{ service_port }}"
+        timeout: "{{ port_timeout | default(30) }}"
+      when: service_port is defined
+      
+    - name: "Check {{ service_name | default('service') }} health endpoint"
+      ansible.builtin.uri:
+        url: "{{ service_url }}"
+        method: GET
+        status_code: "{{ expected_status_codes | default([200]) }}"
+        timeout: 10
+        validate_certs: "{{ validate_ssl_certs | default(true) }}"
+      register: service_health_result
+      retries: "{{ max_retries | default(30) }}"
+      delay: "{{ retry_delay | default(10) }}"
+      until: service_health_result.status in (expected_status_codes | default([200]))
+      
+    - name: "Verify {{ service_name | default('service') }} response content"
+      ansible.builtin.debug:
+        msg: "✅ {{ service_name | default('Service') }} is healthy and responding"
+      when: service_health_result.status in (expected_status_codes | default([200]))
+      
+  rescue:
+    - name: "Gather service diagnostic information"
+      block:
+        - name: "Check if {{ service_name | default('service') }} process is running"
+          ansible.builtin.command: "pgrep -f {{ service_name | default('unknown') }}"
+          register: process_check
+          failed_when: false
+          changed_when: false
+          
+        - name: "Check {{ service_name | default('service') }} logs"
+          ansible.builtin.command: "journalctl -u {{ service_name | default('unknown') }} --no-pager -n 20"
+          register: service_logs
+          failed_when: false
+          changed_when: false
+          when: service_systemd_name is defined
+          
+        - name: "Check Docker container logs"
+          ansible.builtin.command: "docker logs {{ service_container_name | default(service_name) }} --tail 20"
+          register: container_logs
+          failed_when: false
+          changed_when: false
+          when: service_container_name is defined or service_name is defined
+          
+      rescue:
+        - name: "Could not gather diagnostic information"
+          ansible.builtin.debug:
+            msg: "Unable to gather diagnostic information for {{ service_name | default('service') }}"
+            
+    - name: "Display service failure diagnostics"
+      ansible.builtin.debug:
+        msg:
+          - "❌ {{ service_name | default('Service') }} health check failed"
+          - "URL: {{ service_url }}"
+          - "Last status: {{ service_health_result.status | default('No response') }}"
+          - "Process running: {{ 'Yes' if process_check.rc == 0 else 'No' }}"
+          - "Diagnostic info collected: {{ 'Yes' if service_logs is defined or container_logs is defined else 'Limited' }}"
+          
+    - name: "Fail service health check"
+      ansible.builtin.fail:
+        msg: |
+          Service '{{ service_name | default('Unknown service') }}' failed health check after {{ max_retries | default(30) }} attempts.
+          
+          Troubleshooting steps:
+          1. Check if the service is running: systemctl status {{ service_systemd_name | default(service_name) }}
+          2. Check service logs: journalctl -u {{ service_systemd_name | default(service_name) }} -f
+          3. Verify service configuration
+          4. Check port availability: netstat -tlnp | grep {{ service_port | default('unknown') }}
+          5. Test connectivity: curl {{ service_url }}
+          
+          {% if service_logs is defined and service_logs.stdout_lines %}
+          Recent service logs:
+          {{ service_logs.stdout_lines | join('\n') }}
+          {% endif %}
+          
+          {% if container_logs is defined and container_logs.stdout_lines %}
+          Recent container logs:
+          {{ container_logs.stdout_lines | join('\n') }}
+          {% endif %}
+      when: not (ignore_health_check_failures | default(false))
+      
+  always:
+    - name: "Set service health check result fact"
+      ansible.builtin.set_fact:
+        last_health_check:
+          service: "{{ service_name | default('Unknown service') }}"
+          status: "{{ 'healthy' if service_health_result is succeeded else 'unhealthy' }}"
+          url: "{{ service_url }}"
+          response_time: "{{ service_health_result.elapsed | default(0) }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"

@@ -1,9 +1,9 @@
-version: '3.8'
 services:
   alloy:
     image: "{{ alloy_image }}"
     container_name: "{{ alloy_container_name }}"
     restart: unless-stopped
+    hostname: "{{ inventory_hostname }}"
     command:
 {% for arg in alloy_command %}
       - {{ arg }}
@@ -18,6 +18,12 @@ services:
 {% endfor %}
     networks:
       - monitoring
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
 
 networks:
   monitoring:

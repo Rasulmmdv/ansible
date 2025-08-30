@@ -26,6 +26,7 @@ None - all variables have sensible defaults.
 - `portainer_agent_edge`: Enable Edge agent mode (default: `false`)
 - `portainer_agent_edge_key`: Edge agent key (required if edge mode is enabled)
 - `portainer_agent_edge_id`: Edge agent ID (required if edge mode is enabled)
+- `portainer_agent_insecure`: Disable TLS/HTTPS for HTTP communication (default: `true`)
 
 ## Dependencies
 

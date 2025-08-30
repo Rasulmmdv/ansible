@@ -1,90 +1,205 @@
 ---
 # tasks file for jenkins-docker
 
-- name: Create Jenkins group
-  group:
-    name: "{{ jenkins_group }}"
-    state: present
-    gid: 1001
-    system: true
-  become: true
+# Validate required variables for Jenkins
+- name: Validate Jenkins configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  tags: [prereq, validate]
+  vars:
+    role_name: "jenkins-docker"
+    required_variables:
+      - "jenkins_domain"
+      - "jenkins_admin_username"
+      - "jenkins_admin_password"
+      - "jenkins_home"
+      - "jenkins_data_dir"
+    sensitive_variables:
+      - "jenkins_admin_password"
+    conditional_variables:
+      - condition: "jenkins_use_ssl | default(false)"
+        variables:
+          - "jenkins_ssl_cert_path"
+          - "jenkins_ssl_key_path"
+      - condition: "jenkins_install_plugins | default(true)"
+        variables:
+          - "jenkins_plugins_list"
+    custom_validations:
+      - name: "jenkins_domain"
+        validation: "jenkins_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "jenkins_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "jenkins_home"
+        validation: "jenkins_home | regex_search('^/')"
+        error_message: "jenkins_home must be an absolute path starting with '/'"
+      - name: "jenkins_data_dir"
+        validation: "jenkins_data_dir | regex_search('^/')"
+        error_message: "jenkins_data_dir must be an absolute path starting with '/'"
 
-- name: Create Jenkins user
-  user:
-    name: "{{ jenkins_user }}"
-    group: "{{ jenkins_group }}"
-    uid: 1000
-    system: true
-    shell: /bin/bash
-    home: "{{ jenkins_home }}"
-    create_home: false
-    state: present
-  become: true
+- name: Setup Jenkins
+  block:
+  tags: [install, configure, docker]
+    - name: Setup Jenkins user and directories (standardized)
+      include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+      vars:
+        service_name: "jenkins"
+        service_user: "{{ jenkins_user }}"
+        service_group: "{{ jenkins_group }}"
+        service_uid: 1000
+        service_gid: 1001
+        service_shell: "/bin/bash"
+        service_home: "{{ jenkins_home }}"
+        additional_groups: ["docker"]
+        service_directories:
+          - "{{ jenkins_data_dir }}"
+          - "{{ jenkins_home }}"
+        directory_mode: "0755"
+        
+    - name: Set Jenkins UID and GID variables for backward compatibility
+      ansible.builtin.set_fact:
+        jenkins_uid: "{{ jenkins_user_info.uid }}"
+        jenkins_gid: "{{ jenkins_user_info.gid }}"
+        
+    - name: Set ownership of Jenkins directories with recursion
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_group }}"
+        recurse: true
+        mode: '0755'
+      loop:
+        - "{{ jenkins_home }}"
+        - "{{ jenkins_data_dir }}"
+      become: true
 
-- name: Ensure jenkins data directories exist
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ jenkins_user }}"
-    group: "{{ jenkins_group }}"
-    mode: '0755'
-  loop:
-    - "{{ jenkins_data_dir }}"
-    - "{{ jenkins_home }}"
-  become: true
+    - name: Create Docker network for Jenkins
+      community.docker.docker_network:
+        name: "{{ jenkins_network_name }}"
+        state: present
 
-- name: Add Jenkins user to docker group
-  user:
-    name: "{{ jenkins_user }}"
-    groups: docker
-    append: true
-  become: true
+    - name: Ensure Traefik network exists
+      community.docker.docker_network:
+        name: "{{ traefik_network_name | default('traefik-network') }}"
+        state: present
 
-- name: Get Jenkins user UID and GID
-  user:
-    name: "{{ jenkins_user }}"
-  register: jenkins_user_info
-  become: true
+    - name: Ensure init.groovy.d directory exists
+      file:
+        path: "{{ jenkins_home }}/init.groovy.d"
+        state: directory
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_group }}"
+        mode: '0755'
+      become: true
 
-- name: Set Jenkins UID and GID variables
-  set_fact:
-    jenkins_uid: "{{ jenkins_user_info.uid }}"
-    jenkins_gid: "{{ jenkins_user_info.group }}"
+    - name: Clear Jenkins plugins directory for fresh plugin installation
+      file:
+        path: "{{ jenkins_home }}/plugins"
+        state: absent
+      when: 
+        - jenkins_install_plugins
+        - jenkins_force_plugin_reinstall | default(false)
+      become: true
 
-- name: Set ownership of Jenkins directories
-  file:
-    path: "{{ item }}"
-    owner: "{{ jenkins_user }}"
-    group: "{{ jenkins_group }}"
-    recurse: true
-    mode: '0755'
-  loop:
-    - "{{ jenkins_home }}"
-    - "{{ jenkins_data_dir }}"
-  become: true
+    - name: Create plugins directory with correct permissions
+      file:
+        path: "{{ jenkins_home }}/plugins"
+        state: directory
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_group }}"
+        mode: '0755'
+      when: jenkins_install_plugins
+      become: true
 
+    - name: Ensure Jenkins home directory has correct numeric ownership and permissions
+      file:
+        path: "{{ jenkins_home }}"
+        owner: "{{ jenkins_uid }}"
+        group: "{{ jenkins_gid }}"
+        recurse: true
+        mode: '0775'
+      become: true
 
-- name: Create Docker network for Jenkins
-  community.docker.docker_network:
-    name: "{{ jenkins_network_name }}"
-    state: present
+    - name: Deploy Jenkins with standardized Docker Compose
+      include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+      vars:
+        compose_project_name: "jenkins"
+        compose_project_src: "{{ jenkins_data_dir }}"
+        compose_pull: always
+        compose_remove_orphans: true
 
-- name: Ensure Traefik network exists
-  community.docker.docker_network:
-    name: "{{ traefik_network_name | default('traefik-network') }}"
-    state: present
+    - name: Wait for Jenkins to be ready (standardized health check)
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "jenkins"
+        service_url: "https://{{ jenkins_domain }}/login"
+        expected_status_codes: [200, 403, 302]
+        validate_ssl_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+        max_retries: 30
+        retry_delay: 10
+        service_container_name: "{{ jenkins_container_name }}"
+        ignore_health_check_failures: false
 
-- name: Ensure init.groovy.d directory exists
-  file:
-    path: "{{ jenkins_home }}/init.groovy.d"
-    state: directory
-    owner: "{{ jenkins_user }}"
-    group: "{{ jenkins_group }}"
-    mode: '0755'
-  become: true
+    - name: Wait for Jenkins API to be fully initialized
+      include_tasks: "{{ role_path }}/../common/tasks/service_health_check.yml"
+      vars:
+        service_name: "jenkins-api"
+        service_url: "https://{{ jenkins_domain }}/api/json"
+        expected_status_codes: [200]
+        validate_ssl_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+        max_retries: 30
+        retry_delay: 10
+        service_container_name: "{{ jenkins_container_name }}"
+        ignore_health_check_failures: false
+
+    - name: Get list of installed plugins via Jenkins API
+      block:
+        - name: Query Jenkins plugin API
+          ansible.builtin.uri:
+            url: "https://{{ jenkins_domain }}/pluginManager/api/json?depth=1"
+            method: GET
+            user: "{{ jenkins_admin_username }}"
+            password: "{{ jenkins_admin_password }}"
+            force_basic_auth: true
+            status_code: 200
+            validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+          register: jenkins_installed_plugins
+          retries: 5
+          delay: 10
+          until: jenkins_installed_plugins.status == 200
+      rescue:
+        - name: Handle plugin API failure
+          include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+          vars:
+            notification_type: "warning"
+            operation_name: "Jenkins Plugin API Query"
+            error_message: "Could not retrieve installed plugin list from Jenkins API"
+            troubleshooting_steps:
+              - "Verify Jenkins is fully started"
+              - "Check admin credentials"
+              - "Verify SSL certificate configuration"
+            should_fail: false
+      when: jenkins_install_plugins
+
+    - name: Check Jenkins container logs for plugin installation
+      command: docker logs {{ jenkins_container_name }} --tail 50
+      register: jenkins_container_logs
+      when: jenkins_install_plugins
+
+    - name: Verify Jenkins container is running properly
+      community.docker.docker_container_info:
+        name: "{{ jenkins_container_name }}"
+      register: jenkins_container_info
+      failed_when: 
+        - jenkins_container_info.container.State.Status != "running"
+        - jenkins_container_info.container.State.Health.Status is defined and jenkins_container_info.container.State.Health.Status != "healthy"
+
+    - name: Check Jenkins home directory permissions
+      stat:
+        path: "{{ jenkins_home }}"
+      register: jenkins_home_stat
+  when: not ansible_check_mode
 
 - name: Create basic Jenkins configuration files
   template:
+  tags: [configure, web]
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     owner: "{{ jenkins_user }}"
@@ -98,13 +213,13 @@
 
 - name: Create Groovy plugin installation script
   template:
-    src: 'install-plugins.groovy.j2'
-    dest: '{{ jenkins_home }}/init.groovy.d/install-plugins.groovy'
+    src: install-plugins.groovy.j2
+    dest: "{{ jenkins_home }}/init.groovy.d/install-plugins.groovy"
     owner: "{{ jenkins_user }}"
     group: "{{ jenkins_group }}"
     mode: '0644'
-  become: true
   when: jenkins_install_plugins
+  become: true
   notify: restart jenkins
 
 - name: Create script console enablement script
@@ -127,102 +242,30 @@
   become: true
   notify: restart jenkins
 
-- name: Pull Jenkins Docker image
-  community.docker.docker_image:
-    name: "{{ jenkins_image }}"
-    source: pull
-    force_source: true
+- name: Check mode notice for Docker operations
+  debug:
+    msg: "Running in check mode - Docker container operations will be skipped. These tasks require actual execution."
+  when: ansible_check_mode
+
+# Note: Docker image pull is not needed - Docker Compose will handle this automatically
+# Removing this task to avoid dependency on the 'requests' Python library
 
 - name: Stop and remove existing Jenkins container
   community.docker.docker_container:
     name: "{{ jenkins_container_name }}"
     state: absent
   ignore_errors: true
-
-- name: Clear Jenkins plugins directory for fresh plugin installation
-  file:
-    path: "{{ jenkins_home }}/plugins"
-    state: absent
-  when: 
-    - jenkins_install_plugins
-    - jenkins_force_plugin_reinstall | default(false)
-  become: true
-
-- name: Create plugins directory with correct permissions
-  file:
-    path: "{{ jenkins_home }}/plugins"
-    state: directory
-    owner: "{{ jenkins_user }}"
-    group: "{{ jenkins_group }}"
-    mode: '0755'
-  when: jenkins_install_plugins
-  become: true
-
-- name: Ensure Jenkins home directory has correct numeric ownership and permissions
-  file:
-    path: "{{ jenkins_home }}"
-    owner: "{{ jenkins_uid }}"
-    group: "{{ jenkins_gid }}"
-    recurse: true
-    mode: '0775'
-  become: true
+  when: not ansible_check_mode
 
 - name: Create Docker Compose configuration
   template:
+  tags: [configure, deploy, docker]
     src: docker-compose.yml.j2
     dest: "{{ jenkins_data_dir }}/docker-compose.yml"
     owner: "{{ jenkins_user }}"
     group: "{{ jenkins_group }}"
     mode: '0644'
   become: true
-
-- name: Start Jenkins with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ jenkins_data_dir }}"
-  become: true
-
-- name: Wait for Jenkins to be ready
-  uri:
-    url: "https://{{ jenkins_domain }}/login"
-    method: GET
-    status_code: [200, 403, 302]
-    validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
-    follow_redirects: yes
-    force_basic_auth: true
-    user: "{{ jenkins_admin_username }}"
-    password: "{{ jenkins_admin_password }}"
-  register: jenkins_service_status
-  until: jenkins_service_status.status in [200, 403, 302]
-  retries: 30
-  delay: 10
-
-- name: Wait for Jenkins to be fully initialized
-  uri:
-    url: "https://{{ jenkins_domain }}/api/json"
-    method: GET
-    user: "{{ jenkins_admin_username }}"
-    password: "{{ jenkins_admin_password }}"
-    force_basic_auth: true
-    status_code: 200
-    validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
-  register: jenkins_api_status
-  until: jenkins_api_status.status == 200
-  retries: 30
-  delay: 10
-
-- name: Get list of installed plugins via Jenkins API
-  uri:
-    url: "https://{{ jenkins_domain }}/pluginManager/api/json?depth=1"
-    method: GET
-    user: "{{ jenkins_admin_username }}"
-    password: "{{ jenkins_admin_password }}"
-    force_basic_auth: true
-    status_code: 200
-    validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
-  register: jenkins_installed_plugins
-  ignore_errors: true
-  when: jenkins_install_plugins
 
 - name: Display installed plugins summary
   debug:
@@ -239,12 +282,7 @@
       - "{% if jenkins_installed_plugins.json is defined and jenkins_installed_plugins.json.plugins | length < (jenkins_plugins_list | length * 0.8) %}WARNING: Less than 80% of expected plugins are installed.{% endif %}"
   when: 
     - jenkins_install_plugins
-    - jenkins_installed_plugins is defined
-
-- name: Check Jenkins container logs for plugin installation
-  command: docker logs {{ jenkins_container_name }} --tail 50
-  register: jenkins_container_logs
-  when: jenkins_install_plugins
+    - jenkins_installed_plugins.json is defined
 
 - name: Display Jenkins logs related to plugins
   debug:
@@ -253,26 +291,11 @@
       - "{{ jenkins_container_logs.stdout_lines | default(['No logs available']) }}"
   when: 
     - jenkins_install_plugins
-    - jenkins_container_logs is defined
-
-- name: Verify Jenkins container is running properly
-  community.docker.docker_container_info:
-    name: "{{ jenkins_container_name }}"
-  register: jenkins_container_info
-  failed_when: 
-    - jenkins_container_info.container.State.Status != "running"
-    - jenkins_container_info.container.State.Health.Status is defined and jenkins_container_info.container.State.Health.Status != "healthy"
-
-- name: Check Jenkins home directory permissions
-  stat:
-    path: "{{ jenkins_home }}"
-  register: jenkins_home_stat
-  failed_when: 
-    - not jenkins_home_stat.stat.exists
-    - jenkins_home_stat.stat.pw_name != jenkins_user
+    - jenkins_container_logs.json is defined
 
 - name: Test Jenkins login functionality
   uri:
+  tags: [validate, web]
     url: "https://{{ jenkins_domain }}/login"
     method: GET
     validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"

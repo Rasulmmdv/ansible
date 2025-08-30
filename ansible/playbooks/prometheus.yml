@@ -1,6 +1,6 @@
 ---
-- name: Deploy Prometheus monitoring
+- name: Deploy Prometheus
   hosts: all
   become: true
   roles:
-    - prometheus 
+    - prometheus  # Deploy only Prometheus 

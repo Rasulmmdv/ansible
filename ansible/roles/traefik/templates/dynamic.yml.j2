@@ -1,7 +1,31 @@
 # Traefik dynamic configuration
+# Priority system: Higher numbers = higher priority
+# 100+ = High priority (dashboard, API, redirects)
+# 50-99 = Medium priority (service-specific routers)
+# 1-49 = Low priority (catch-all, fallbacks)
 http:
   # Routers
   routers:
+    # Router for Traefik dashboard
+    dashboard:
+      entryPoints:
+        - "traefik"
+      rule: "Host(`{{ traefik_dashboard_domain | default('localhost') }}`) && PathPrefix(`/`)"
+      service: "api@internal"
+      middlewares:
+        - "vpn-whitelist@file"  # Tailscale-compatible whitelist
+      priority: 100 # High priority for dashboard, but specific to dashboard domain
+
+    # Router for Traefik API endpoints and health check
+    api:
+      entryPoints:
+        - "traefik"
+      rule: "PathPrefix(`/api`) || Path(`/ping`)"
+      service: "api@internal"
+      middlewares:
+        - "vpn-whitelist@file"  # Tailscale-compatible whitelist
+      priority: 100 # High priority for API access
+
     # Router to catch all HTTP traffic and redirect to HTTPS
     web-redirect:
       entryPoints:
@@ -12,6 +36,7 @@ http:
       service: "noop@internal" # A dummy service, as it's just a redirect
       priority: 1 # Low priority to not interfere with other routers
 
+{% if traefik_domain != "localhost" %}
     # Router to redirect www to non-www
     www-redirect:
       entryPoints:
@@ -22,6 +47,7 @@ http:
       service: "noop@internal"
       priority: 100 # High priority to catch www requests first
       tls: true
+{% endif %}
 
   # Services
   services:

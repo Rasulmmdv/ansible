@@ -54,6 +54,8 @@ scrape_configs:
 {% endfor %}
 {% endif %}
 
+
+
   # File-based service discovery for extensibility
   - job_name: 'file_sd'
     file_sd_configs:
@@ -66,6 +68,29 @@ scrape_configs:
     file_sd_configs:
       - files:
         - '/etc/prometheus/targets/loki_targets.yml'
+        refresh_interval: 30s
+
+  # PostgreSQL exporter targets via service discovery (dynamically updated)
+  - job_name: 'postgres_exporter'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    relabel_configs:
+      # Use the target address from file_sd
+      - source_labels: [__address__]
+        target_label: instance
+      # Add PostgreSQL-specific labels
+      - source_labels: [__meta_filepath]
+        regex: '.*/postgres_exporter_(.*)\.yml'
+        target_label: postgres_host
+        replacement: '${1}'
+      # Keep original labels from file_sd
+      - regex: '__meta_filepath'
+        action: labeldrop
+    file_sd_configs:
+      - files:
+        - '/etc/prometheus/targets/postgres_exporter_*.yml'
         refresh_interval: 30s
 
   # Blackbox targets via service discovery (dynamically updated)
@@ -116,5 +141,3 @@ scrape_configs:
         - {{ target }}
 {% endfor %}
 {% endif %}
-
- 

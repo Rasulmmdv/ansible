@@ -18,9 +18,7 @@ blackbox_enable_website_monitoring: true
 
 # Blackbox targets for Prometheus monitoring
 blackbox_targets:
-  - http://example.com
   - https://google.com
-  - http://prometheus.io
 
 # Endpoint configuration - can be defined as variables or loaded from config file
 blackbox_endpoints_config_file: "{{ blackbox_exporter_data_dir }}/endpoints.yml"
@@ -208,11 +206,10 @@ blackbox_endpoints:
       User-Agent: "Prometheus/Blackbox Exporter"
     valid_status_codes: [200, 201, 202, 301, 302]
 
-  # Development and Testing Sites
   - name: "fix-ci-fail-badges-bio"
     url: "https://fix-ci-fail.badges.bio"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -221,7 +218,7 @@ blackbox_endpoints:
   - name: "branches-badges-bio"
     url: "https://branches.badges.bio"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -230,7 +227,7 @@ blackbox_endpoints:
   - name: "begoclinic-kimdevs-ru"
     url: "https://begoclinic.kimdevs.ru"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -239,13 +236,12 @@ blackbox_endpoints:
   - name: "dev-mafia-game"
     url: "https://dev.mafia.game"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
     valid_status_codes: [200, 201, 202, 301, 302]
 
-  # API Endpoints
   - name: "api-batumi-estate"
     url: "https://api.batumi.estate"
     module: "http_2xx"
@@ -300,11 +296,10 @@ blackbox_endpoints:
       User-Agent: "Prometheus/Blackbox Exporter"
     valid_status_codes: [200, 201, 202, 301, 302]
 
-  # Test API Endpoints
   - name: "directus-test-kimdevs-ru"
     url: "https://directus-test.kimdevs.ru"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -313,7 +308,7 @@ blackbox_endpoints:
   - name: "admin-realtyevents-ru"
     url: "https://admin.realtyevents.ru"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -322,7 +317,7 @@ blackbox_endpoints:
   - name: "api-test-kimdevs-ru"
     url: "https://api-test.kimdevs.ru"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -331,7 +326,7 @@ blackbox_endpoints:
   - name: "test-api-batumi-estate"
     url: "https://test-api.batumi.estate"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -340,7 +335,7 @@ blackbox_endpoints:
   - name: "api-dev-mafia-game"
     url: "https://api-dev.mafia.game"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
@@ -349,14 +344,11 @@ blackbox_endpoints:
   - name: "api-test1-kimdevs-ru"
     url: "https://api.test1.kimdevs.ru"
     module: "http_2xx"
-    interval: "60s"
+    interval: "30s"
     timeout: "10s"
     headers:
       User-Agent: "Prometheus/Blackbox Exporter"
     valid_status_codes: [200, 201, 202, 301, 302]
-
-# Legacy single endpoint support (for backward compatibility)
-blackbox_target_endpoint: "http://your-website.com"
 
 # Prometheus integration paths (referenced from prometheus role)
 blackbox_exporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"

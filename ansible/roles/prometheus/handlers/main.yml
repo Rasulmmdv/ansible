@@ -2,30 +2,36 @@
 # handlers file for prometheus
 
 - name: restart prometheus
-  command: docker compose restart
-  args:
-    chdir: "{{ prometheus_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "prometheus"
+    project_src: "{{ prometheus_data_dir }}"
+    state: restarted
   become: true
   listen: restart prometheus
+  when: not ansible_check_mode
 
 - name: stop prometheus
-  command: docker compose down
-  args:
-    chdir: "{{ prometheus_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "prometheus"
+    project_src: "{{ prometheus_data_dir }}"
+    state: stopped
   become: true
   listen: stop prometheus
+  when: not ansible_check_mode
 
 - name: start prometheus
-  command: docker compose up -d
-  args:
-    chdir: "{{ prometheus_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "prometheus"
+    project_src: "{{ prometheus_data_dir }}"
+    state: present
   become: true
   listen: start prometheus
+  when: not ansible_check_mode
 
 - name: reload prometheus
   uri:
     url: "http://localhost:9090/-/reload"
     method: POST
-    status_code: 200
-  become: true
-  listen: reload prometheus 
+    status_code: [200]
+  listen: reload prometheus
+  when: not ansible_check_mode 

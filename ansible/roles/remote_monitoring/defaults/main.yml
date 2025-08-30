@@ -52,6 +52,12 @@ remote_monitoring_labels:
   instance: "{{ ansible_host | default(ansible_default_ipv4.address) }}"
   environment: "production"
   service: "nginx"
+
+# Integration test configuration
+remote_monitoring_tests:
+  retry_count: 3
+  retry_delay: 3  # Reduced from hardcoded 5 seconds
+  timeout: 60     # Total timeout for integration tests
   # Add more labels per host as needed
   # datacenter: "primary"
   # team: "web"

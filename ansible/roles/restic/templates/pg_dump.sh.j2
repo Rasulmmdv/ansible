@@ -34,9 +34,9 @@ fi
 DUMP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Read database configurations from file
-while IFS='|' read -r CONTAINER_NAME DB_NAME DB_USER DB_PASSWORD DB_PORT; do
+while IFS='|' read -r CONTAINER_NAME DB_NAME DB_USER DB_PASSWORD DB_PORT IS_CONTAINER HOST; do
     # Skip empty lines, lines with missing required fields, and comments
-    if [[ -z "$CONTAINER_NAME" || -z "$DB_NAME" || "$CONTAINER_NAME" =~ ^[[:space:]]*# ]]; then
+    if [[ -z "$DB_NAME" || "$DB_NAME" =~ ^[[:space:]]*# ]]; then
         continue
     fi
     
@@ -46,68 +46,208 @@ while IFS='|' read -r CONTAINER_NAME DB_NAME DB_USER DB_PASSWORD DB_PORT; do
     DB_USER=$(echo "$DB_USER" | xargs)
     DB_PASSWORD=$(echo "$DB_PASSWORD" | xargs)
     DB_PORT=$(echo "$DB_PORT" | xargs)
+    IS_CONTAINER=$(echo "${IS_CONTAINER:-true}" | xargs)
+    HOST=$(echo "${HOST:-localhost}" | xargs)
     
     # Validate required fields after trimming
-    if [[ -z "$CONTAINER_NAME" || -z "$DB_NAME" || -z "$DB_USER" ]]; then
+    if [[ -z "$DB_NAME" || -z "$DB_USER" ]]; then
         log "WARNING: Skipping invalid configuration line - missing required fields"
         continue
     fi
     
-    log "Processing database: $DB_NAME from container: $CONTAINER_NAME"
+    log "Processing database: $DB_NAME on host: $HOST (container: $IS_CONTAINER)"
     
-    # Check if container exists and is running FIRST
-    if ! docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
-        log "WARNING: Container $CONTAINER_NAME not found or not accessible - skipping"
-        continue
-    fi
-    
-    if ! docker ps | grep -q "$CONTAINER_NAME"; then
-        log "WARNING: Container $CONTAINER_NAME is not running - skipping"
-        continue
-    fi
-    
-    log "Container $CONTAINER_NAME is available - starting backup"
-    
-    # Create temporary dump file first
-    TEMP_DUMP_FILE="/tmp/${CONTAINER_NAME}_${DB_NAME}_${DUMP_TIMESTAMP}.sql"
-    
-    # Perform the database dump using docker exec to temporary file
-    if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" pg_dump \
-        -h localhost \
-        -p "$DB_PORT" \
-        -U "$DB_USER" \
-        -d "$DB_NAME" \
-        --verbose \
-        --no-password \
-        --format=custom \
-        --blobs \
-        --no-owner \
-        --no-privileges > "$TEMP_DUMP_FILE"; then
-        log "pg_dump command completed for $CONTAINER_NAME"
+    if [ "$IS_CONTAINER" == "true" ]; then
+        if [[ -z "$CONTAINER_NAME" ]]; then
+            log "WARNING: Container name required for container backups - skipping"
+            continue
+        fi
+        
+        # Check if container exists and is running
+        if ! docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+            log "WARNING: Container $CONTAINER_NAME not found or not accessible - skipping"
+            continue
+        fi
+        
+        if ! docker ps | grep -q "$CONTAINER_NAME"; then
+            log "WARNING: Container $CONTAINER_NAME is not running - skipping"
+            continue
+        fi
+        
+        log "Container $CONTAINER_NAME is available - starting backup"
+        
+        if [ "$DB_NAME" == "all" ]; then
+            log "Backing up all non-template databases"
+            DBS=$(docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" psql -h $HOST -p "$DB_PORT" -U "$DB_USER" -d postgres -t -A -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('template0', 'template1');")
+            if [ -z "$DBS" ]; then
+                log "WARNING: No databases found to backup - skipping"
+                continue
+            fi
+            for db in $DBS; do
+                log "Dumping database: $db"
+                TEMP_DUMP_FILE="/tmp/${CONTAINER_NAME}_${db}_${DUMP_TIMESTAMP}.sql"
+                
+                if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" pg_dump \
+                    -h $HOST \
+                    -p "$DB_PORT" \
+                    -U "$DB_USER" \
+                    -d "$db" \
+                    --verbose \
+                    --no-password \
+                    --format=custom \
+                    --blobs \
+                    --no-owner \
+                    --no-privileges > "$TEMP_DUMP_FILE"; then
+                    log "pg_dump completed for $db in $CONTAINER_NAME"
+                else
+                    log "ERROR: pg_dump failed for $db in $CONTAINER_NAME - skipping"
+                    rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                    continue
+                fi
+                
+                if [ -f "$TEMP_DUMP_FILE" ] && [ -s "$TEMP_DUMP_FILE" ]; then
+                    DUMP_SIZE=$(du -h "$TEMP_DUMP_FILE" | cut -f1)
+                    log "Database dump successful: ${DUMP_SIZE} - moving to final location"
+                    
+                    CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/$CONTAINER_NAME"
+                    mkdir -p "$CONTAINER_DIR"
+                    
+                    FINAL_DUMP_FILE="${CONTAINER_DIR}/${db}_${DUMP_TIMESTAMP}.sql"
+                    mv "$TEMP_DUMP_FILE" "$FINAL_DUMP_FILE"
+                    
+                    log "Database dump completed: $FINAL_DUMP_FILE (${DUMP_SIZE})"
+                else
+                    log "ERROR: Database dump failed or file is empty for $db in $CONTAINER_NAME - cleaning up"
+                    rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                fi
+            done
+        else
+            # Single DB logic with docker exec pg_dump -h $HOST ...
+            # Adjust pg_dump command: docker exec ... pg_dump -h $HOST ...
+            TEMP_DUMP_FILE="/tmp/${CONTAINER_NAME}_${DB_NAME}_${DUMP_TIMESTAMP}.sql"
+            
+            if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" pg_dump \
+                -h $HOST \
+                -p "$DB_PORT" \
+                -U "$DB_USER" \
+                -d "$DB_NAME" \
+                --verbose \
+                --no-password \
+                --format=custom \
+                --blobs \
+                --no-owner \
+                --no-privileges > "$TEMP_DUMP_FILE"; then
+                log "pg_dump command completed for $CONTAINER_NAME"
+            else
+                log "ERROR: pg_dump command failed for $CONTAINER_NAME - skipping"
+                rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                continue
+            fi
+            
+            if [ -f "$TEMP_DUMP_FILE" ] && [ -s "$TEMP_DUMP_FILE" ]; then
+                DUMP_SIZE=$(du -h "$TEMP_DUMP_FILE" | cut -f1)
+                log "Database dump successful: ${DUMP_SIZE} - moving to final location"
+                
+                CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/$CONTAINER_NAME"
+                mkdir -p "$CONTAINER_DIR"
+                
+                FINAL_DUMP_FILE="${CONTAINER_DIR}/${DB_NAME}_${DUMP_TIMESTAMP}.sql"
+                mv "$TEMP_DUMP_FILE" "$FINAL_DUMP_FILE"
+                
+                log "Database dump completed: $FINAL_DUMP_FILE (${DUMP_SIZE})"
+            else
+                log "ERROR: Database dump failed or file is empty for $CONTAINER_NAME - cleaning up"
+                rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                continue
+            fi
+        fi
     else
-        log "ERROR: pg_dump command failed for $CONTAINER_NAME - skipping"
-        rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
-        continue
-    fi
-    
-    # Verify dump file was created and has content
-    if [ -f "$TEMP_DUMP_FILE" ] && [ -s "$TEMP_DUMP_FILE" ]; then
-        DUMP_SIZE=$(du -h "$TEMP_DUMP_FILE" | cut -f1)
-        log "Database dump successful: ${DUMP_SIZE} - moving to final location"
-        
-        # Only NOW create the container-specific directory
-        CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/$CONTAINER_NAME"
-        mkdir -p "$CONTAINER_DIR"
-        
-        # Move the successful dump to final location
-        FINAL_DUMP_FILE="${CONTAINER_DIR}/${DB_NAME}_${DUMP_TIMESTAMP}.sql"
-        mv "$TEMP_DUMP_FILE" "$FINAL_DUMP_FILE"
-        
-        log "Database dump completed: $FINAL_DUMP_FILE (${DUMP_SIZE})"
-    else
-        log "ERROR: Database dump failed or file is empty for $CONTAINER_NAME - cleaning up"
-        rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
-        continue
+        # Non-container logic
+        if [ "$DB_NAME" == "all" ]; then
+            log "Backing up all non-template databases"
+            DBS=$(PGPASSWORD="$DB_PASSWORD" psql -h $HOST -p "$DB_PORT" -U "$DB_USER" -d postgres -t -A -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('template0', 'template1');")
+            if [ -z "$DBS" ]; then
+                log "WARNING: No databases found to backup - skipping"
+                continue
+            fi
+            for db in $DBS; do
+                log "Dumping database: $db"
+                TEMP_DUMP_FILE="/tmp/${HOST//./_}_${db}_${DUMP_TIMESTAMP}.sql"
+                
+                if PGPASSWORD="$DB_PASSWORD" pg_dump \
+                    -h "$HOST" \
+                    -p "$DB_PORT" \
+                    -U "$DB_USER" \
+                    -d "$db" \
+                    --verbose \
+                    --no-password \
+                    --format=custom \
+                    --blobs \
+                    --no-owner \
+                    --no-privileges > "$TEMP_DUMP_FILE"; then
+                    log "pg_dump completed for $db on $HOST"
+                else
+                    log "ERROR: pg_dump failed for $db on $HOST - skipping"
+                    rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                    continue
+                fi
+                
+                if [ -f "$TEMP_DUMP_FILE" ] && [ -s "$TEMP_DUMP_FILE" ]; then
+                    DUMP_SIZE=$(du -h "$TEMP_DUMP_FILE" | cut -f1)
+                    log "Database dump successful: ${DUMP_SIZE} - moving to final location"
+                    
+                    CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/${HOST//./_}"
+                    mkdir -p "$CONTAINER_DIR"
+                    
+                    FINAL_DUMP_FILE="${CONTAINER_DIR}/${db}_${DUMP_TIMESTAMP}.sql"
+                    mv "$TEMP_DUMP_FILE" "$FINAL_DUMP_FILE"
+                    
+                    log "Database dump completed: $FINAL_DUMP_FILE (${DUMP_SIZE})"
+                else
+                    log "ERROR: Database dump failed or file is empty for $db on $HOST - cleaning up"
+                    rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                fi
+            done
+        else
+            # Single DB with direct pg_dump
+            TEMP_DUMP_FILE="/tmp/${HOST//./_}_${DB_NAME}_${DUMP_TIMESTAMP}.sql"
+            
+            if PGPASSWORD="$DB_PASSWORD" pg_dump \
+                -h "$HOST" \
+                -p "$DB_PORT" \
+                -U "$DB_USER" \
+                -d "$DB_NAME" \
+                --verbose \
+                --no-password \
+                --format=custom \
+                --blobs \
+                --no-owner \
+                --no-privileges > "$TEMP_DUMP_FILE"; then
+                log "pg_dump command completed for $DB_NAME on $HOST"
+            else
+                log "ERROR: pg_dump command failed for $DB_NAME on $HOST - skipping"
+                rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+                continue
+            fi
+            
+            # Verify and move, using HOST in directory name perhaps: CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/${HOST//./_}"
+            # Adjust accordingly
+            if [ -f "$TEMP_DUMP_FILE" ] && [ -s "$TEMP_DUMP_FILE" ]; then
+                DUMP_SIZE=$(du -h "$TEMP_DUMP_FILE" | cut -f1)
+                log "Database dump successful: ${DUMP_SIZE} - moving to final location"
+                
+                CONTAINER_DIR="{{ restic_postgresql_backup_dir }}/${HOST//./_}"
+                mkdir -p "$CONTAINER_DIR"
+                
+                FINAL_DUMP_FILE="${CONTAINER_DIR}/${DB_NAME}_${DUMP_TIMESTAMP}.sql"
+                mv "$TEMP_DUMP_FILE" "$FINAL_DUMP_FILE"
+                
+                log "Database dump completed: $FINAL_DUMP_FILE (${DUMP_SIZE})"
+            else
+                log "ERROR: Database dump failed or file is empty for $DB_NAME on $HOST - cleaning up"
+                rm -f "$TEMP_DUMP_FILE" 2>/dev/null || true
+            fi
+        fi
     fi
     
 done < "$DB_CONFIG_FILE"

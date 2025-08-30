@@ -1,15 +1,29 @@
 ---
-- name: Make sure portainer config directory exists
-  ansible.builtin.file:
-    path: /etc/portainer
-    state: directory
-    mode: "0755"
+# Validate required variables for Portainer
+- name: Validate Portainer configuration variables
+  include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
+  vars:
+    role_name: "portainer"
+    required_variables:
+      - "portainer_domain"
+      - "portainer_data_directory"
+    custom_validations:
+      - name: "portainer_domain"
+        validation: "portainer_domain | regex_search('^[a-zA-Z0-9.-]+$')"
+        error_message: "portainer_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
+      - name: "portainer_data_directory"
+        validation: "portainer_data_directory | regex_search('^/')"
+        error_message: "portainer_data_directory must be an absolute path starting with '/'"
 
-- name: Make sure portainer data directory exists
+- name: Create portainer directories
   ansible.builtin.file:
-    path: "{{ portainer_data_directory }}"
+    path: "{{ item }}"
     state: directory
     mode: "0755"
+  loop:
+    - /etc/portainer
+    - "{{ portainer_data_directory }}"
+  when: not ansible_check_mode
 
 - name: Template docker-compose file for portainer
   ansible.builtin.template:
@@ -20,4 +34,5 @@
 - name: Run docker-compose for portainer
   community.docker.docker_compose_v2:
     project_src: /etc/portainer
-    state: present 
+    state: present
+  when: not ansible_check_mode 

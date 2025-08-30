@@ -2,22 +2,37 @@
 # handlers file for loki
 
 - name: restart loki
-  command: docker compose restart
-  args:
-    chdir: "{{ loki_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "loki"
+    project_src: "{{ loki_data_dir }}"
+    state: restarted
   become: true
   listen: restart loki
+  when: not ansible_check_mode
 
 - name: stop loki
-  command: docker compose down
-  args:
-    chdir: "{{ loki_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "loki"
+    project_src: "{{ loki_data_dir }}"
+    state: stopped
   become: true
   listen: stop loki
+  when: not ansible_check_mode
 
 - name: start loki
-  command: docker compose up -d
-  args:
-    chdir: "{{ loki_data_dir }}"
+  community.docker.docker_compose_v2:
+    project_name: "loki"
+    project_src: "{{ loki_data_dir }}"
+    state: present
   become: true
-  listen: start loki 
+  listen: start loki
+  when: not ansible_check_mode
+
+- name: reload prometheus
+  uri:
+    url: "{{ loki_prometheus_reload_url | default('http://localhost:9090/-/reload') }}"
+    method: POST
+    status_code: 200
+  listen: reload prometheus
+  when: loki_notify_prometheus_reload | default(false)
+  ignore_errors: true 

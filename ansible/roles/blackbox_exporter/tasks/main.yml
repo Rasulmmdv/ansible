@@ -1,28 +1,17 @@
 ---
 # tasks file for blackbox_exporter
 
-- name: Create blackbox_exporter group
-  group:
-    name: "{{ blackbox_exporter_group }}"
-  become: true
-
-- name: Create blackbox_exporter user
-  user:
-    name: "{{ blackbox_exporter_user }}"
-    group: "{{ blackbox_exporter_group }}"
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
-  become: true
-
-- name: Create blackbox_exporter data directory
-  file:
-    path: "{{ blackbox_exporter_data_dir }}"
-    state: directory
-    owner: "{{ blackbox_exporter_user }}"
-    group: "{{ blackbox_exporter_group }}"
-    mode: '0755'
-  become: true
+- name: Setup Blackbox Exporter user and directories (standardized)
+  include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+  vars:
+    service_name: "blackbox_exporter"
+    service_user: "{{ blackbox_exporter_user }}"
+    service_group: "{{ blackbox_exporter_group }}"
+    service_directories:
+      - "{{ blackbox_exporter_data_dir }}"
+    directory_mode: "0755"
+  when: not ansible_check_mode
+  tags: [install, configure]
 
 - name: Deploy blackbox_exporter config
   template:
@@ -51,13 +40,29 @@
     group: "{{ blackbox_exporter_group }}"
     mode: '0644'
   become: true
+  tags: [configure, deploy]
 
-- name: Start blackbox_exporter with Docker Compose
-  command: docker compose up -d
-  args:
-    chdir: "{{ blackbox_exporter_data_dir }}"
+# Create service discovery file for Prometheus to pick up automatically
+- name: Create blackbox targets service discovery file
+  template:
+    src: blackbox_targets.yml.j2
+    dest: "{{ blackbox_exporter_prometheus_config_dir }}/targets/blackbox_targets.yml"
+    owner: "{{ blackbox_exporter_prometheus_user_id }}"
+    group: "{{ blackbox_exporter_prometheus_group_id }}"
+    mode: '0644'
   become: true
-  notify: restart blackbox_exporter
+  when: blackbox_endpoints is defined and blackbox_endpoints | length > 0
+  tags: [configure, deploy]
+
+- name: Deploy Blackbox Exporter with standardized Docker Compose
+  include_tasks: "{{ role_path }}/../common/tasks/docker_compose_deploy.yml"
+  vars:
+    compose_project_name: "blackbox_exporter"
+    compose_project_src: "{{ blackbox_exporter_data_dir }}"
+    compose_pull: always
+    compose_remove_orphans: true
+  when: not ansible_check_mode
+  tags: [deploy, start]
 
 # Register blackbox targets for prometheus configuration
 - name: Register blackbox targets
@@ -82,15 +87,4 @@
           target_label: target
       static_configs:
         - targets: "{{ blackbox_endpoints | map(attribute='url') | list }}"
-  when: blackbox_endpoints is defined and blackbox_endpoints | length > 0
-
-# Create service discovery file for Prometheus to pick up automatically
-- name: Create blackbox targets service discovery file
-  template:
-    src: blackbox_targets.yml.j2
-    dest: "{{ blackbox_exporter_prometheus_config_dir }}/targets/blackbox_targets.yml"
-    owner: "{{ blackbox_exporter_prometheus_user_id }}"
-    group: "{{ blackbox_exporter_prometheus_group_id }}"
-    mode: '0644'
-  become: true
   when: blackbox_endpoints is defined and blackbox_endpoints | length > 0 

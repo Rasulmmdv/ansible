@@ -1,6 +1,9 @@
 ---
 # defaults file for prometheus
 
+# Import monitoring configuration from group_vars
+prometheus_config: "{{ prometheus_config | default({}) }}"
+
 prometheus_image: "prom/prometheus:latest"
 prometheus_container_name: "prometheus"
 prometheus_data_dir: "/opt/monitoring/prometheus"
@@ -13,6 +16,9 @@ prometheus_user_id: "65533"
 prometheus_group_id: "65533"
 prometheus_ports:
   - "9090:9090"
+
+# Network configuration - keep "bridge" for compatibility with other services
+prometheus_network_mode: "bridge"  # Options: "bridge", "host"
 prometheus_volumes:
   - "{{ prometheus_config_dir }}:/etc/prometheus"
   - "{{ prometheus_data_dir }}/data:/prometheus"
@@ -32,9 +38,24 @@ prometheus_command:
 
 # Blackbox monitoring targets (can be overridden by blackbox_exporter role)
 prometheus_blackbox_targets:
-  - "http://example.com"
   - "https://google.com"
-  - "http://prometheus.io"
+
+# PostgreSQL exporter monitoring configuration
+# Array of hostnames/IPs that should have pgexporter targets generated
+# These should match the hosts where pgexporter is deployed
+prometheus_pgexporter_hosts: []
+  # Example:
+  # - "prod-01"
+  # - "test-server"
+  # - "db-host-01"
+
+# Default port for PostgreSQL exporters
+prometheus_pgexporter_port: "9187"
+
+# Labels to add to all PostgreSQL exporter targets
+prometheus_pgexporter_labels:
+  job: "postgres_exporter"
+  service: "postgresql"
 
 # Enhanced cAdvisor scraping configuration
 prometheus_cadvisor_config:

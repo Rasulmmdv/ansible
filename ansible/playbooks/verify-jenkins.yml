@@ -1,25 +1,25 @@
 ---
 # Jenkins deployment verification playbook
-# This playbook performs comprehensive testing of Jenkins deployment
-# Usage: ansible-playbook -i inventory.yml playbooks/verify-jenkins.yml
+# This playbook verifies that Jenkins is properly deployed and functioning
 
-- name: Verify Jenkins Deployment
-  hosts: jenkins_servers
-  become: false
-  gather_facts: true
-  
+- name: Check mode notice for Jenkins verification
+  debug:
+    msg: "Running in check mode - Jenkins verification tasks will be skipped. Health checks require actual execution."
+  when: ansible_check_mode
+
+- name: Verify Jenkins deployment
+  hosts: "{{ jenkins_hosts | default('jenkins') }}"
+  become: true
+  gather_facts: false
   vars:
+    jenkins_container_name: "{{ jenkins_container_name | default('jenkins') }}"
+    jenkins_home: "{{ jenkins_home | default('/var/jenkins_home') }}"
+    jenkins_domain: "{{ jenkins_domain | default('localhost') }}"
     jenkins_host_port: "{{ jenkins_host_port | default(8080) }}"
-    jenkins_container_name: "jenkins"
-    jenkins_domain: "" # TODO: add domain name
-  
+    jenkins_verify_ssl_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
+    jenkins_admin_username: "{{ jenkins_admin_username | default('admin') }}"
+    jenkins_admin_password: "{{ jenkins_admin_password | default('changeme') }}"
   tasks:
-    - name: Check if Docker is running
-      command: docker info
-      register: docker_status
-      failed_when: docker_status.rc != 0
-      changed_when: false
-      
     - name: Verify Jenkins container is running
       community.docker.docker_container_info:
         name: "{{ jenkins_container_name }}"
@@ -27,24 +27,27 @@
       failed_when: 
         - not jenkins_container_info.exists
         - jenkins_container_info.container.State.Status != "running"
+      when: not ansible_check_mode
         
     - name: Display container status
       debug:
         msg:
-          - "Container Status: {{ jenkins_container_info.container.State.Status }}"
-          - "Container ID: {{ jenkins_container_info.container.Id[:12] }}"
-          - "Started at: {{ jenkins_container_info.container.State.StartedAt }}"
-          - "Restart Count: {{ jenkins_container_info.container.RestartCount }}"
+          - "Container Status: {{ jenkins_container_info.container.State.Status | default('N/A') }}"
+          - "Container ID: {{ jenkins_container_info.container.Id[:12] | default('N/A') }}"
+          - "Started at: {{ jenkins_container_info.container.State.StartedAt | default('N/A') }}"
+          - "Restart Count: {{ jenkins_container_info.container.RestartCount | default('N/A') }}"
           
     - name: Check Jenkins container logs for errors
       command: docker logs {{ jenkins_container_name }} --tail 50
       register: jenkins_logs
       changed_when: false
+      when: not ansible_check_mode
       
     - name: Fail if permission errors found in logs
       fail:
         msg: "Permission errors detected in Jenkins logs"
       when: 
+        - not ansible_check_mode
         - "'Permission denied' in jenkins_logs.stdout or 'Wrong volume permissions' in jenkins_logs.stdout"
         - "'INSTALL WARNING' in jenkins_logs.stdout"
         
@@ -58,9 +61,9 @@
       debug:
         msg:
           - "Jenkins Home: {{ jenkins_home }}"
-          - "Owner: {{ jenkins_home_stat.stat.pw_name }}:{{ jenkins_home_stat.stat.gr_name }}"
-          - "Permissions: {{ jenkins_home_stat.stat.mode }}"
-          - "Writable: {{ jenkins_home_stat.stat.writeable }}"
+          - "Owner: {{ jenkins_home_stat.stat.pw_name | default('N/A') }}:{{ jenkins_home_stat.stat.gr_name | default('N/A') }}"
+          - "Permissions: {{ jenkins_home_stat.stat.mode | default('N/A') }}"
+          - "Writable: {{ jenkins_home_stat.stat.writeable | default('N/A') }}"
       when: jenkins_home_stat.stat.exists
       
     - name: Wait for Jenkins web interface to be ready
@@ -73,6 +76,7 @@
       until: jenkins_health_check.status in [200, 403]
       retries: 30
       delay: 10
+      when: not ansible_check_mode
       
     - name: Test Jenkins API endpoint with authentication
       uri:
@@ -84,6 +88,7 @@
         status_code: 200
         validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
       register: jenkins_api_test
+      when: not ansible_check_mode
       
     - name: Verify Jenkins version and basic info
       uri:
@@ -96,6 +101,7 @@
         status_code: 200
         validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"
       register: jenkins_info
+      when: not ansible_check_mode
       
     - name: Display Jenkins deployment verification results
       debug:
@@ -103,10 +109,10 @@
           - "✅ Jenkins Deployment Verification PASSED"
           - "================================================"
           - "Jenkins URL: https://{{ jenkins_domain }}"
-          - "Jenkins Version: {{ (jenkins_info.content | from_json).hudson.version | default('Unknown') }}"
-          - "Container Status: {{ jenkins_container_info.container.State.Status }}"
-          - "API Accessible: {{ jenkins_api_test.status == 200 }}"
-          - "Home Directory: {{ jenkins_home }} ({{ jenkins_home_stat.stat.pw_name }}:{{ jenkins_home_stat.stat.gr_name }})"
+          - "Jenkins Version: {{ (jenkins_info.content | from_json).hudson.version | default('Unknown') if (jenkins_info.content is defined and not ansible_check_mode) else 'N/A (check mode)' }}"
+          - "Container Status: {{ jenkins_container_info.container.State.Status | default('N/A') }}"
+          - "API Accessible: {{ 'Yes' if (jenkins_api_test.status is defined and jenkins_api_test.status == 200 and not ansible_check_mode) else 'N/A (check mode)' }}"
+          - "Home Directory: {{ jenkins_home }} ({{ jenkins_home_stat.stat.pw_name | default('N/A') }}:{{ jenkins_home_stat.stat.gr_name | default('N/A') }})"
           - "================================================"
           
   handlers:

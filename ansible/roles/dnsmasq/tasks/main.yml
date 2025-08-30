@@ -5,7 +5,7 @@
   apt:
     name: dnsmasq
     state: present
-    update_cache: yes
+    update_cache: true
   become: true
 
 - name: Create dnsmasq configuration directory
@@ -41,14 +41,16 @@
   systemd:
     name: systemd-resolved
     state: stopped
-    enabled: no
-    daemon_reload: yes
+    enabled: false
+    daemon_reload: true
   become: true
+  when: not ansible_check_mode
 
 - name: Ensure dnsmasq is enabled and started
   systemd:
     name: dnsmasq
     state: started
-    enabled: yes
-    daemon_reload: yes
-  become: true 
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: not ansible_check_mode 

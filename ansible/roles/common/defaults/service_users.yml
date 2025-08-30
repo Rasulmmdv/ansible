@@ -1,0 +1,171 @@
+---
+# Common role defaults for standardized service users and groups
+# This file provides consistent UID/GID mappings across all roles
+
+# Standard UID/GID ranges for service users
+service_user_ranges:
+  # System users: 1-999 (reserved by system)
+  system_min: 1
+  system_max: 999
+  
+  # Service users: 5000-59999 (our managed services)
+  service_min: 5000
+  service_max: 59999
+  
+  # Dynamic allocation: 60000-65533 (auto-generated)
+  dynamic_min: 60000
+  dynamic_max: 65533
+
+# Standardized service user configurations
+# These provide consistent UID/GID mappings across all deployments
+service_users:
+  # Monitoring stack services
+  prometheus:
+    uid: 9090
+    gid: 9090
+    home: "/opt/prometheus"
+    shell: "/usr/sbin/nologin"
+    
+  grafana:
+    uid: 472  # Official Grafana Docker image UID
+    gid: 472
+    home: "/var/lib/grafana"
+    shell: "/usr/sbin/nologin"
+    
+  alertmanager:
+    uid: 9093
+    gid: 9093
+    home: "/opt/alertmanager"
+    shell: "/usr/sbin/nologin"
+    
+  loki:
+    uid: 10001  # Official Loki Docker image UID
+    gid: 10001
+    home: "/opt/loki"
+    shell: "/usr/sbin/nologin"
+    
+  node_exporter:
+    uid: 9100
+    gid: 9100
+    home: "/nonexistent"
+    shell: "/usr/sbin/nologin"
+    
+  blackbox_exporter:
+    uid: 9115
+    gid: 9115
+    home: "/nonexistent"
+    shell: "/usr/sbin/nologin"
+    
+  cadvisor:
+    uid: 65533  # Official cAdvisor Docker image UID (nobody)
+    gid: 65533
+    home: "/nonexistent"
+    shell: "/usr/sbin/nologin"
+    
+  alloy:
+    uid: 12345
+    gid: 12345
+    home: "/opt/alloy"
+    shell: "/usr/sbin/nologin"
+    
+  # Application services
+  jenkins:
+    uid: 1000
+    gid: 1001
+    home: "/var/lib/jenkins"
+    shell: "/bin/bash"
+    additional_groups: ["docker"]
+    
+  traefik:
+    uid: 8080
+    gid: 8080
+    home: "/opt/traefik"
+    shell: "/usr/sbin/nologin"
+    additional_groups: ["docker"]
+    
+  # Backup services
+  restic:
+    uid: 8000
+    gid: 8000
+    home: "/opt/restic"
+    shell: "/bin/bash"
+    additional_groups: ["docker"]
+    
+  # Registry services
+  registry:
+    uid: 5000
+    gid: 5000
+    home: "/var/lib/registry"
+    shell: "/usr/sbin/nologin"
+    
+  # Database services
+  postgres:
+    uid: 999   # Official PostgreSQL Docker image UID
+    gid: 999
+    home: "/var/lib/postgresql"
+    shell: "/bin/bash"
+
+# Default service user configuration template
+default_service_user_config:
+  shell: "/usr/sbin/nologin"
+  home: "/nonexistent"
+  create_home: false
+  system_user: true
+  additional_groups: []
+
+# Service directory default configurations
+service_directories:
+  prometheus:
+    - "/opt/prometheus"
+    - "/opt/prometheus/data"
+    - "/opt/prometheus/config"
+    - "/opt/prometheus/rules"
+    - "/opt/prometheus/alerts"
+    
+  grafana:
+    - "/var/lib/grafana"
+    - "/var/lib/grafana/data"
+    - "/var/lib/grafana/logs"
+    - "/var/lib/grafana/plugins"
+    - "/etc/grafana/provisioning"
+    
+  jenkins:
+    - "/var/lib/jenkins"
+    - "/var/log/jenkins"
+    
+  traefik:
+    - "/opt/traefik"
+    - "/opt/traefik/config"
+    - "/opt/traefik/certs"
+    - "/opt/traefik/logs"
+    
+  restic:
+    - "/opt/restic"
+    - "/opt/restic/config"
+    - "/opt/restic/scripts"
+    - "/opt/restic/logs"
+    - "/opt/restic/cache"
+
+# Default directory permissions
+default_directory_permissions:
+  mode: "0755"
+  create_parents: true
+
+# Service user creation configuration
+service_user_creation:
+  # Whether to show detailed summaries during user creation
+  show_summaries: true
+  
+  # Whether to fail if user already exists with different configuration
+  strict_mode: false
+  
+  # Whether to update existing users with new group memberships
+  update_existing_users: true
+  
+  # UID/GID generation method for services not in the predefined list
+  # Options: "hash" (based on service name hash), "sequential" (next available)
+  uid_generation_method: "hash"
+  
+  # Base UID/GID for hash-based generation
+  hash_base_uid: 5000
+  hash_base_gid: 5000

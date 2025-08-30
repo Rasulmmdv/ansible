@@ -18,23 +18,24 @@
 
 - name: Restart netfilter-persistent
   listen: "commit iptables rules"
-  service:
+  systemd:
     name: netfilter-persistent
     state: restarted
   become: true
-  when: not ansible_check_mode
+  when: not ansible_check_mode and ansible_service_mgr is defined and ansible_service_mgr == "systemd"
+  ignore_errors: true
 
 - name: Debug Docker restart
   listen: "commit iptables rules"
   debug:
     msg: "iptables rules changed. Notifying Docker to restart and recreate its firewall chains to avoid conflicts."
-  when: docker_installed
+  when: docker_installed | bool
 
 - name: Restart docker to recreate its chains
   listen: "commit iptables rules"
   systemd:
     name: docker
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   become: true
-  when: docker_installed
+  when: docker_installed | bool

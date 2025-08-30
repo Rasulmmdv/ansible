@@ -1,0 +1,98 @@
+---
+# Reusable failure notification system
+# Usage: include this task with variables:
+#   - notification_type: "error" | "warning" | "info"
+#   - operation_name: "Docker installation"
+#   - error_message: "Failed to install Docker"
+#   - troubleshooting_steps: ["Check network", "Verify repositories"]
+#   - docs_url: "https://docs.example.com/docker" (optional)
+#   - should_fail: true/false (optional, default: true for error type)
+
+- name: "Process failure notification for {{ operation_name | default('operation') }}"
+  block:
+    - name: "Set notification defaults"
+      ansible.builtin.set_fact:
+        _notification_config:
+          type: "{{ notification_type | default('error') }}"
+          operation: "{{ operation_name | default('Unknown operation') }}"
+          message: "{{ error_message | default('Operation failed') }}"
+          steps: "{{ troubleshooting_steps | default([]) }}"
+          docs: "{{ docs_url | default('') }}"
+          should_fail: "{{ should_fail | default(notification_type | default('error') == 'error') }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          
+    - name: "Display error notification"
+      ansible.builtin.debug:
+        msg:
+          - "❌ ERROR: {{ _notification_config.operation }}"
+          - "{{ _notification_config.message }}"
+          - ""
+          - "Troubleshooting steps:"
+          - "{% for step in _notification_config.steps %}{{ loop.index }}. {{ step }}{% endfor %}"
+          - "{% if _notification_config.docs %}Documentation: {{ _notification_config.docs }}{% endif %}"
+          - "Timestamp: {{ _notification_config.timestamp }}"
+      when: _notification_config.type == 'error'
+      
+    - name: "Display warning notification"
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  WARNING: {{ _notification_config.operation }}"
+          - "{{ _notification_config.message }}"
+          - ""
+          - "{% if _notification_config.steps | length > 0 %}Recommended actions:{% endif %}"
+          - "{% for step in _notification_config.steps %}{{ loop.index }}. {{ step }}{% endfor %}"
+          - "{% if _notification_config.docs %}Documentation: {{ _notification_config.docs }}{% endif %}"
+          - "Timestamp: {{ _notification_config.timestamp }}"
+      when: _notification_config.type == 'warning'
+      
+    - name: "Display info notification"
+      ansible.builtin.debug:
+        msg:
+          - "ℹ️  INFO: {{ _notification_config.operation }}"
+          - "{{ _notification_config.message }}"
+          - "{% if _notification_config.docs %}Documentation: {{ _notification_config.docs }}{% endif %}"
+          - "Timestamp: {{ _notification_config.timestamp }}"
+      when: _notification_config.type == 'info'
+      
+    - name: "Log notification to file"
+      ansible.builtin.lineinfile:
+        path: "{{ notification_log_file | default('/tmp/ansible-notifications.log') }}"
+        line: "{{ _notification_config.timestamp }} [{{ _notification_config.type | upper }}] {{ _notification_config.operation }}: {{ _notification_config.message }}"
+        create: true
+        mode: '0644'
+      when: enable_notification_logging | default(false)
+      
+    - name: "Send notification to external system"
+      ansible.builtin.uri:
+        url: "{{ notification_webhook_url }}"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          type: "{{ _notification_config.type }}"
+          operation: "{{ _notification_config.operation }}"
+          message: "{{ _notification_config.message }}"
+          host: "{{ inventory_hostname }}"
+          timestamp: "{{ _notification_config.timestamp }}"
+          troubleshooting_steps: "{{ _notification_config.steps }}"
+        status_code: [200, 201, 202]
+      when: 
+        - notification_webhook_url is defined
+        - send_external_notifications | default(false)
+      failed_when: false  # Don't fail the playbook if notification fails
+      
+    - name: "Fail playbook execution"
+      ansible.builtin.fail:
+        msg: "{{ _notification_config.message }}"
+      when: _notification_config.should_fail | bool
+      
+  always:
+    - name: "Record notification in facts"
+      ansible.builtin.set_fact:
+        last_notification:
+          type: "{{ _notification_config.type }}"
+          operation: "{{ _notification_config.operation }}"
+          message: "{{ _notification_config.message }}"
+          timestamp: "{{ _notification_config.timestamp }}"
+          failed_execution: "{{ _notification_config.should_fail | bool }}"

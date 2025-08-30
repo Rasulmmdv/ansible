@@ -1,6 +1,9 @@
 loki.write "local" {
   endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
+    url = "{{ alloy_loki_write_url }}"
+{% if alloy_loki_tenant_id | length > 0 %}
+    headers = { "X-Scope-OrgID" = "{{ alloy_loki_tenant_id }}" }
+{% endif %}
   }
 }
 
@@ -33,6 +36,45 @@ discovery.relabel "logs_integrations_docker" {
     }
 }
 
+discovery.relabel "logs_integrations_journald" {
+    targets = []
+
+    rule {
+        target_label = "job"
+        replacement  = "integrations/journald"
+    }
+
+    rule {
+        target_label = "instance"
+        replacement  = constants.hostname
+    }
+
+    rule {
+        source_labels = ["__meta_journald_unit"]
+        target_label  = "unit"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_syslog_identifier"]
+        target_label  = "syslog_identifier"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_container_name"]
+        target_label  = "container"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_container_id"]
+        target_label  = "container_id"
+    }
+
+    rule {
+        source_labels = ["__meta_journald_priority"]
+        target_label  = "priority"
+    }
+}
+
 loki.source.docker "default" {
   host = "unix:///var/run/docker.sock"
   targets = discovery.docker.linux.targets
@@ -40,6 +82,23 @@ loki.source.docker "default" {
   labels = {
   }
   forward_to = [
-    loki.write.local.receiver,
+    loki.process.drop_old.receiver,
+  ]
+}
+
+// Drop logs that are too old before sending to Loki
+// This prevents the "entry too old" errors in Loki
+loki.process "drop_old" {
+  forward_to = [loki.write.local.receiver]
+  stage.drop {
+    older_than          = "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
+    drop_counter_reason = "too old"
+  }
+}
+
+loki.source.journal "default" {
+  relabel_rules = discovery.relabel.logs_integrations_journald.rules
+  forward_to = [
+    loki.process.drop_old.receiver,
   ]
 } 

@@ -2,9 +2,13 @@
 # This file contains DNS entries for services
 # Format: address=/hostname.domain/ip
 
-# Jenkins
-address=/jenkins.{{ dnsmasq_domain }}/{{ wireguard_address | regex_replace('/[0-9]+$', '') }}
+{% set wg_ip = (
+    wireguard_address
+      | default(dnsmasq_server_ip | default(ansible_default_ipv4.address | default('127.0.0.1')), true)
+      | regex_replace('/[0-9]+$', '')
+  ) %}
+address=/jenkins.{{ dnsmasq_domain }}/{{ wg_ip }}
 
 # Add more services here as needed
-# Example:
-# address=/gitlab.{{ dnsmasq_domain }}/{{ wireguard_address | regex_replace('/[0-9]+$', '') }}
+# Example (uncomment and replace IP as needed):
+# address=/gitlab.{{ dnsmasq_domain }}/{{ wg_ip }}

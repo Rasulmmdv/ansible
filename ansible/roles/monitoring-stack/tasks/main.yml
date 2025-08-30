@@ -1,37 +1,106 @@
 ---
-# Monitoring stack orchestration tasks
-# This role coordinates configuration and validation across all monitoring components
+# Monitoring stack orchestration tasks with dependency management and rollback support
+# This role orchestrates the complete monitoring stack deployment with enhanced reliability
 
-- name: Create monitoring network
-  community.docker.docker_network:
-    name: "{{ monitoring_stack.network_name }}"
-    state: present
-  become: true
+- name: Setup monitoring infrastructure
+  block:
+    - name: Create monitoring network
+      community.docker.docker_network:
+        name: "{{ monitoring_stack.network_name }}"
+        state: present
+      become: true
+      tags: [install, configure]
 
-- name: Create monitoring data root directory
-  file:
-    path: "{{ monitoring_stack.data_root }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  become: true
+    - name: Create monitoring data root directory
+      file:
+        path: "{{ monitoring_stack.data_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      become: true
+      tags: [install, configure]
+  rescue:
+    - name: "Handle infrastructure setup failure"
+      include_tasks: "{{ role_path }}/../common/tasks/failure_notification.yml"
+      vars:
+        notification_type: "error"
+        operation_name: "Monitoring Stack Infrastructure Setup"
+        error_message: "Failed to create basic monitoring infrastructure"
+        troubleshooting_steps:
+          - "Check Docker daemon status"
+          - "Verify root permissions for directory creation"
+          - "Ensure sufficient disk space"
+          - "Check network connectivity"
+        should_fail: true
+  when: not ansible_check_mode
+  tags: [install, configure]
 
 - name: Initialize monitoring configuration variables
   set_fact:
     monitoring_alertmanagers: []
     monitoring_scrape_configs: []
-  
+  tags: [configure]
+
+- name: "Phase 1: Validate dependencies and system requirements"
+  include_tasks: dependency_checks.yml
+  tags: [install, configure, validate]
+
+- name: "Phase 2: Initialize rollback mechanisms"
+  include_tasks: rollback_mechanisms.yml
+  tags: [install, configure]
+
 - name: Display monitoring stack configuration summary
   debug:
     msg:
-      - "Monitoring Stack Configuration:"
+      - "=== Enhanced Monitoring Stack Deployment Starting ==="
       - "Network: {{ monitoring_stack.network_name }}"
       - "Data Root: {{ monitoring_stack.data_root }}"
-      - "Alertmanagers: {{ monitoring_alertmanagers | default([]) | length }} configured"
-      - "Scrape Configs: {{ monitoring_scrape_configs | default([]) | length }} configured"
-      - "Blackbox Targets: {{ prometheus_blackbox_targets | default([]) | length }} configured"
+      - "Features: Dependency validation, incremental deployment, rollback support"
+      - "Components will be deployed with health checks and failure recovery"
+  tags: [configure]
 
-- name: Validate monitoring stack deployment
-  include_tasks: validate.yml
+# Phase 3: Deploy core monitoring services with incremental validation
+- name: "Deploy monitoring services with health checks and rollback support"
+  include_tasks: incremental_deployment.yml
+  tags: [deploy]
+
+# Phase 4: Final validation and deployment summary
+- name: "Validate complete monitoring stack deployment"
+  include_tasks: validate_complete.yml
   tags: ["validate"]
+  when: monitoring_stack.validation_enabled | default(true)
+
+- name: "Display enhanced deployment summary"
+  debug:
+    msg:
+      - "=== Enhanced Monitoring Stack Deployment Complete ==="
+      - "📊 Service URLs:"
+      - "  • Prometheus: http://{{ ansible_default_ipv4.address }}:9090"
+      - "  • Grafana: http://{{ ansible_default_ipv4.address }}:3000 (admin/admin)"
+      - "  • Alertmanager: http://{{ ansible_default_ipv4.address }}:9093"
+      - "  • Loki: http://{{ ansible_default_ipv4.address }}:3100"
+      - ""
+      - "🛠️  Management Tools:"
+      - "  • Rollback: {{ monitoring_stack.data_root }}/.deployment-state/complete_rollback.sh"
+      - "  • Service Recovery: {{ monitoring_stack.data_root }}/.deployment-state/recover_service.sh <service>"
+      - "  • Deployment State: {{ monitoring_stack.data_root }}/.deployment-state/final_state.yml"
+      - ""
+      - "📋 Available Commands:"
+      - "  • Full validation: ansible-playbook --tags validate <playbook>"
+      - "  • Service logs: docker compose -f {{ monitoring_stack.data_root }}/<service>/docker-compose.yml logs"
+      - "  • Stack status: docker compose -f {{ monitoring_stack.data_root }}/*/docker-compose.yml ps"
+  tags: [deploy]
+
+# Always run cleanup on completion
+- name: "Cleanup temporary deployment files"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml.tmp"
+    - "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml.failed"
+    - "{{ monitoring_stack.data_root }}/.deployment-state/deployment.yml.new"
+  ignore_errors: true
+  become: true
+  tags: [deploy]

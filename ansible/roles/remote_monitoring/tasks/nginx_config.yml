@@ -1,30 +1,46 @@
 ---
 # Configure Nginx stub_status for Docker-based Nginx setups
 
+- name: Check mode notice for Nginx configuration
+  debug:
+    msg: "Running in check mode - Nginx container checks will be skipped. Container checks require actual execution."
+  when: ansible_check_mode
+
 - name: Check if Nginx container is running
   docker_container_info:
     name: "{{ nginx_docker_container_name }}"
   register: nginx_container_info
   failed_when: false
+  when: not ansible_check_mode
 
 - name: Fail if Nginx container is not running
   fail:
     msg: "Nginx container '{{ nginx_docker_container_name }}' is not running. Please start it before running this role."
-  when: nginx_container_info.exists == false or nginx_container_info.container.State.Status != "running"
+  when: 
+    - not ansible_check_mode
+    - nginx_container_info.exists == false or nginx_container_info.container.State.Status != "running"
 
 - name: Display Nginx container information
   debug:
-    msg: "Nginx container is running with image: {{ nginx_container_info.container.Image }}"
+    msg: "Nginx container is running with image: {{ nginx_container_info.container.Image | default('N/A (check mode)') }}"
+  when: nginx_container_info.container.Image is defined or ansible_check_mode
 
 - name: Check for volume mounts in Nginx container
   set_fact:
     nginx_volume_mounts: "{{ nginx_container_info.container.Mounts | selectattr('Destination', 'match', '/etc/nginx/conf.d/default.conf') | list }}"
+  when: nginx_container_info.container.Mounts is defined
+
+- name: Initialize nginx_volume_mounts for check mode
+  set_fact:
+    nginx_volume_mounts: []
+  when: ansible_check_mode
 
 - name: Check if stub_status is already configured
   command: docker exec {{ nginx_docker_container_name }} grep -q "stub_status" /etc/nginx/conf.d/default.conf
   register: stub_status_exists
   failed_when: false
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Handle volume-mounted configuration
   block:
@@ -93,9 +109,9 @@
           }
         dest: "{{ nginx_volume_mounts[0].Source }}"
         backup: yes
-      when: nginx_volume_mounts | length > 0 and stub_status_exists.rc != 0
+      when: nginx_volume_mounts | length > 0 and (stub_status_exists.rc is defined and stub_status_exists.rc != 0)
 
-  when: stub_status_exists.rc != 0
+  when: (stub_status_exists.rc is defined and stub_status_exists.rc != 0) or ansible_check_mode
 
 - name: Handle non-volume-mounted configuration (fallback)
   block:
@@ -125,6 +141,7 @@
 
     - name: Backup original default.conf
       command: docker exec {{ nginx_docker_container_name }} cp /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.backup
+      when: not ansible_check_mode
 
     - name: Add stub_status configuration to default.conf
       shell: |
@@ -133,18 +150,22 @@
         sed -i "/location \/ {/r /tmp/snippet.conf" /etc/nginx/conf.d/default.conf
         rm /tmp/snippet.conf'
       become: true
+      when: not ansible_check_mode
 
-  when: stub_status_exists.rc != 0 and (nginx_volume_mounts | length == 0)
+  when: ((stub_status_exists.rc is defined and stub_status_exists.rc != 0) and (nginx_volume_mounts | length == 0)) or ansible_check_mode
 
 - name: Test Nginx configuration in container
   command: docker exec {{ nginx_docker_container_name }} nginx -t
   register: nginx_test_result
   changed_when: false
   failed_when: false
+  when: not ansible_check_mode
 
 - name: Reload Nginx if configuration is valid
   command: docker exec {{ nginx_docker_container_name }} nginx -s reload
-  when: nginx_test_result.rc == 0
+  when: 
+    - not ansible_check_mode
+    - nginx_test_result.rc is defined and nginx_test_result.rc == 0
   notify: reload nginx
 
 - name: Wait for Nginx to be ready after reload
@@ -152,7 +173,9 @@
     port: 80
     host: "127.0.0.1"
     timeout: 30
-  when: nginx_test_result.rc == 0
+  when: 
+    - not ansible_check_mode
+    - nginx_test_result.rc is defined and nginx_test_result.rc == 0
 
 - name: Verify Nginx stub_status endpoint from within container
   command: docker exec {{ nginx_docker_container_name }} curl -s -f "http://127.0.0.1{{ nginx_stub_status_path }}"
@@ -160,5 +183,7 @@
   retries: 3
   delay: 5
   until: nginx_status_check is succeeded
-  when: nginx_test_result.rc == 0
+  when: 
+    - not ansible_check_mode
+    - nginx_test_result.rc is defined and nginx_test_result.rc == 0
   changed_when: false 

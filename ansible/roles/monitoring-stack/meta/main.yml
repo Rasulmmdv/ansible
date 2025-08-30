@@ -1,37 +1,9 @@
 ---
-# Meta role for orchestrating the complete monitoring stack
-# This role ensures proper dependency order and configuration coordination
+# Meta role for setting up monitoring infrastructure
+# This role only handles the foundational infrastructure (network, directories)
+# Individual monitoring roles should be run separately after this
 
 dependencies:
-  # Common foundation
+  # Only common foundation - no monitoring roles to avoid circular dependencies
   - role: common
     tags: ["common", "monitoring"]
-  
-  # Core monitoring services (order matters)
-  - role: prometheus
-    tags: ["metrics", "prometheus"]
-  
-  # Metrics exporters
-  - role: node_exporter
-    tags: ["metrics", "node_exporter"]
-  
-  - role: cadvisor
-    tags: ["metrics", "cadvisor"]
-  
-  - role: blackbox_exporter
-    tags: ["uptime", "blackbox_exporter"]
-  
-  # Alerting
-  - role: alertmanager
-    tags: ["alerts", "alertmanager"]
-  
-  # Logging
-  - role: loki
-    tags: ["logs", "loki"]
-  
-  - role: alloy
-    tags: ["logs", "alloy"]
-  
-  # Visualization (should come last to ensure datasources are available)
-  - role: grafana
-    tags: ["visualization", "grafana"]

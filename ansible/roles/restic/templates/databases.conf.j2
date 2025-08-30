@@ -1,7 +1,15 @@
 # Database Backup Configuration
-# Format: container_name|database_name|username|password|port
+# Format: container_name|database_name|username|password|port|is_container|host
 # Lines starting with # are ignored
 
-{% for db in restic_postgresql_databases %}
-{{ db.container_name }}|{{ db.name }}|{{ db.username | default('postgres') }}|{{ db.password | default('password') }}|{{ db.port | default(5432) }}
+{% for instance in restic_postgresql_instances %}
+{% set _host = instance.host | default('localhost') %}
+{% set _is_container = instance.is_container | default(true) %}
+{% if instance.databases is string and instance.databases == 'all' %}
+{{ instance.container_name | default('') }}|all|{{ instance.username | default('postgres') }}|{{ instance.password | default('password') }}|{{ instance.port | default(5432) }}|{{ _is_container }}|{{ _host }}
+{% else %}
+{% for db in instance.databases | default([]) %}
+{{ instance.container_name | default('') }}|{{ db }}|{{ instance.username | default('postgres') }}|{{ instance.password | default('password') }}|{{ instance.port | default(5432) }}|{{ _is_container }}|{{ _host }}
+{% endfor %}
+{% endif %}
 {% endfor %} 

@@ -8,6 +8,7 @@
     chdir: "{{ jenkins_data_dir }}"
   become: true
   listen: "restart jenkins"
+  when: not ansible_check_mode
 
 - name: reload jenkins
   uri:
@@ -18,3 +19,4 @@
     force_basic_auth: yes
     status_code: [200, 302]
   listen: "reload jenkins"
+  when: not ansible_check_mode

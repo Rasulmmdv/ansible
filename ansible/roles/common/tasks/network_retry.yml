@@ -1,0 +1,62 @@
+---
+# Reusable network operation with retry logic
+# Usage: include this task with variables:
+#   - operation_name: "Download package"
+#   - operation_url: "https://example.com/file"
+#   - operation_dest: "/tmp/file"
+#   - operation_method: "GET" (optional, default: GET)
+#   - operation_timeout: 30 (optional, default: 30)
+#   - max_retries: 5 (optional, default: 5)
+#   - retry_delay: 10 (optional, default: 10)
+
+- name: "{{ operation_name | default('Network operation') }}"
+  block:
+    - name: "Execute {{ operation_name | default('network operation') }}"
+      ansible.builtin.uri:
+        url: "{{ operation_url }}"
+        method: "{{ operation_method | default('GET') }}"
+        dest: "{{ operation_dest | default(omit) }}"
+        timeout: "{{ operation_timeout | default(30) }}"
+        status_code: [200, 201, 202]
+        headers: "{{ operation_headers | default(omit) }}"
+        body: "{{ operation_body | default(omit) }}"
+        return_content: "{{ operation_return_content | default(false) }}"
+      register: network_operation_result
+      retries: "{{ max_retries | default(5) }}"
+      delay: "{{ retry_delay | default(10) }}"
+      until: network_operation_result.status in [200, 201, 202]
+      
+  rescue:
+    - name: "Log network operation failure details"
+      ansible.builtin.debug:
+        msg:
+          - "❌ Network operation failed: {{ operation_name | default('Unknown operation') }}"
+          - "URL: {{ operation_url }}"
+          - "Last status: {{ network_operation_result.status | default('No response') }}"
+          - "Error: {{ network_operation_result.msg | default('Connection failed') }}"
+          - "Retries attempted: {{ max_retries | default(5) }}"
+          
+    - name: "Fail after network retry exhaustion"
+      ansible.builtin.fail:
+        msg: |
+          Network operation '{{ operation_name | default('Unknown') }}' failed after {{ max_retries | default(5) }} attempts.
+          Please check:
+          1. Network connectivity to {{ operation_url }}
+          2. DNS resolution
+          3. Firewall/proxy settings
+          4. Service availability
+      when: not (ignore_network_failures | default(false))
+      
+    - name: "Continue despite network failure (warning)"
+      ansible.builtin.debug:
+        msg: "⚠️ Continuing despite network failure for {{ operation_name | default('operation') }}"
+      when: ignore_network_failures | default(false)
+  
+  always:
+    - name: "Set network operation result fact"
+      ansible.builtin.set_fact:
+        last_network_operation:
+          name: "{{ operation_name | default('Unknown operation') }}"
+          status: "{{ 'success' if network_operation_result is succeeded else 'failed' }}"
+          url: "{{ operation_url }}"
+          duration: "{{ network_operation_result.elapsed | default(0) }}"

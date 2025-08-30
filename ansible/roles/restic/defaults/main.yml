@@ -2,7 +2,11 @@
 # defaults file for restic
 # NOTE: Some variables must be set in your playbook or inventory (see playbook example)
 
-# Base directories
+# Default project name - must be set in playbook or inventory
+# project_name: "your-project-name"  # Set in playbook
+
+# Base directories - these will be calculated from project_name and restic_instance_name
+# but can be overridden individually in playbook
 restic_instance_name: backup
 restic_base_dir: "/opt/{{ project_name }}/{{ restic_instance_name }}"
 restic_config_dir: "{{ restic_base_dir }}/config"
@@ -15,44 +19,40 @@ restic_user: "restic"
 restic_group: "restic"
 
 # Restic repository configuration
-restic_repository: "s3:s3.ru-7.storage.selcloud.ru/{{ project_name }}-backups-{{ inventory_hostname }}"
+# Default to Yandex Cloud - can be overridden in playbook
+restic_repository: "s3:https://storage.yandexcloud.net/backupsdi"
 restic_repository_type: "s3"  # Options: s3, local, sftp, rest, azure, gs, swift
 # restic_repository_path: ""  # For local repositories (set in playbook if needed)
 
-# AWS S3 configuration (when using S3 backend)
-# restic_aws_access_key_id: ""  # Set in playbook
-# restic_aws_secret_access_key: ""  # Set in playbook
-restic_aws_region: "ru-7"
-restic_aws_endpoint: "s3.ru-7.storage.selcloud.ru"
+# # AWS S3 configuration (when using S3 backend)
+# # Default credentials for check mode - should be overridden in production
+# restic_aws_access_key_id: "changeme"
+# restic_aws_secret_access_key: "changeme"
+restic_aws_region: "ru-central1"
+restic_aws_endpoint: "storage.yandexcloud.net"
 
-# Selectel S3 specific configuration
-restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
+# # Selectel S3 specific configuration
+# restic_s3_endpoint_url: "https://s3.ru-7.storage.selcloud.ru"
+restic_s3_endpoint_url: "storage.yandexcloud.net"
 restic_s3_ca_bundle: "{{ restic_config_dir }}/selectel-ca.crt"
-restic_setup_selectel_ca: true
+# restic_setup_selectel_ca: true
 
 # Repository password (required for all repository types)
-# restic_password: ""  # Set in playbook or inventory (REQUIRED)
+# Default password - should be overridden in production for security
+# restic_password: "changeme"
 
 # Backup configuration
 restic_backup_paths:
   - "/data"
   - "/opt"
-  - "/etc/wireguard"
-  - "/etc/portainer"
+  - "/etc"
+  - "/home"
+  - "/root"
 
 # PostgreSQL backup configuration
 restic_postgresql_backup_enabled: true
 restic_postgresql_backup_dir: "{{ restic_base_dir }}/db-dumps"
 restic_postgresql_retention_days: 7  # Keep database dumps for 7 days locally
-
-# Database configurations are now stored in {{ restic_config_dir }}/databases.conf
-# Example databases (will be templated to databases.conf):
-restic_postgresql_databases:
-  - container_name: "{{ project_name }}_postgres"
-    name: "postgres"
-    username: "postgres"
-    password: "password"
-    port: 5432
 
 # Additional backup paths (will be added to restic_backup_paths when PostgreSQL backup is enabled)
 restic_postgresql_backup_paths:
@@ -82,7 +82,7 @@ restic_prune_schedule: "Sun *-*-* 03:00:00"   # Weekly on Sunday at 3 AM
 restic_check_schedule: "Sun *-*-* 04:00:00"   # Weekly on Sunday at 4 AM
 
 # Systemd service configuration
-restic_service_name: "{{ project_name }}_{{ restic_instance_name }}"
+restic_service_name: "restic_backup"
 restic_service_description: "Restic Backup Service"
 restic_service_type: "oneshot"
 restic_service_restart: "no"
@@ -118,3 +118,14 @@ restic_system_packages:
   - postgresql-client
 # Python packages required
 restic_python_packages: [] 
+
+# PostgreSQL instances configuration
+restic_postgresql_instances: []
+  # Example:
+  # - container_name: "{{ project_name }}_postgres"  # Optional if not container
+  #   host: "localhost"  # Required if is_container: false
+  #   is_container: true  # Default: true
+  #   username: "postgres"
+  #   password: "password"
+  #   port: 5432
+  #   databases: 'all'  # Use 'all' to backup all non-template databases, or list specific ones: ['db1', 'db2'] 

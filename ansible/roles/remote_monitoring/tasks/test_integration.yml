@@ -7,8 +7,8 @@
     method: GET
     status_code: [200]
   register: nginx_status_test
-  retries: 3
-  delay: 5
+  retries: "{{ remote_monitoring_tests.retry_count }}"
+  delay: "{{ remote_monitoring_tests.retry_delay }}"
   until: nginx_status_test is succeeded
 
 - name: Test Nginx Exporter metrics endpoint
@@ -17,8 +17,8 @@
     method: GET
     status_code: [200]
   register: nginx_exporter_test
-  retries: 3
-  delay: 5
+  retries: "{{ remote_monitoring_tests.retry_count }}"
+  delay: "{{ remote_monitoring_tests.retry_delay }}"
   until: nginx_exporter_test is succeeded
 
 - name: Verify Nginx Exporter metrics contain expected data
@@ -35,8 +35,8 @@
     method: GET
     status_code: [200]
   register: prometheus_targets_test
-  retries: 3
-  delay: 5
+  retries: "{{ remote_monitoring_tests.retry_count }}"
+  delay: "{{ remote_monitoring_tests.retry_delay }}"
   until: prometheus_targets_test is succeeded
   when: monitoring_server_host is defined
   delegate_to: "{{ monitoring_server_host }}"

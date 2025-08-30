@@ -1,0 +1,91 @@
+---
+# Complete service user and directory setup
+# This is a convenience task that combines user creation and directory setup
+# Usage: include this task with variables:
+#   - service_name: "prometheus" (required)
+#   - service_user: "prometheus" (optional, defaults to service_name)
+#   - service_group: "prometheus" (optional, defaults to service_name)
+#   - service_uid: 9090 (optional, auto-generated if not specified)
+#   - service_gid: 9090 (optional, auto-generated if not specified)
+#   - service_shell: "/usr/sbin/nologin" (optional, default: /usr/sbin/nologin)
+#   - service_home: "/opt/prometheus" (optional, default: /nonexistent)
+#   - service_directories: ["/opt/prometheus/data", "/opt/prometheus/config"] (optional)
+#   - additional_groups: ["docker"] (optional, default: [])
+#   - directory_mode: "0755" (optional, default: 0755)
+
+- name: "Complete service setup for {{ service_name | default('service') }}"
+  block:
+    - name: "Validate service setup parameters for {{ service_name | default('service') }}"
+      ansible.builtin.assert:
+        that:
+          - service_name is defined
+          - service_name != ""
+        fail_msg: "service_name is required for service setup"
+        
+    - name: "Create service user and group for {{ service_name | default('service') }}"
+      include_tasks: create_service_user.yml
+      vars:
+        show_user_creation_summary: "{{ show_service_setup_summary | default(true) }}"
+        
+    - name: "Create service directories for {{ service_name | default('service') }}"
+      include_tasks: create_service_directories.yml
+      when: service_directories is defined and service_directories | length > 0
+      vars:
+        show_directory_creation_summary: "{{ show_service_setup_summary | default(true) }}"
+        
+    - name: "Set complete service setup facts for {{ service_name | default('service') }}"
+      ansible.builtin.set_fact:
+        "{{ service_name | default('service') }}_setup_complete": true
+        "{{ service_name | default('service') }}_setup_timestamp": "{{ ansible_date_time.iso8601 }}"
+        
+  rescue:
+    - name: "Handle service setup failure for {{ service_name | default('service') }}"
+      include_tasks: failure_notification.yml
+      vars:
+        notification_type: "error"
+        operation_name: "Complete service setup for {{ service_name | default('service') }}"
+        error_message: "Service setup failed during user or directory creation"
+        troubleshooting_steps:
+          - "Review individual user creation and directory creation logs"
+          - "Check system resources and permissions"
+          - "Verify service configuration parameters"
+        should_fail: true
+        
+  always:
+    - name: "Display complete service setup summary for {{ service_name | default('service') }}"
+      ansible.builtin.debug:
+        msg:
+          - "=== Complete Service Setup Summary ==="
+          - "Service: {{ service_name | default('service') }}"
+          - "Setup Status: {{ 'Complete' if vars[service_name + '_setup_complete'] | default(false) else 'Failed' }}"
+          - "User Info: {{ vars[service_name + '_user_info'] | default('Not available') }}"
+          - "Directory Info: {{ vars[service_name + '_directories_info'] | default('No directories created') }}"
+          - "Timestamp: {{ vars[service_name + '_setup_timestamp'] | default('Unknown') }}"
+      when: show_service_setup_summary | default(true)
+
+# Usage examples:
+#
+# Basic service setup:
+# - include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+#   vars:
+#     service_name: "prometheus"
+#     service_directories:
+#       - "/opt/prometheus/data"
+#       - "/opt/prometheus/config"
+#
+# Advanced service setup:
+# - include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
+#   vars:
+#     service_name: "jenkins"
+#     service_user: "jenkins"
+#     service_group: "jenkins"
+#     service_uid: 1000
+#     service_gid: 1001
+#     service_shell: "/bin/bash"
+#     service_home: "/var/lib/jenkins"
+#     create_home: false
+#     additional_groups: ["docker"]
+#     service_directories:
+#       - "/var/lib/jenkins"
+#       - "/var/log/jenkins"
+#     directory_mode: "0755"

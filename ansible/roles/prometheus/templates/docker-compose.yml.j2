@@ -7,21 +7,29 @@ services:
 {% for arg in prometheus_command %}
       - {{ arg }}
 {% endfor %}
+{% if prometheus_network_mode != "host" %}
     ports:
 {% for port in prometheus_ports %}
       - "{{ port }}"
 {% endfor %}
+{% endif %}
     volumes:
 {% for volume in prometheus_volumes %}
       - {{ volume }}
 {% endfor %}
       - "{{ prometheus_config_dir }}/targets:/etc/prometheus/targets"
     user: "{{ prometheus_user_id }}:{{ prometheus_group_id }}"
+{% if prometheus_network_mode == "host" %}
+    network_mode: host
+{% else %}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - monitoring
+{% endif %}
 
+{% if prometheus_network_mode != "host" %}
 networks:
   monitoring:
-    external: true 
+    external: true
+{% endif %} 
