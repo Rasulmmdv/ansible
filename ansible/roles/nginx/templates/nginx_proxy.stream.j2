@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+
+{% from "_macros.j2" import nginx_write_params with context -%}
+
+{{ nginx_write_params(item.value.content) }}

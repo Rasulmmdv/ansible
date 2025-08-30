@@ -1,0 +1,183 @@
+---
+# Nginx role tasks
+
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  tags: [install, nginx]
+
+- name: Generate DH parameters for SSL
+  ansible.builtin.command: openssl dhparam -out {{ nginx_configs_dir }}/dhparams.pem 2048
+  args:
+    creates: "{{ nginx_configs_dir }}/dhparams.pem"
+  become: true
+  when: nginx_generate_dhparams | default(true)
+  tags: [configure, nginx, ssl]
+
+- name: Create Nginx configuration directories
+  ansible.builtin.file:
+    path: "{{ nginx_configs_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  loop:
+    - conf.d
+    - sites-available
+    - sites-enabled
+  tags: [configure, nginx]
+
+- name: Remove existing configuration for reinit
+  ansible.builtin.file:
+    path: "{{ nginx_configs_dir }}/{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - conf.d
+  when: nginx_reconfigure | default(false)
+  tags: [configure, nginx]
+
+- name: Recreate configuration directories after cleanup
+  ansible.builtin.file:
+    path: "{{ nginx_configs_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  loop:
+    - conf.d
+  when: nginx_reconfigure | default(false)
+  tags: [configure, nginx]
+
+- name: Configure main nginx.conf
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_configs_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    validate: nginx -t -c %s
+  become: true
+  notify: reload_nginx
+  tags: [configure, nginx]
+
+- name: Configure upstreams
+  ansible.builtin.template:
+    src: nginx_upstreams.conf.j2
+    dest: "{{ nginx_configs_dir }}/conf.d/upstreams.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: nginx_upstreams | length > 0
+  notify: reload_nginx
+  tags: [configure, nginx, upstreams]
+
+- name: Configure stream blocks
+  ansible.builtin.template:
+    src: nginx_proxy.stream.j2
+    dest: "{{ nginx_configs_dir }}/conf.d/{{ item.key }}.stream"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  loop: "{{ nginx_streams | dict2items }}"
+  when: nginx_streams | length > 0
+  notify: reload_nginx
+  tags: [configure, nginx, streams]
+
+- name: Configure sites
+  ansible.builtin.template:
+    src: nginx_site.conf.j2
+    dest: "{{ nginx_configs_dir }}/conf.d/{{ item.key }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  loop: "{{ nginx_sites | dict2items }}"
+  when: nginx_sites | length > 0
+  notify: reload_nginx
+  tags: [configure, nginx, sites]
+
+- name: Configure default site
+  ansible.builtin.template:
+    src: default.j2
+    dest: "{{ nginx_configs_dir }}/sites-available/default"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: nginx_configure_default_site | default(true)
+  notify: reload_nginx
+  tags: [configure, nginx]
+
+- name: Enable default site
+  ansible.builtin.file:
+    src: "{{ nginx_configs_dir }}/sites-available/default"
+    dest: "{{ nginx_configs_dir }}/sites-enabled/default"
+    state: link
+    owner: root
+    group: root
+  become: true
+  when: nginx_configure_default_site | default(true)
+  notify: reload_nginx
+  tags: [configure, nginx]
+
+- name: Configure log rotation
+  ansible.builtin.template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/nginx
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: nginx_configure_logrotate | default(true)
+  tags: [configure, nginx, logrotate]
+
+- name: Configure log rotation cron job
+  ansible.builtin.cron:
+    name: nginx_log_rotate
+    minute: "*/5"
+    job: "/usr/sbin/logrotate -f /etc/logrotate.d/nginx"
+    state: present
+    user: root
+  become: true
+  when: nginx_configure_logrotate | default(true)
+  tags: [configure, nginx, logrotate]
+
+- name: Configure kernel parameters for high traffic
+  ansible.builtin.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+  become: true
+  loop:
+    - name: net.core.somaxconn
+      value: "{{ nginx_somaxconn }}"
+    - name: net.netfilter.nf_conntrack_max
+      value: "{{ nginx_nf_conntrack_max }}"
+  when: nginx_configure_kernel_params | default(true)
+  tags: [configure, nginx, kernel]
+
+- name: Load conntrack kernel module
+  ansible.builtin.modprobe:
+    name: nf_conntrack
+    state: present
+  become: true
+  when: nginx_load_conntrack | default(true)
+  tags: [configure, nginx, kernel]
+
+- name: Ensure Nginx is started and enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  become: true
+  tags: [service, nginx]

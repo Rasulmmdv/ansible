@@ -1,0 +1,67 @@
+---
+# Rclone role tasks
+
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - unzip
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  tags: [install, rclone]
+
+- name: Create temporary directory for rclone download
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: rclone
+  register: rclone_temp_dir
+  tags: [configure, rclone]
+
+- name: Download rclone binary
+  ansible.builtin.get_url:
+    url: "{{ rclone_download_url }}"
+    dest: "{{ rclone_temp_dir.path }}/rclone.zip"
+    mode: '0644'
+  register: rclone_download
+  tags: [install, rclone]
+
+- name: Extract rclone binary
+  ansible.builtin.unarchive:
+    src: "{{ rclone_temp_dir.path }}/rclone.zip"
+    dest: "{{ rclone_temp_dir.path }}"
+    remote_src: true
+  when: rclone_download.changed
+  tags: [install, rclone]
+
+- name: Install rclone binary
+  ansible.builtin.copy:
+    src: "{{ rclone_temp_dir.path }}/rclone"
+    dest: "{{ rclone_install_path }}/rclone"
+    mode: '0755'
+    remote_src: true
+  become: true
+  tags: [install, rclone]
+
+- name: Create rclone configuration directory
+  ansible.builtin.file:
+    path: "{{ rclone_conf_path }}"
+    state: directory
+    mode: '0750'
+  tags: [configure, rclone]
+
+- name: Configure rclone
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ rclone_conf_path }}/rclone.conf"
+    mode: '0600'
+  when: rclone_configs | length > 0
+  tags: [configure, rclone]
+
+- name: Clean up temporary files
+  ansible.builtin.file:
+    path: "{{ rclone_temp_dir.path }}"
+    state: absent
+  when: rclone_temp_dir.path is defined
+  tags: [cleanup, rclone]

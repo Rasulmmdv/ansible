@@ -1,0 +1,28 @@
+server {
+    listen       80;
+    server_name  _ default;
+
+    location /server_status {
+        stub_status on;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+
+    location /vts_status {
+        vhost_traffic_status_display;
+        vhost_traffic_status_display_format json;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+
+    location /.well-known/acme-challenge {
+        root /var/www/letsencrypt;
+        try_files $uri $uri/ =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
