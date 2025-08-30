@@ -4,13 +4,16 @@ This Ansible role configures and manages IPtables firewall rules for Linux serve
 
 ## Description
 
-The role sets up a secure firewall configuration with sensible defaults while allowing customization of allowed ports and services. It implements a "deny by default" policy and includes integration with Docker and Fail2ban.
+The role sets up a secure firewall configuration with sensible defaults while allowing customization of allowed ports and services. It implements a configurable default policy (deny-by-default recommended) and includes optional integration with Docker via the DOCKER-USER chain.
 
 ## Default Configuration
 
 The role implements the following default rules:
 
-- Default policy: DROP for INPUT, FORWARD, and OUTPUT chains
+- Default policy (customizable):
+  - INPUT: DROP
+  - FORWARD: ACCEPT
+  - OUTPUT: ACCEPT
 - Allowed incoming TCP ports:
   - 22 (SSH)
   - 80 (HTTP)
@@ -20,25 +23,37 @@ The role implements the following default rules:
 - Additional rules:
   - Allows established and related connections
   - Allows loopback interface traffic
-  - Allows Docker bridge network (docker0) traffic
-  - Integrates with Fail2ban (if present)
+  - Optional: Manages Docker DOCKER-USER chain to restrict/allow inbound to containers
 
 ## Variables
 
 The following variables can be set to customize the firewall configuration:
 
 ```yaml
-# Note: iptables_install_when_docker_present variable has been removed due to recursive templating issues
+# Master switch
+iptables_manage_firewall: true
 
-# List of allowed TCP ports
-iptables_allowed_tcp_ports:
-  - 22   # SSH
-  - 80   # HTTP
-  - 443  # HTTPS
+# Policies
+iptables_policy_input: "DROP"
+iptables_policy_forward: "ACCEPT"
+iptables_policy_output: "ACCEPT"
 
-# List of allowed UDP ports
-iptables_allowed_udp_ports:
-  - 51820  # WireGuard
+# Persistence
+iptables_persistent_save: true
+
+# Safety delay for auto-recovery
+iptables_emergency_recovery_delay_minutes: 3
+
+# Docker integration
+iptables_enable_docker_chain: true
+iptables_restart_docker_on_change: false
+
+# Simple port lists
+iptables_allowed_tcp_ports: [22, 80, 443]
+iptables_allowed_udp_ports: [51820]
+
+# Unified custom rules (optional)
+iptables_custom_rules: []
 ```
 
 ## Usage
@@ -66,10 +81,14 @@ Customizing allowed ports:
         iptables_allowed_udp_ports:
           - 51820  # WireGuard
           - 500    # Custom UDP port
+        iptables_custom_rules:
+          - { chain: 'INPUT', protocol: 'tcp', dport: 8443, jump: 'ACCEPT', comment: 'Allow alt-HTTPS' }
+          - { chain: 'OUTPUT', protocol: 'udp', dport: 53, jump: 'ACCEPT', comment: 'DNS queries' }
 ```
 
-# Note: The iptables_install_when_docker_present variable has been removed due to recursive templating issues.
-# The role now runs based on the check-mode condition and Docker detection logic.
+Notes:
+- The role honors Ansible check mode; mutating tasks are skipped in check mode.
+- When changing firewall rules, an emergency recovery job is scheduled and removed upon success.
 
 ## Requirements
 
