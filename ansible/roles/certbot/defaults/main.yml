@@ -1,0 +1,20 @@
+---
+# Certbot role configuration
+
+# Domains to obtain certificates for
+certbot_domains: []
+
+# Email address for Let's Encrypt registration
+certbot_mail: server@kimdevs.ru
+
+# Cloudflare DNS API token (should be set via environment variable)
+dns_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_KIMDEVS') }}"
+
+# Deploy hook to run after certificate renewal
+certbot_deploy_hook: "systemctl reload nginx"
+
+# Optional Route53 deploy hook (legacy support)
+certbot_route53_deploy_hook: ""
+
+# DNS propagation timeout in seconds
+certbot_dns_propagation_seconds: 60
