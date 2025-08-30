@@ -1,0 +1,78 @@
+---
+# Nginx role configuration
+
+# Basic settings
+nginx_configs_dir: "/etc/nginx"
+nginx_service: "nginx"
+
+# Feature toggles
+nginx_generate_dhparams: true
+nginx_configure_default_site: true
+nginx_configure_logrotate: true
+nginx_configure_kernel_params: true
+nginx_load_conntrack: true
+nginx_reconfigure: false
+
+# SSL/TLS settings
+nginx_ssl_protocols: "TLSv1.2 TLSv1.3"
+nginx_ssl_ciphers: "ECDHE-RSA-AES128-GSS-SHA256:ECDHE-RSA-AES256-GSS-SHA256"
+
+# Performance settings
+nginx_worker_processes: "{{ ansible_processor_vcpus | default(2) }}"
+nginx_worker_connections: 2048
+nginx_worker_rlimit_nofile: 16384
+nginx_keepalive_timeout: 65
+nginx_client_max_body_size: "100M"
+
+# Kernel tuning for high traffic
+nginx_somaxconn: 150000
+nginx_nf_conntrack_max: 1548576
+
+# Main nginx configuration
+nginx_configs:
+  common:
+    content:
+      - user nginx
+      - worker_processes {{ nginx_worker_processes }}
+      - worker_rlimit_nofile {{ nginx_worker_rlimit_nofile }}
+      - error_log /var/log/nginx/error.log warn
+      - pid /var/run/nginx.pid
+      - events:
+          - worker_connections {{ nginx_worker_connections }}
+          - use epoll
+      - http:
+          - include /etc/nginx/mime.types
+          - server_names_hash_bucket_size 128
+          - default_type application/octet-stream
+          - log_format app '$request_id $http_host $remote_addr [$msec] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time $upstream_response_time'
+          - log_format upstream '$upstream_addr $status $status'
+          - access_log off
+          - sendfile on
+          - tcp_nopush on
+          - tcp_nodelay on
+          - keepalive_timeout {{ nginx_keepalive_timeout }}
+          - types_hash_max_size 2048
+          - client_max_body_size {{ nginx_client_max_body_size }}
+          - gzip on
+          - gzip_disable "msie6"
+          - gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript
+          - proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=microcache:5m max_size=1000m
+          - include /etc/nginx/conf.d/*.conf
+      - stream:
+          - include /etc/nginx/conf.d/*.stream
+
+# Site configurations
+nginx_sites:
+  status:
+    - listen 127.0.0.1:8081
+    - location /nginx_status:
+        - stub_status on
+        - access_log off
+        - allow 127.0.0.1
+        - deny all
+
+# Upstream configurations
+nginx_upstreams: {}
+
+# Stream configurations
+nginx_streams: {}

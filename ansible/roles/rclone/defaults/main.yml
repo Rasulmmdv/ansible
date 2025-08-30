@@ -1,0 +1,37 @@
+---
+# Rclone role configuration
+
+# Rclone version to install
+rclone_version: "v1.70.0"
+
+# Architecture (auto-detected from ansible_architecture)
+rclone_arch: "{{ ansible_architecture }}"
+
+# Installation path for rclone binary
+rclone_install_path: "/usr/local/bin"
+
+# Configuration directory path
+rclone_conf_path: "{{ ansible_env.HOME }}/.config/rclone"
+
+# Temporary setup path (will be auto-generated)
+rclone_setup_path: "/tmp"
+
+# Download URL for rclone binary
+rclone_download_url: "https://downloads.rclone.org/{{ rclone_version }}/rclone-{{ rclone_version }}-linux-{{ rclone_arch }}.zip"
+
+# Rclone configuration remotes
+# Example:
+# rclone_configs:
+#   remote1:
+#     type: s3
+#     provider: AWS
+#     access_key_id: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     secret_access_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     region: us-east-1
+#   remote2:
+#     type: drive
+#     client_id: "your-client-id"
+#     client_secret: "your-client-secret"
+#     scope: drive
+#     token: "{{ lookup('env', 'GOOGLE_DRIVE_TOKEN') }}"
+rclone_configs: {}

@@ -1,0 +1,9 @@
+---
+# Nginx handlers
+
+- name: reload_nginx
+  ansible.builtin.service:
+    name: "{{ nginx_service }}"
+    state: reloaded
+  become: true
+  ignore_errors: true

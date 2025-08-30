@@ -1,0 +1,6 @@
+{% for entry, settings in rclone_configs.items() %}
+[{{ entry }}]
+{% for key, value in settings.items() %}
+{{ key }} = {{ value }}
+{% endfor %}
+{% endfor %}
