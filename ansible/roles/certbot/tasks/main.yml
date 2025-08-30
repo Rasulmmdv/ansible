@@ -1,0 +1,46 @@
+---
+# Certbot role tasks
+
+- name: Install certbot and required packages
+  ansible.builtin.apt:
+    name:
+      - python3-acme
+      - python3-certbot
+      - python3-certbot-nginx
+      - python3-certbot-dns-cloudflare
+      - certbot
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  tags: [install, certbot]
+
+- name: Create secrets directory for cloudflare credentials
+  ansible.builtin.file:
+    state: directory
+    path: "{{ ansible_env.HOME }}/.secrets"
+    mode: '0700'
+  tags: [configure, certbot]
+
+- name: Add cloudflare DNS configuration
+  ansible.builtin.template:
+    src: config.j2
+    dest: "{{ ansible_env.HOME }}/.secrets/cloudflare.ini"
+    mode: '0600'
+  tags: [configure, certbot]
+
+- name: Obtain SSL certificates from Let's Encrypt
+  ansible.builtin.shell: >
+    certbot certonly --noninteractive --dns-cloudflare
+    --dns-cloudflare-credentials {{ ansible_env.HOME }}/.secrets/cloudflare.ini
+    --preferred-challenges dns-01
+    -d {{ certbot_domains | join(' -d ') }}
+    --agree-tos -m {{ certbot_mail }}
+    {% if certbot_deploy_hook is defined %}--deploy-hook="{{ certbot_deploy_hook }}"{% endif %}
+    --dns-cloudflare-propagation-seconds {{ certbot_dns_propagation_seconds }}
+    {% if certbot_route53_deploy_hook is defined and certbot_route53_deploy_hook != '' %}--deploy-hook="{{ certbot_route53_deploy_hook }}"{% endif %}
+  become: true
+  when: certbot_domains | length > 0
+  tags: [configure, certbot]
+  register: certbot_result
+  changed_when: "'Certificate is saved at' in certbot_result.stdout or 'Congratulations!' in certbot_result.stdout"
