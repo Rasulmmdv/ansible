@@ -2,10 +2,10 @@
 bantime  = 1h
 findtime  = 10m
 maxretry = 5
-backend = auto
+backend = systemd
 ignoreip = 127.0.0.1/8 ::1
 
 [sshd]
 enabled = true
 port    = ssh
-logpath = /var/log/auth.log
+backend = systemd
