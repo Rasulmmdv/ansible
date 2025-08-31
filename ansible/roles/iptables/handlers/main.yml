@@ -1,7 +1,7 @@
 # handlers file for iptables
 ---
 
-# Save iptables rules to persistent files
+# Save iptables rules to persistent files (disabled by default when UFW is used)
 - name: Save iptables rules
   listen: "commit iptables rules"
   become: true
@@ -9,16 +9,16 @@
     mkdir -p /etc/iptables
     iptables-save > /etc/iptables/rules.v4
     ip6tables-save > /etc/iptables/rules.v6
-  when: not ansible_check_mode and (iptables_persistent_save | default(true) | bool)
+  when: not ansible_check_mode and (iptables_persistent_save | default(false) | bool)
 
-# Reload/restart netfilter-persistent to ensure rules applied and persisted
+# Reload/restart netfilter-persistent to ensure rules applied and persisted (optional)
 - name: Restart netfilter-persistent
   listen: "commit iptables rules"
   become: true
   systemd:
     name: netfilter-persistent
     state: restarted
-  when: not ansible_check_mode and (iptables_persistent_save | default(true) | bool) and ansible_service_mgr is defined and ansible_service_mgr == "systemd"
+  when: not ansible_check_mode and (iptables_persistent_save | default(false) | bool) and ansible_service_mgr is defined and ansible_service_mgr == "systemd"
   ignore_errors: true
 
 # Optional: Restart Docker to recreate its iptables chains after firewall changes

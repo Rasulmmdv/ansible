@@ -1,0 +1,12 @@
+[Unit]
+Description=Timer for emergency iptables recovery
+
+[Timer]
+OnActiveSec={{ (iptables_emergency_recovery_delay_minutes | default(3)) | int }}min
+AccuracySec=1s
+Unit=emergency-iptables-recovery.service
+
+[Install]
+WantedBy=timers.target
+
+

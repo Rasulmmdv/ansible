@@ -1,0 +1,10 @@
+[Unit]
+Description=Emergency iptables recovery (UFW disable + permissive chains)
+Documentation=man:iptables(8)
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/emergency-iptables-recovery.sh
+
+

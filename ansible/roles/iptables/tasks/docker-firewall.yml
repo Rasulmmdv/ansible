@@ -1,0 +1,70 @@
+---
+# Manage iptables DOCKER-USER chain for container ingress control
+
+- name: Ensure DOCKER-USER chain exists (block/rescue)
+  become: true
+  block:
+    - name: Probe DOCKER-USER chain
+      ansible.builtin.command: iptables -L DOCKER-USER
+      register: docker_user_check
+      changed_when: false
+      failed_when: false
+
+    - name: Create DOCKER-USER chain if missing
+      ansible.builtin.command: iptables -N DOCKER-USER
+      when: docker_user_check.rc != 0
+      notify: commit iptables rules
+  rescue:
+    - name: Force-create DOCKER-USER chain on failure
+      ansible.builtin.command: iptables -N DOCKER-USER
+      notify: commit iptables rules
+
+- name: Flush DOCKER-USER chain
+  become: true
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    flush: true
+  notify: commit iptables rules
+
+- name: Allow established and related container traffic
+  become: true
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    ctstate: ESTABLISHED,RELATED
+    jump: RETURN
+    comment: Allow established and related connections to containers
+  notify: commit iptables rules
+
+- name: Allow whitelisted sources to access Docker containers
+  become: true
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    source: "{{ item }}"
+    jump: RETURN
+    comment: "Allow whitelisted source {{ item }} to access containers"
+  loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
+  notify: commit iptables rules
+
+- name: Allow publicly exposed TCP ports for containers
+  become: true
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    protocol: tcp
+    destination_port: "{{ item }}"
+    jump: RETURN
+    comment: "Allow public access to container TCP port {{ item }}"
+  loop: "{{ (iptables_docker_public_tcp_ports | default([])) + (iptables_docker_public_tcp_ports_extra | default([])) }}"
+  notify: commit iptables rules
+
+- name: Block all other external traffic to containers
+  become: true
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    jump: DROP
+    comment: Block all other external traffic to containers at the end of the chain
+  notify: commit iptables rules
+
+- name: Save iptables rules after Docker chain updates
+  ansible.builtin.meta: flush_handlers
+
+

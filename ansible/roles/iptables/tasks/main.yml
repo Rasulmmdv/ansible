@@ -1,7 +1,7 @@
 ---
 # tasks file for iptables
 
-# Skip all iptables configuration if firewall management is disabled
+# Skip all firewall configuration if role disabled
 - name: Check if iptables management is disabled
   ansible.builtin.debug:
     msg: "🛑 iptables role disabled - skipping all firewall configuration"
@@ -38,23 +38,22 @@
   set_fact:
     docker_installed: false
 
-
-- name: Configure iptables
+- name: Configure firewall
   when: iptables_manage_firewall | default(true)
   tags: [configure, security, networking]
   block:
-    - name: Install iptables and at packages
+    - name: Install packages (ufw, iptables and at)
       become: true
       when: not ansible_check_mode
       ansible.builtin.package:
         name:
+          - ufw
           - iptables
           - at
-          - iptables-persistent
         state: present
       tags: [install]
 
-    - name: Ensure /etc/iptables directory exists for saving rules
+    - name: Ensure /etc/iptables directory exists for saving rules (legacy)
       become: true
       when: not ansible_check_mode
       ansible.builtin.file:
@@ -63,259 +62,102 @@
         mode: '0755'
       tags: [configure]
 
-    - name: Create emergency iptables recovery script
+    - name: Install emergency firewall recovery script
       become: true
       when: not ansible_check_mode
       ansible.builtin.copy:
+        src: emergency-iptables-recovery.sh
         dest: /usr/local/bin/emergency-iptables-recovery.sh
         mode: '0755'
-        content: |
-          #!/bin/bash
-          # Emergency iptables recovery script
-          echo "$(date): Emergency iptables recovery activated" >> /var/log/iptables-recovery.log
-
-          # Flush all rules and set permissive policies
-          iptables -F
-          iptables -X
-          iptables -P INPUT ACCEPT
-          iptables -P FORWARD ACCEPT
-          iptables -P OUTPUT ACCEPT
-
-          # Add basic SSH rule
-          iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-          iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-          iptables -A INPUT -i lo -j ACCEPT
-
-          echo "$(date): Emergency recovery completed - SSH should be accessible" >> /var/log/iptables-recovery.log
-
-          # Send notification if possible
-          wall "EMERGENCY: iptables rules have been reset due to connectivity loss"
       tags: [configure, safety]
 
-    - name: Schedule emergency recovery (runs after configured delay if not cancelled)
+    - name: Install systemd unit for emergency firewall rollback (service)
       become: true
       when: not ansible_check_mode
-      ansible.builtin.shell: |
-        set -euo pipefail
-        # Cancel any existing emergency recovery jobs
-        for job in $(atq | awk '{print $1}' 2>/dev/null || echo ""); do
-          if [[ -n "$job" ]]; then
-            atrm "$job" 2>/dev/null || true
-          fi
-        done
+      ansible.builtin.copy:
+        src: emergency-iptables-recovery.service
+        dest: /etc/systemd/system/emergency-iptables-recovery.service
+        mode: '0644'
 
-        # Schedule new emergency recovery after delay
-        printf '%s\n' "/usr/local/bin/emergency-iptables-recovery.sh" | at now + {{ iptables_emergency_recovery_delay_minutes | default(3) }} minutes
+    - name: Install systemd unit for emergency firewall rollback (timer)
+      become: true
+      when: not ansible_check_mode
+      ansible.builtin.template:
+        src: emergency-iptables-recovery.timer.j2
+        dest: /etc/systemd/system/emergency-iptables-recovery.timer
+        mode: '0644'
 
-        # Show scheduled job
-        atq
-      args:
-        executable: /bin/bash
-      register: emergency_job
-      changed_when: false
+    - name: Start emergency rollback timer
+      become: true
+      when: not ansible_check_mode
+      ansible.builtin.systemd:
+        name: emergency-iptables-recovery.timer
+        state: started
+        enabled: false
+        daemon_reload: true
       tags: [configure, safety]
 
-    - name: Show emergency recovery job info
+    - name: Show emergency recovery timer info
       when: not ansible_check_mode
       debug:
         msg: |
           SAFETY MECHANISM ACTIVATED:
-          Emergency iptables recovery job scheduled: {{ emergency_job.stdout }}
-
-          This job will run in 3 minutes and restore SSH access if you get disconnected.
-          The job will be cancelled automatically at the end of the playbook if successful.
+          Emergency firewall rollback timer started: emergency-iptables-recovery.timer
+          It will run in {{ iptables_emergency_recovery_delay_minutes | default(3) }} minutes to restore access if disconnected.
+          The timer will be stopped at the end of this play if successful.
       tags: [validate, safety]
 
-    - name: Reset iptables to a permissive state before applying new rules
+    - name: Ensure UFW is enabled with sane defaults
       become: true
       when: not ansible_check_mode
-      ansible.builtin.shell: |
-        set -euo pipefail
-        # Set permissive policies first (critical for SSH access)
-        iptables -P INPUT ACCEPT
-        iptables -P FORWARD ACCEPT
-        iptables -P OUTPUT ACCEPT
-        # Flush all existing rules
-        iptables -F
-      args:
-        executable: /bin/bash
-      changed_when: false
-      notify: commit iptables rules
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
       tags: [configure]
 
-    - name: Set Ansible port rules if custom port is used
-      when: (ansible_port | default(22)) != 22
-      set_fact:
-        iptables_ansible_port_rules:
-          - { chain: 'INPUT', protocol: 'tcp', destination_port: '{{ ansible_port }}', comment: 'Allow Ansible SSH traffic' }
-      tags: [configure]
-
-    - name: Apply essential iptables rules first (before changing policies)
+    - name: Allow UFW base ports
       become: true
-      when: not ansible_check_mode
-      ansible.builtin.iptables:
-        chain: "{{ item.chain }}"
-        ctstate: "{{ item.ctstate | default(omit) }}"
-        in_interface: "{{ item.in_interface | default(omit) }}"
-        protocol: "{{ item.protocol | default(omit) }}"
-        destination_port: "{{ item.destination_port | default(omit) }}"
-        jump: "{{ item.jump | default('ACCEPT') }}"
-        comment: "{{ item.comment }}"
-      loop: "{{ (iptables_essential_rules | default([])) + (iptables_ansible_port_rules | default([])) }}"
-      notify: commit iptables rules
+      when: not ansible_check_mode and (ufw_custom_ports | length) > 0
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto | default('tcp') }}"
+      loop: "{{ ufw_custom_ports }}"
       tags: [configure]
 
-    - name: Set iptables policies (ONLY after allowing essential traffic)
+    - name: Allow UFW custom ports (new API)
       become: true
-      when: not ansible_check_mode
-      ansible.builtin.iptables:
-        chain: "{{ item.chain }}"
-        policy: "{{ item.policy }}"
-      loop:
-        - { chain: 'OUTPUT', policy: '{{ iptables_policy_output }}' }
-        - { chain: 'FORWARD', policy: '{{ iptables_policy_forward }}' }
-        - { chain: 'INPUT', policy: '{{ iptables_policy_input }}' }  # Set this LAST after all ACCEPT rules are in place
-      notify: commit iptables rules
+      when: not ansible_check_mode and (ufw_custom_ports | length) > 0
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto | default('tcp') }}"
+      loop: "{{ ufw_custom_ports }}"
       tags: [configure]
 
-    - name: Allow configured TCP ports
-      become: true
-      when: not ansible_check_mode
-      ansible.builtin.iptables:
-        chain: 'INPUT'
-        protocol: 'tcp'
-        destination_port: "{{ item }}"
-        jump: 'ACCEPT'
-        comment: "Allow user-defined TCP port {{ item }}"
-      loop: "{{ iptables_allowed_tcp_ports }}"
-      notify: commit iptables rules
-      tags: [configure]
-
-    - name: Allow configured UDP ports
-      become: true
-      when: not ansible_check_mode
-      ansible.builtin.iptables:
-        chain: 'INPUT'
-        protocol: 'udp'
-        destination_port: "{{ item }}"
-        jump: 'ACCEPT'
-        comment: "Allow user-defined UDP port {{ item }}"
-      loop: "{{ iptables_allowed_udp_ports }}"
-      notify: commit iptables rules
-      tags: [configure]
-
-    - name: Apply custom iptables rules
-      become: true
-      when: not ansible_check_mode and (iptables_custom_rules | length) > 0
-      ansible.builtin.iptables:
-        chain: "{{ item.chain }}"
-        source: "{{ item.source | default(omit) }}"
-        destination: "{{ item.destination | default(omit) }}"
-        in_interface: "{{ item.in_interface | default(omit) }}"
-        out_interface: "{{ item.out_interface | default(omit) }}"
-        protocol: "{{ item.protocol | default(omit) }}"
-        source_port: "{{ item.sport | default(item.source_port | default(omit)) }}"
-        destination_port: "{{ item.dport | default(item.destination_port | default(omit)) }}"
-        ctstate: "{{ item.ctstate | default(omit) }}"
-        jump: "{{ item.jump | default('ACCEPT') }}"
-        comment: "{{ item.comment | default(omit) }}"
-      loop: "{{ iptables_custom_rules }}"
-      notify: commit iptables rules
-      tags: [configure]
-
-    - name: Configure container access control with DOCKER-USER chain
-      become: true
+    - name: Docker firewall (DOCKER-USER) configuration
       when: not ansible_check_mode and docker_installed and (iptables_enable_docker_chain | default(true) | bool)
-      block:
-        - name: Check if DOCKER-USER chain exists
-          ansible.builtin.command: iptables -L DOCKER-USER
-          register: docker_user_check
-          changed_when: false
-          failed_when: false
+      ansible.builtin.include_tasks: docker-firewall.yml
+      tags: [docker, iptables]
 
-        - name: Create DOCKER-USER chain if it does not exist
-          when: docker_user_check.rc != 0
-          ansible.builtin.command: iptables -N DOCKER-USER
-          notify: commit iptables rules
+    # Save rules is handled within docker-firewall tasks include
 
-        - name: Flush DOCKER-USER chain to ensure a clean state
-          ansible.builtin.iptables:
-            chain: DOCKER-USER
-            flush: true
-          notify: commit iptables rules
-
-        - name: Allow established and related traffic to containers
-          ansible.builtin.iptables:
-            chain: DOCKER-USER
-            ctstate: ESTABLISHED,RELATED
-            jump: RETURN
-            comment: Allow established and related connections to containers
-          notify: commit iptables rules
-
-        - name: Allow whitelisted sources to access Docker containers
-          ansible.builtin.iptables:
-            chain: DOCKER-USER
-            source: "{{ item }}"
-            jump: RETURN
-            comment: "Allow whitelisted source {{ item }} to access containers"
-          loop: "{{ iptables_docker_allowed_sources }}"
-          notify: commit iptables rules
-
-        - name: Allow publicly exposed TCP ports for containers
-          ansible.builtin.iptables:
-            chain: DOCKER-USER
-            protocol: tcp
-            destination_port: "{{ item }}"
-            jump: RETURN
-            comment: "Allow public access to container TCP port {{ item }}"
-          loop: "{{ iptables_docker_public_tcp_ports }}"
-          notify: commit iptables rules
-
-        - name: Block all other external traffic to containers
-          ansible.builtin.iptables:
-            chain: DOCKER-USER
-            jump: DROP
-            comment: Block all other external traffic to containers at the end of the chain
-          notify: commit iptables rules
-      tags:
-        - docker
-        - iptables
-
-    # Handlers will now save the rules, so we need to ensure they are flushed at the end
-    - name: Flush handlers to save rules if changed
-      when: not ansible_check_mode
-      ansible.builtin.meta: flush_handlers
-      tags: [configure]
-
-    - name: Cancel emergency recovery job (deployment succeeded)
+    - name: Stop and disable emergency rollback timer (deployment succeeded)
       become: true
       when: not ansible_check_mode
-      ansible.builtin.shell: |
-        # Cancel all at jobs (emergency recovery)
-        for job in $(atq | awk '{print $1}'); do
-          echo "Cancelling emergency job $job"
-          atrm $job 2>/dev/null || true
-        done
-        echo "All emergency recovery jobs cancelled - deployment successful"
-      register: cancel_result
-      changed_when: false
-      tags: [cleanup, safety]
-
-    - name: Remove emergency recovery script
-      become: true
-      when: not ansible_check_mode
-      ansible.builtin.file:
-        path: /usr/local/bin/emergency-iptables-recovery.sh
-        state: absent
-      changed_when: false
+      ansible.builtin.systemd:
+        name: emergency-iptables-recovery.timer
+        state: stopped
+        enabled: false
+      register: emergency_timer_stop
       tags: [cleanup, safety]
 
     - name: Confirm emergency job cancellation
       when: not ansible_check_mode
       debug:
         msg: |
-          SUCCESS: Emergency recovery job cancelled!
-          {{ cancel_result.stdout }}
+          SUCCESS: Emergency rollback timer stopped.
 
-          Your iptables configuration has been applied successfully without triggering emergency recovery.
+          Your firewall configuration has been applied successfully without triggering emergency recovery.
       tags: [validate]
