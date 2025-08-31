@@ -187,8 +187,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} high CPU usage"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has CPU usage at {{ $value | printf \"%.2f\" }}% for more than 2 minutes."
+          summary: "Container {{ $labels.name }} high CPU usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has CPU usage at {{ $value | printf \"%.2f\" }}% for more than 2 minutes."
       - alert: ContainerCriticalCPUUsage
         expr: rate(container_cpu_usage_seconds_total{job="cadvisor", id!="/"}[5m]) * 100 > 95
         for: 1m  
@@ -196,8 +196,8 @@ groups:
           severity: critical
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} critical CPU usage"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has CPU usage at {{ $value | printf \"%.2f\" }}% for more than 1 minute. Immediate action required."
+          summary: "Container {{ $labels.name }} critical CPU usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has CPU usage at {{ $value | printf \"%.2f\" }}% for more than 1 minute. Immediate action required."
       # Container Memory Alerts (absolute values for containers without limits)
       - alert: ContainerHighMemoryUsage
         expr: container_memory_usage_bytes{job="cadvisor", id!="/"} > 2 * 1024 * 1024 * 1024
@@ -206,8 +206,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} high memory usage"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} is using {{ $value | humanize1024 }}B of memory for more than 5 minutes."
+          summary: "Container {{ $labels.name }} high memory usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using {{ $value | humanize1024 }}B of memory for more than 5 minutes."
       - alert: ContainerVeryHighMemoryUsage
         expr: container_memory_usage_bytes{job="cadvisor", id!="/"} > 4 * 1024 * 1024 * 1024
         for: 2m  
@@ -215,8 +215,8 @@ groups:
           severity: critical
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} very high memory usage"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} is using {{ $value | humanize1024 }}B of memory for more than 2 minutes. May impact system performance."
+          summary: "Container {{ $labels.name }} very high memory usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using {{ $value | humanize1024 }}B of memory for more than 2 minutes. May impact system performance."
       # Container Memory Limit Alerts (only for containers with limits)
       - alert: ContainerMemoryLimitReached
         expr: container_memory_usage_bytes{job="cadvisor", id!="/"} >= container_spec_memory_limit_bytes{job="cadvisor", id!="/"} and container_spec_memory_limit_bytes{job="cadvisor", id!="/"} > 0
@@ -225,8 +225,8 @@ groups:
           severity: critical
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} memory limit reached"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has reached its memory limit and may be killed by OOMKiller."
+          summary: "Container {{ $labels.name }} memory limit reached"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has reached its memory limit and may be killed by OOMKiller."
       # Container Disk I/O Alerts
       - alert: ContainerHighDiskIO
         expr: (rate(container_fs_reads_bytes_total{job="cadvisor", id!="/"}[5m]) + rate(container_fs_writes_bytes_total{job="cadvisor", id!="/"}[5m])) > 100 * 1024 * 1024
@@ -235,8 +235,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} high disk I/O"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has high disk I/O at {{ $value | printf \"%.0f\" }} bytes/s for more than 2 minutes."
+          summary: "Container {{ $labels.name }} high disk I/O"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has high disk I/O at {{ $value | printf \"%.0f\" }} bytes/s for more than 2 minutes."
       # Container Network Alerts
       - alert: ContainerHighNetworkIO
         expr: (rate(container_network_receive_bytes_total{job="cadvisor", id!="/"}[5m]) + rate(container_network_transmit_bytes_total{job="cadvisor", id!="/"}[5m])) > 100 * 1024 * 1024
@@ -245,8 +245,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} high network I/O"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has high network I/O at {{ $value | printf \"%.0f\" }} bytes/s for more than 2 minutes."
+          summary: "Container {{ $labels.name }} high network I/O"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has high network I/O at {{ $value | printf \"%.0f\" }} bytes/s for more than 2 minutes."
 
   - name: container_availability_alerts
     rules:
@@ -259,8 +259,8 @@ groups:
           service: docker
           component: container
         annotations:
-          summary: "Container {{ $labels.container }} is down on {{ $labels.instance }}"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has not been seen for more than 5 minutes. It may have crashed or stopped."
+          summary: "Container {{ $labels.name }} is down on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has not been seen for more than 5 minutes. It may have crashed or stopped."
       # Container Restart Alerts
       - alert: ContainerRestartTooOften
         expr: rate(container_status_restarts_total{job="cadvisor", id!="/"}[5m]) > 0
@@ -269,8 +269,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} restarting frequently"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} is restarting at {{ $value | printf \"%.2f\" }} restarts/sec. Check container logs for issues."
+          summary: "Container {{ $labels.name }} restarting frequently"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is restarting at {{ $value | printf \"%.2f\" }} restarts/sec. Check container logs for issues."
       # Container State Alerts
 
   - name: container_performance_alerts
@@ -283,8 +283,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} CPU throttling"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} is experiencing CPU throttling at {{ $value | printf \"%.2f\" }}s/s for more than 2 minutes."
+          summary: "Container {{ $labels.name }} CPU throttling"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is experiencing CPU throttling at {{ $value | printf \"%.2f\" }}s/s for more than 2 minutes."
       # Container File Descriptor Alerts (absolute values)
       - alert: ContainerHighFileDescriptorUsage
         expr: container_file_descriptors{job="cadvisor"} > 1000
@@ -293,8 +293,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} high file descriptor usage"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has {{ $value | printf \"%.0f\" }} file descriptors open for more than 2 minutes."
+          summary: "Container {{ $labels.name }} high file descriptor usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has {{ $value | printf \"%.0f\" }} file descriptors open for more than 2 minutes."
       # Container Socket Usage Alerts
       - alert: ContainerHighSocketUsage
         expr: container_sockets{job="cadvisor"} > 1000
@@ -303,8 +303,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} high socket usage"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has {{ $value | printf \"%.0f\" }} open sockets for more than 2 minutes."
+          summary: "Container {{ $labels.name }} high socket usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has {{ $value | printf \"%.0f\" }} open sockets for more than 2 minutes."
 
   - name: container_security_alerts
     rules:
@@ -316,8 +316,8 @@ groups:
           severity: warning
           service: container-monitoring
         annotations:
-          summary: "Container {{ $labels.container }} running as root"
-          description: "Container {{ $labels.container }} on {{ $labels.instance }} has {{ $value | printf \"%.0f\" }} processes running as root user."
+          summary: "Container {{ $labels.name }} running as root"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has {{ $value | printf \"%.0f\" }} processes running as root user."
 
   - name: monitoring_alerts
     rules:
