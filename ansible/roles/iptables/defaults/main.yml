@@ -18,15 +18,11 @@ iptables_restart_docker_on_change: false
 iptables_emergency_recovery_delay_minutes: 3
 
 # Persist rules to disk and reload service after changes
-iptables_persistent_save: true
+iptables_persistent_save: false
 
-# Simple allow-lists for common ports
-iptables_allowed_tcp_ports:
-  - 22   # SSH
-  - 80   # HTTP
-  - 443  # HTTPS
-iptables_allowed_udp_ports:
-  - 51820  # WireGuard default port
+# Simple allow-lists for common ports (deprecated in favor of ufw_custom_ports)
+iptables_allowed_tcp_ports: []
+iptables_allowed_udp_ports: []
 
 # Essential iptables rules that are always applied (before policies)
 iptables_essential_rules:
@@ -52,6 +48,12 @@ iptables_docker_public_tcp_ports:
   - 80
   - 443
 
+# Per-call extensions when including docker-firewall.yml from other roles
+iptables_docker_public_tcp_ports_extra: []
+iptables_docker_allowed_sources_extra: []
+
+# UFW is the only host-level firewall manager. Raw iptables reserved for Docker.
+
 # Unified custom rules for advanced use cases.
 # Example item keys: chain, protocol, source, destination, in_interface, out_interface,
 #                    sport, dport (or destination_port), ctstate, jump, comment
@@ -60,3 +62,11 @@ iptables_docker_public_tcp_ports:
 #   - { chain: 'INPUT', protocol: 'tcp', dport: 8080, jump: 'ACCEPT', comment: 'Allow app port' }
 #   - { chain: 'OUTPUT', protocol: 'udp', dport: 53, jump: 'ACCEPT', comment: 'DNS queries' }
 iptables_custom_rules: []
+
+# UFW custom ports (preferred for host-level rules)
+# Defaults keep SSH/HTTP/HTTPS and WireGuard open
+ufw_custom_ports:
+  - { port: 22, proto: tcp }
+  - { port: 80, proto: tcp }
+  - { port: 443, proto: tcp }
+  - { port: 51820, proto: udp }

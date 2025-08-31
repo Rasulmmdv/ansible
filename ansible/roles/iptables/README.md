@@ -1,29 +1,20 @@
-# IPtables Role
+# UFW + iptables (DOCKER-USER) Role
 
-This Ansible role configures and manages IPtables firewall rules for Linux servers, providing a secure default configuration with customizable port access.
+This role configures a host-level firewall with UFW (simple and readable) and uses raw iptables only for the Docker `DOCKER-USER` chain where UFW cannot help.
 
 ## Description
 
-The role sets up a secure firewall configuration with sensible defaults while allowing customization of allowed ports and services. It implements a configurable default policy (deny-by-default recommended) and includes optional integration with Docker via the DOCKER-USER chain.
+The role enables UFW with a deny-by-default incoming policy and allows configurable ports. For containers, it manages the `DOCKER-USER` chain in iptables to surgically control external access to containers. Other roles can include the Docker snippet directly and pass extra ports/sources.
 
 ## Default Configuration
 
 The role implements the following default rules:
 
-- Default policy (customizable):
-  - INPUT: DROP
-  - FORWARD: ACCEPT
-  - OUTPUT: ACCEPT
-- Allowed incoming TCP ports:
-  - 22 (SSH)
-  - 80 (HTTP)
-  - 443 (HTTPS)
-- Allowed incoming UDP ports:
-  - 51820 (WireGuard)
-- Additional rules:
-  - Allows established and related connections
-  - Allows loopback interface traffic
-  - Optional: Manages Docker DOCKER-USER chain to restrict/allow inbound to containers
+Managed by UFW (host-level, Ubuntu default):
+- Deny incoming by default; allow configured TCP/UDP ports (e.g. 22/80/443, 51820).
+
+Managed by iptables (containers only):
+- `DOCKER-USER` chain created/cleaned; allows ESTABLISHED,RETURN; allows whitelisted sources and public container ports; drops remainder.
 
 ## Variables
 
@@ -33,13 +24,8 @@ The following variables can be set to customize the firewall configuration:
 # Master switch
 iptables_manage_firewall: true
 
-# Policies
-iptables_policy_input: "DROP"
-iptables_policy_forward: "ACCEPT"
-iptables_policy_output: "ACCEPT"
-
-# Persistence
-iptables_persistent_save: true
+# Persistence (iptables-save) is disabled by default since UFW manages host rules
+iptables_persistent_save: false
 
 # Safety delay for auto-recovery
 iptables_emergency_recovery_delay_minutes: 3
@@ -52,8 +38,12 @@ iptables_restart_docker_on_change: false
 iptables_allowed_tcp_ports: [22, 80, 443]
 iptables_allowed_udp_ports: [51820]
 
-# Unified custom rules (optional)
-iptables_custom_rules: []
+# UFW custom ports (preferred for host-level rules)
+ufw_custom_ports: []
+
+# Per-call extensions when including Docker snippet
+iptables_docker_public_tcp_ports_extra: []
+iptables_docker_allowed_sources_extra: []
 ```
 
 ## Usage
@@ -86,9 +76,26 @@ Customizing allowed ports:
           - { chain: 'OUTPUT', protocol: 'udp', dport: 53, jump: 'ACCEPT', comment: 'DNS queries' }
 ```
 
+### Include from other roles
+
+Add container ingress rules from another role via include_role:
+
+```yaml
+- name: Open container ports for my-service via DOCKER-USER
+  include_role:
+    name: iptables
+    tasks_from: docker-firewall.yml
+  vars:
+    iptables_docker_public_tcp_ports_extra: [8080, 8443]
+    iptables_docker_allowed_sources_extra: ['10.10.0.0/16']
+  tags: [docker, iptables]
+```
+
 Notes:
 - The role honors Ansible check mode; mutating tasks are skipped in check mode.
 - When changing firewall rules, an emergency recovery job is scheduled and removed upon success.
+- Emergency script will also disable UFW to recover access if needed.
+- Rollback safety uses a systemd timer instead of 'at'.
 
 ## Requirements
 
