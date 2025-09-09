@@ -21,6 +21,9 @@ limits_config:
   # Log retention configuration - keep data for 30 days
   retention_period: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
   max_query_lookback: "{{ (alloy_log_retention_days | default(30)) * 24 }}h"
+  
+  # Maximum log entries returned per query fetch up to 50k lines per query
+  max_entries_limit_per_query: {{ loki_max_entries_limit_per_query | default(50000) }}
 
   # Ingestion rate limits
   ingestion_rate_mb: {{ loki_ingestion_rate_mb_per_sec | default(8) }}
@@ -58,6 +61,26 @@ compactor:
   delete_request_store: filesystem
 
 
+
+# Ingester configuration
+ingester:
+  max_chunk_age: {{ loki_ingester.max_chunk_age }}
+  chunk_target_size: {{ loki_ingester.chunk_target_size }}
+  chunk_retain_period: {{ loki_ingester.chunk_retain_period }}
+  max_transfer_retries: {{ loki_ingester.max_transfer_retries }}
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+    min_ready_duration: {{ loki_ingester.min_ready_duration }}  # This controls the "waiting for 15s" behavior
+    num_tokens: {{ loki_ingester.num_tokens }}
+    heartbeat_period: {{ loki_ingester.heartbeat_period }}
+    observe_period: {{ loki_ingester.observe_period }}
+    join_after: {{ loki_ingester.join_after }}
+    claim_on_rollout: false
+    normalise_tokens: false
 
 ruler:
   storage:

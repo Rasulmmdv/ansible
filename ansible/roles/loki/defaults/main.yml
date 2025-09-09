@@ -44,11 +44,24 @@ loki_ingestion_rate_limit:
   rate: "{{ loki_ingestion_rate_mb_per_sec | default(8) * 1024 * 1024 }}"
   burst: "{{ loki_ingestion_burst_mb | default(16) * 1024 * 1024 }}"
 
+
 # Per-user rate limits
 loki_per_user_rate_limit:
   enabled: true
   rate: "{{ loki_per_user_rate_mb_per_sec | default(4) * 1024 * 1024 }}"
   burst: "{{ loki_per_user_burst_mb | default(8) * 1024 * 1024 }}" 
+# Ingester configuration
+loki_ingester:
+  max_chunk_age: "1h"
+  chunk_target_size: 1048576  # 1MB
+  chunk_retain_period: "30s"
+  max_transfer_retries: 0
+  min_ready_duration: "15s"  # Controls the "waiting for 15s" behavior
+  num_tokens: 512
+  heartbeat_period: "5s"
+  observe_period: "10s"
+  join_after: "0s"
+
 # Health check configuration
 loki_health_check:
   max_retries: 30

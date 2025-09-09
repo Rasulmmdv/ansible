@@ -116,6 +116,51 @@
         direction: incoming
       tags: [configure]
 
+    - name: Configure UFW forward policy for Docker networking
+      become: true
+      when: not ansible_check_mode and docker_installed
+      community.general.ufw:
+        state: enabled
+        policy: allow
+        direction: routed
+      tags: [configure, docker]
+
+    - name: Allow Docker bridge network forwarding
+      become: true
+      when: not ansible_check_mode and docker_installed
+      ansible.builtin.command: "ufw allow out from {{ docker_source }} to any"
+      loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
+      loop_control:
+        loop_var: docker_source
+      tags: [configure, docker]
+
+    - name: Allow return traffic from internet to Docker containers
+      become: true
+      when: not ansible_check_mode and docker_installed
+      ansible.builtin.command: "ufw allow in from any to {{ docker_dest }}"
+      loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
+      loop_control:
+        loop_var: docker_dest
+      tags: [configure, docker]
+
+    - name: Allow all traffic within private subnets (incoming)
+      become: true
+      when: not ansible_check_mode and (iptables_docker_allowed_sources | length) > 0
+      ansible.builtin.command: "ufw allow in from {{ private_subnet }} to {{ private_subnet }}"
+      loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
+      loop_control:
+        loop_var: private_subnet
+      tags: [configure, networking]
+
+    - name: Allow all traffic within private subnets (outgoing)
+      become: true
+      when: not ansible_check_mode and (iptables_docker_allowed_sources | length) > 0
+      ansible.builtin.command: "ufw allow out from {{ private_subnet }} to {{ private_subnet }}"
+      loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
+      loop_control:
+        loop_var: private_subnet
+      tags: [configure, networking]
+
     - name: Allow UFW base ports
       become: true
       when: not ansible_check_mode and (ufw_custom_ports | length) > 0

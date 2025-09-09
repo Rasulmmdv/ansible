@@ -12,13 +12,15 @@ iptables_policy_output: "ACCEPT"
 iptables_enable_docker_chain: true
 
 # Whether to restart Docker after rules change (may disrupt running containers)
+# Disabled by default since Docker iptables integration is disabled for security
 iptables_restart_docker_on_change: false
 
 # Delay (in minutes) before emergency recovery script runs
 iptables_emergency_recovery_delay_minutes: 3
 
 # Persist rules to disk and reload service after changes
-iptables_persistent_save: false
+# Enabled by default when Docker is present to ensure container access rules persist
+iptables_persistent_save: true
 
 # Simple allow-lists for common ports (deprecated in favor of ufw_custom_ports)
 iptables_allowed_tcp_ports: []

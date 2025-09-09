@@ -39,10 +39,12 @@
   become: true
   ansible.builtin.iptables:
     chain: DOCKER-USER
-    source: "{{ item }}"
+    source: "{{ allowed_source }}"
     jump: RETURN
-    comment: "Allow whitelisted source {{ item }} to access containers"
+    comment: "Allow whitelisted source {{ allowed_source }} to access containers"
   loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
+  loop_control:
+    loop_var: allowed_source
   notify: commit iptables rules
 
 - name: Allow publicly exposed TCP ports for containers
@@ -50,10 +52,12 @@
   ansible.builtin.iptables:
     chain: DOCKER-USER
     protocol: tcp
-    destination_port: "{{ item }}"
+    destination_port: "{{ tcp_port }}"
     jump: RETURN
-    comment: "Allow public access to container TCP port {{ item }}"
+    comment: "Allow public access to container TCP port {{ tcp_port }}"
   loop: "{{ (iptables_docker_public_tcp_ports | default([])) + (iptables_docker_public_tcp_ports_extra | default([])) }}"
+  loop_control:
+    loop_var: tcp_port
   notify: commit iptables rules
 
 - name: Block all other external traffic to containers
@@ -62,6 +66,64 @@
     chain: DOCKER-USER
     jump: DROP
     comment: Block all other external traffic to containers at the end of the chain
+  notify: commit iptables rules
+
+- name: Get Docker network information
+  become: true
+  ansible.builtin.shell: |
+    docker network ls --format "{{ '{{.Name}}' }}" | grep -v "^host$" | grep -v "^none$" | while read network; do
+      subnet=$(docker network inspect "$network" --format '{{ "{{range .IPAM.Config}}{{.Subnet}}{{end}}" }}' 2>/dev/null || echo "")
+      if [ ! -z "$subnet" ]; then
+        echo "$network:$subnet"
+      fi
+    done
+  register: docker_networks_info
+  changed_when: false
+  failed_when: false
+
+- name: Debug Docker networks
+  ansible.builtin.debug:
+    msg: "Docker networks found: {{ docker_networks_info.stdout_lines }}"
+
+- name: Enable NAT for Docker networks (since Docker iptables is disabled)
+  become: true
+  ansible.builtin.iptables:
+    table: nat
+    chain: POSTROUTING
+    source: "{{ network_info.split(':')[1] }}"
+    jump: MASQUERADE
+    comment: "NAT for Docker network {{ network_info.split(':')[0] }}"
+  loop: "{{ docker_networks_info.stdout_lines }}"
+  when: docker_networks_info.stdout_lines | length > 0 and ':' in network_info
+  loop_control:
+    loop_var: network_info
+  notify: commit iptables rules
+
+- name: Allow Docker network traffic in FORWARD chain (outbound)
+  become: true
+  ansible.builtin.iptables:
+    chain: FORWARD
+    source: "{{ network_info.split(':')[1] }}"
+    jump: ACCEPT
+    comment: "Allow Docker network {{ network_info.split(':')[0] }} outbound traffic"
+  loop: "{{ docker_networks_info.stdout_lines }}"
+  when: docker_networks_info.stdout_lines | length > 0 and ':' in network_info
+  loop_control:
+    loop_var: network_info
+  notify: commit iptables rules
+
+- name: Allow return traffic to Docker networks
+  become: true
+  ansible.builtin.iptables:
+    chain: FORWARD
+    destination: "{{ network_info.split(':')[1] }}"
+    ctstate: RELATED,ESTABLISHED
+    jump: ACCEPT
+    comment: "Allow return traffic to Docker network {{ network_info.split(':')[0] }}"
+  loop: "{{ docker_networks_info.stdout_lines }}"
+  when: docker_networks_info.stdout_lines | length > 0 and ':' in network_info
+  loop_control:
+    loop_var: network_info
   notify: commit iptables rules
 
 - name: Save iptables rules after Docker chain updates

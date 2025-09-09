@@ -6,12 +6,34 @@ This role configures a host-level firewall with UFW (simple and readable) and us
 
 The role enables UFW with a deny-by-default incoming policy and allows configurable ports. For containers, it manages the `DOCKER-USER` chain in iptables to surgically control external access to containers. Other roles can include the Docker snippet directly and pass extra ports/sources.
 
+### Docker Networking Support
+
+This role automatically configures UFW to allow Docker container outbound traffic by:
+- Setting UFW forward policy to ACCEPT when Docker is present
+- Allowing traffic from Docker allowed sources (including 172.17.0.0/16) to internet
+- Allowing return traffic from internet to Docker containers (established/related connections)
+
+This fixes common Docker networking issues where containers cannot reach the internet due to UFW blocking the FORWARD chain that Docker uses for NAT routing.
+
+**Security Note**: This role is designed to work with Docker's iptables integration disabled (`"iptables": false` in `/etc/docker/daemon.json`). Instead of letting Docker manage iptables directly (which can be insecure), this role manually creates the necessary NAT and FORWARD rules while maintaining full control over firewall configuration.
+
+### Private Subnet Support
+
+The role allows unrestricted traffic within Docker allowed sources (which include private networks) by default. This is useful for:
+- Internal network communication without firewall restrictions
+- Development environments where services need to communicate freely
+- VPN or mesh network setups where internal traffic should be trusted
+
+By default, all traffic within private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) is permitted in both directions.
+
 ## Default Configuration
 
 The role implements the following default rules:
 
 Managed by UFW (host-level, Ubuntu default):
 - Deny incoming by default; allow configured TCP/UDP ports (e.g. 22/80/443, 51820).
+- Accept forward by default when Docker is present; allows Docker container outbound traffic.
+- Allow unrestricted traffic within Docker allowed sources (private networks).
 
 Managed by iptables (containers only):
 - `DOCKER-USER` chain created/cleaned; allows ESTABLISHED,RETURN; allows whitelisted sources and public container ports; drops remainder.
@@ -24,8 +46,8 @@ The following variables can be set to customize the firewall configuration:
 # Master switch
 iptables_manage_firewall: true
 
-# Persistence (iptables-save) is disabled by default since UFW manages host rules
-iptables_persistent_save: false
+# Persistence (iptables-save) is enabled by default to ensure Docker rules persist
+iptables_persistent_save: true
 
 # Safety delay for auto-recovery
 iptables_emergency_recovery_delay_minutes: 3
