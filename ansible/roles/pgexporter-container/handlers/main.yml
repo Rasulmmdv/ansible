@@ -1,0 +1,36 @@
+---
+# handlers file for pgexporter-container
+
+- name: restart postgres-exporter container
+  docker_compose:
+    project_src: "{{ pgexporter_compose_dir }}"
+    state: present
+    recreate: always
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, monitoring]
+
+- name: stop postgres-exporter container
+  docker_compose:
+    project_src: "{{ pgexporter_compose_dir }}"
+    state: absent
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, monitoring]
+
+- name: start postgres-exporter container
+  docker_compose:
+    project_src: "{{ pgexporter_compose_dir }}"
+    state: present
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, monitoring]
+
+- name: reload postgres-exporter container
+  docker_compose:
+    project_src: "{{ pgexporter_compose_dir }}"
+    state: present
+    recreate: always
+  become: true
+  when: not ansible_check_mode
+  tags: [configure, monitoring]

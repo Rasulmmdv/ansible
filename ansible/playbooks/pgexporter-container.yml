@@ -1,0 +1,6 @@
+---
+- name: Deploy PostgreSQL Exporter Container for database monitoring
+  hosts: all
+  become: true
+  roles:
+    - pgexporter-container

@@ -1,0 +1,59 @@
+---
+# defaults file for pgexporter-container (PostgreSQL metrics exporter for Prometheus in Docker)
+# PostgreSQL Exporter exports PostgreSQL metrics to Prometheus for monitoring using Docker containers
+
+# PostgreSQL connection details (must be provided by user)
+pgexporter_postgres_host: "localhost"
+pgexporter_postgres_port: 5432
+pgexporter_postgres_user: "postgres"
+pgexporter_postgres_password: "changeme"
+pgexporter_postgres_db: "postgres"
+
+# Container configuration
+pgexporter_container_name: "postgres-exporter"
+pgexporter_container_image: "bitnami/postgres-exporter
+pgexporter_container_tag: "latest"
+pgexporter_container_restart_policy: "unless-stopped"
+
+# Container networking
+pgexporter_container_port: "9187"
+pgexporter_host_port: "9187"
+pgexporter_container_network: "monitoring"
+
+# Container user configuration
+pgexporter_container_user: "65533"
+pgexporter_container_group: "65533"
+
+# Service discovery configuration
+pgexporter_service_discovery_enabled: true
+pgexporter_prometheus_config_dir: "/opt/monitoring/prometheus/config"
+# Prometheus user IDs for file ownership when creating service discovery files
+pgexporter_prometheus_user_id: "65533"
+pgexporter_prometheus_group_id: "65533"
+# Whether this host should generate Prometheus file_sd targets locally (usually only the Prometheus host)
+pgexporter_generate_prometheus_targets: false
+
+# Networking / firewall configuration
+pgexporter_monitoring_network_name: "monitoring"
+pgexporter_manage_firewall: true
+# Explicit allowed source CIDRs for accessing pgexporter (e.g., Prometheus VPN IP)
+# Example: ['10.0.0.5/32']
+pgexporter_allowed_sources: [10.0.0.0/24]
+
+# Container environment variables
+pgexporter_env_vars:
+  DATA_SOURCE_NAME: "postgresql://{{ pgexporter_postgres_user }}:{{ pgexporter_postgres_password }}@{{ pgexporter_postgres_host }}:{{ pgexporter_postgres_port }}/{{ pgexporter_postgres_db }}?sslmode=disable"
+
+# Container command arguments
+pgexporter_container_args: "--web.listen-address=0.0.0.0:9187 --disable-settings-metrics --exclude-databases=template0,template1"
+
+# Docker Compose configuration
+pgexporter_compose_file: "/opt/monitoring/postgres-exporter/docker-compose.yml"
+pgexporter_compose_dir: "/opt/monitoring/postgres-exporter"
+
+# Container health check
+pgexporter_health_check_enabled: true
+pgexporter_health_check_interval: "30s"
+pgexporter_health_check_timeout: "10s"
+pgexporter_health_check_retries: 3
+pgexporter_health_check_start_period: "40s"

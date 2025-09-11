@@ -1,0 +1,88 @@
+---
+alwaysApply: true
+---
+Core Principles
+Idempotency & Safety: All roles must be idempotent (re-runnable without unintended changes) and check-mode safe. Use when: ansible_check_mode to skip tasks that mutate the system during a dry run.
+
+Modularity: Keep roles and tasks modular. Files should ideally be under 300 lines of code (LOC). Split large roles into smaller, reusable tasks.
+
+Security: Never commit secrets, credentials, or .env files. Use --extra-vars or host_vars/ for sensitive data.
+
+Consistency: Use a consistent tagging scheme (e.g., install, configure, validate, cleanup). Document all tags in the README.md.
+
+Environment Agnostic: Design roles to be reusable across dev, test, and prod environments. Avoid hardcoding environment-specific values.
+
+Development Workflow
+This section outlines the step-by-step process for developing, testing, and documenting your Ansible roles.
+
+1. Discovery & Analysis
+Scan existing roles and services. Identify dependencies (e.g., Docker requires docker-py and docker service) and document them in an analysis.md file.
+
+2. Orchestration & Configuration
+Create a central configuration file at group_vars/all/main.yml.
+
+Define roles_all: a list of all roles in the project.
+
+Define role_dependencies: a dictionary mapping roles to their prerequisites.
+
+Build orchestrate.yml, a dynamic playbook that handles role selection and dependency resolution.
+
+It should accept a list of roles via an extra variable (e.g., -e "roles_enabled=['roleA','roleB']").
+
+It must gracefully fail if a requested role doesn't exist.
+
+It must support running all roles with a flag (e.g., -e "run_all_roles=true").
+
+3. Tagging & Tasking
+Add consistent tags to all tasks within your roles. For example, a task to install a package should have the install tag.
+
+Use tags to test selective execution. Validate this with ansible-playbook orchestrate.yml --list-tasks --tags install.
+
+4. Testing & Validation
+Syntax & Dry Run: Before execution, always run ansible-playbook orchestrate.yml --syntax-check and ansible-playbook orchestrate.yml --check -e "run_all_roles=true".
+
+Execution: Run the playbook on the target node (e.g., test-server) and capture the results.
+
+Verification: After execution, SSH into the target node to verify changes.
+
+Check for created or modified files.
+
+Verify services are running with systemctl status <service_name>.
+
+Check open ports with netstat -tulnp.
+
+Review relevant logs in /var/log/.
+
+Reinstall necessary tools using package managers (e.g., apt install <package>).
+
+Fix & Retest: Document any failures and their fixes in a testing_log.md file. Continue to fix errors and retest until all roles pass. Never use destructive commands like rm -rf.
+
+5. Documentation & Finalization
+Update README.md with clear instructions on:
+
+How to run the playbook for all roles or a subset.
+
+How to use tags for selective execution.
+
+The testing and verification steps.
+
+Securely handling secrets.
+
+Git conventions and commit message guidelines.
+
+Create a project_roadmap.md file to track future tasks, using a simple Jira-like format (Task, Description, Status, Assignee, Priority).
+
+Deliverables
+orchestrate.yml: A dynamic playbook for execution.
+
+group_vars/all/main.yml: The central configuration file.
+
+Updated Roles: All roles are tagged, idempotent, and check-mode safe.
+
+README.md: Comprehensive documentation.
+
+project_roadmap.md: A plan for future work.
+
+testing_log.md: A record of test results, fixes, and final validation.
+
+Final State: All roles run without issues, and all services on the target node are fully operational and verified.

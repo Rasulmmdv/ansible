@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  postgres-exporter:
+    image: "{{ pgexporter_container_image }}:{{ pgexporter_container_tag }}"
+    container_name: "{{ pgexporter_container_name }}"
+    restart: "{{ pgexporter_container_restart_policy }}"
+    user: "{{ pgexporter_container_user }}:{{ pgexporter_container_group }}"
+    ports:
+      - "{{ pgexporter_host_port }}:{{ pgexporter_container_port }}"
+    environment:
+{% for key, value in pgexporter_env_vars.items() %}
+      - "{{ key }}={{ value }}"
+{% endfor %}
+    command: "{{ pgexporter_container_args }}"
+    networks:
+      - "{{ pgexporter_container_network }}"
+{% if pgexporter_health_check_enabled %}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{ pgexporter_container_port }}/metrics"]
+      interval: "{{ pgexporter_health_check_interval }}"
+      timeout: "{{ pgexporter_health_check_timeout }}"
+      retries: {{ pgexporter_health_check_retries }}
+      start_period: "{{ pgexporter_health_check_start_period }}"
+{% endif %}
+
+networks:
+  {{ pgexporter_container_network }}:
+    external: true

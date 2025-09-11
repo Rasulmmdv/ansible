@@ -9,7 +9,7 @@
     - docker
     - iptables
     - common
-    - portainer-agent
+    # - portainer-agent
     # - tailscale
     # - traefik
     # - portainer
