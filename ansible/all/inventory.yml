@@ -1,0 +1,74 @@
+---
+all:
+  hosts:
+    infra-01: # gitlab server
+      ansible_host: 5.188.158.83
+      ansible_port: 2222
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      iptables_docker_public_tcp_ports:
+        - 22 #gitlab-ce for git commands
+        - 80 # gitlab-ce for web interface
+        - 443 # gitlab-ce for web interface
+      # PostgreSQL exporter monitoring configuration
+      prometheus_pgexporter_hosts:
+        - "prod-01"      # Production database server
+      prometheus_pgexporter_port: "9187"
+      # Override default labels for PostgreSQL exporters
+      prometheus_pgexporter_labels:
+        job: "postgres_exporter"
+        service: "postgresql"
+        environment: "production"
+      wireguard_address: 10.0.0.5/24
+    prod-01: # prod server
+      ansible_host: 188.124.37.101
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      iptables_allowed_tcp_ports:
+        - 5432 # postgres
+        - 80
+        - 443
+        - 8061
+      iptables_docker_public_tcp_ports:
+        - 8061
+        - 80
+        - 443
+      pgexporter_postgres_host: "localhost"
+      pgexporter_postgres_port: 5432
+      pgexporter_postgres_user: "monitoring"
+      pgexporter_postgres_password: "XPgwTpfJJmwoSXe"
+      pgexporter_postgres_db: "postgres"
+      wireguard_address: 10.0.0.6/24
+    prod-02: # prod server
+      ansible_host: 80.249.131.232
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      wireguard_address: 10.0.0.7/24
+    test-01: # test server Fields
+      ansible_host: 82.202.197.209
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      wireguard_address: 10.0.0.3/24
+    vpn-01: # vpn server Hetzner
+      ansible_host: 159.69.207.188
+      ansible_user: root
+      ansible_become: true
+      ansible_become_method: sudo
+      wireguard_address: 10.0.0.1/24
+      iptables_allowed_tcp_ports:
+        - 40152 # xray
+        - 38837 # xray ui
+  
+  vars:
+    # Common variables for all hosts
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_python_interpreter: /usr/bin/python3
+    restic_aws_access_key_id: "YOUR_YANDEX_CLOUD_ACCESS_KEY_ID"
+    restic_aws_secret_access_key: "YOUR_YANDEX_CLOUD_SECRET_ACCESS_KEY"
+    restic_password: "YOUR_RESTIC_PASSWORD"
+    restic_setup_selectel_ca: false
+    project_name: kimdev
