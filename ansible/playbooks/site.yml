@@ -9,6 +9,7 @@
     - docker
     - iptables
     - common
+    - restic
     # - portainer-agent
     # - tailscale
     # - traefik

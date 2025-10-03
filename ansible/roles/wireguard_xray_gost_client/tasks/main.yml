@@ -1,10 +1,11 @@
 ---
-- name: Install dependencies
+- name: Install client dependencies (WireGuard client tools, Xray dependencies)
   apt:
     name:
       - curl
       - unzip
       - wireguard
+      - wireguard-tools
       - resolvconf
     state: present
     update_cache: true
@@ -99,6 +100,18 @@
         to_ports: 51821
         state: present
       notify: commit iptables rules
+
+    - name: Stop existing WireGuard interface if running
+      shell: wg-quick down wg0
+      ignore_errors: true
+      register: wg_down_result
+      changed_when: wg_down_result.rc == 0
+
+    - name: Ensure systemd-resolved service is running
+      systemd:
+        name: systemd-resolved
+        enabled: true
+        state: started
 
     - name: Ensure WireGuard (wg-quick@wg0) service is enabled and started
       systemd:

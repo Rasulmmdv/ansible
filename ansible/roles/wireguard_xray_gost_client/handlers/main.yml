@@ -26,4 +26,12 @@
     enabled: true
   become: true
   when: not ansible_check_mode
-  ignore_errors: true 
+  ignore_errors: true
+
+- name: Restart wireguard client
+  systemd:
+    name: wg-quick@wg0
+    state: restarted
+    enabled: true
+  become: true
+  when: not ansible_check_mode 

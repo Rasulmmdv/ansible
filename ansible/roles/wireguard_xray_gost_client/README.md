@@ -1,4 +1,6 @@
-# 🛰️ WireGuard + Xray + Gost Stack
+# 🛰️ WireGuard + Xray + Gost CLIENT Stack
+
+> **Note**: This is a **CLIENT-ONLY** role. It installs WireGuard client tools (`wireguard` + `wireguard-tools`) and configuration to connect to an external WireGuard server. It does NOT set up a WireGuard server, PostUp/PostDown scripts, NAT masquerading, or server key generation.
 
 ## Overview
 
@@ -14,12 +16,13 @@ This stack enables clients to:
 ## 📜 Ansible Tasks Summary
 
 ```yaml
-- Install: curl, unzip, wireguard
+- Install client packages: curl, unzip, wireguard, wireguard-tools, resolvconf
 - Install Xray and deploy VLESS + Reality config
 - Download and install Gost
 - Add iptables rule to redirect UDP 51820 to TCP 51821
 - Deploy and enable gost systemd service
-- Deploy and enable WireGuard config (wg0)
+- Deploy user-provided WireGuard client config (wg0.conf)
+- Enable WireGuard client service (wg-quick@wg0)
 ```
 
 ## 🧪 Verification

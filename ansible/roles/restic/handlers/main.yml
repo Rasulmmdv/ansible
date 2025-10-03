@@ -2,4 +2,10 @@
 - name: reload systemd
   systemd:
     daemon_reload: true
+  when: not ansible_check_mode
+
+- name: apply docker group membership
+  command: newgrp docker
+  args:
+    creates: /tmp/docker_group_applied
   when: not ansible_check_mode 

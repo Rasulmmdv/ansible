@@ -187,9 +187,47 @@
     name: "{{ restic_user }}"
     groups: docker
     append: yes
+  notify: apply docker group membership
   when: 
     - restic_postgresql_backup_enabled | bool
-    - restic_postgresql_instances | selectattr('container_name', 'defined') | list | length > 0
+    - (restic_postgresql_instances | selectattr('container_name', 'defined') | list | length > 0) or (restic_postgresql_instances | selectattr('is_container', 'defined') | selectattr('is_container', 'equalto', true) | list | length > 0)
+
+# Additional check: Add restic user to docker group if databases.conf contains container entries
+- name: Check if databases.conf contains container entries
+  stat:
+    path: "{{ restic_config_dir }}/databases.conf"
+  register: databases_conf_file
+  when: restic_postgresql_backup_enabled | bool
+
+- name: Read databases.conf to check for container entries
+  slurp:
+    src: "{{ restic_config_dir }}/databases.conf"
+  register: databases_conf_content
+  when: 
+    - restic_postgresql_backup_enabled | bool
+    - databases_conf_file.stat.exists
+
+- name: Add restic user to docker group if databases.conf contains container entries
+  user:
+    name: "{{ restic_user }}"
+    groups: docker
+    append: yes
+  notify: apply docker group membership
+  when: 
+    - restic_postgresql_backup_enabled | bool
+    - databases_conf_file.stat.exists
+    - databases_conf_content.content | b64decode | regex_search('true|localhost')
+
+# Ensure restic user is in docker group when PostgreSQL backup is enabled (fallback)
+- name: Ensure restic user is in docker group for PostgreSQL backup
+  user:
+    name: "{{ restic_user }}"
+    groups: docker
+    append: yes
+  notify: apply docker group membership
+  when: 
+    - restic_postgresql_backup_enabled | bool
+    - not ansible_check_mode
 
 # Create systemd service files
 - name: Create backup service file
@@ -365,4 +403,5 @@
       }}
   register: restic_test
   changed_when: false
+  failed_when: false
   when: not ansible_check_mode 

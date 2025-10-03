@@ -18,7 +18,7 @@
         validation: "wireguard_port | int > 0 and wireguard_port | int <= 65535"
         error_message: "wireguard_port must be a valid port number (1-65535)"
       - name: "wireguard_address"
-        validation: "wireguard_address | regex_search('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$')"
+        validation: "wireguard_address | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(/[0-9]+)?$')"
         error_message: "wireguard_address must be a valid IP address with optional CIDR notation (e.g., 10.0.0.1/24)"
       - name: "wireguard_interface"
         validation: "wireguard_interface | regex_search('^wg[0-9]+$')"
