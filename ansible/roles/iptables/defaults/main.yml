@@ -22,7 +22,7 @@ iptables_emergency_recovery_delay_minutes: 3
 # Enabled by default when Docker is present to ensure container access rules persist
 iptables_persistent_save: true
 
-# Simple allow-lists for common ports (deprecated in favor of ufw_custom_ports)
+# Simple allow-lists for common ports (deprecated in favor of iptables_custom_ports)
 iptables_allowed_tcp_ports: []
 iptables_allowed_udp_ports: []
 
@@ -55,7 +55,7 @@ iptables_docker_public_tcp_ports:
 iptables_docker_public_tcp_ports_extra: []
 iptables_docker_allowed_sources_extra: []
 
-# UFW is the only host-level firewall manager. Raw iptables reserved for Docker.
+# iptables-persistent is used for firewall management with raw iptables rules.
 
 # Unified custom rules for advanced use cases.
 # Example item keys: chain, protocol, source, destination, in_interface, out_interface,
@@ -64,12 +64,14 @@ iptables_docker_allowed_sources_extra: []
 # iptables_custom_rules:
 #   - { chain: 'INPUT', protocol: 'tcp', dport: 8080, jump: 'ACCEPT', comment: 'Allow app port' }
 #   - { chain: 'OUTPUT', protocol: 'udp', dport: 53, jump: 'ACCEPT', comment: 'DNS queries' }
-iptables_custom_rules: []
+iptables_custom_rules:
+  # Allow outbound DNS queries (UDP port 53) - essential for certbot and other services
+  - { chain: 'OUTPUT', protocol: 'udp', destination_port: 53, jump: 'ACCEPT', comment: 'Allow outbound DNS queries (UDP)' }
+  - { chain: 'OUTPUT', protocol: 'tcp', destination_port: 53, jump: 'ACCEPT', comment: 'Allow outbound DNS queries (TCP)' }
 
-# UFW custom ports (preferred for host-level rules)
-# Defaults keep SSH/HTTP/HTTPS and WireGuard open
-# SSH port is dynamically determined based on ansible_port
-ufw_custom_ports:
+# Custom ports for host-level firewall rules
+# These ports are opened for external access to the host
+iptables_custom_ports:
   - { port: "{{ ansible_port | default(22) }}", proto: tcp }  # SSH (custom port if specified)
   - { port: 80, proto: tcp }
   - { port: 443, proto: tcp }

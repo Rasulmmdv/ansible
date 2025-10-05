@@ -43,14 +43,14 @@
   when: iptables_manage_firewall | default(true)
   tags: [configure, security, networking]
   block:
-    - name: Install packages (ufw, iptables and at)
+    - name: Install packages (iptables and at - UFW replaced by iptables-persistent)
       become: true
       when: not ansible_check_mode
       ansible.builtin.package:
         name:
-          - ufw
           - iptables
           - at
+          - iptables-persistent
         state: present
       tags: [install]
 
@@ -117,28 +117,34 @@
           The timer will be stopped at the end of this play if successful.
       tags: [validate, safety]
 
-    - name: Ensure UFW is enabled with sane defaults
+    - name: Ensure UFW is not interfering (if installed)
       become: true
       when: not ansible_check_mode
-      community.general.ufw:
-        state: enabled
-        policy: deny
-        direction: incoming
+      ansible.builtin.service:
+        name: ufw
+        state: stopped
+        enabled: false
+      failed_when: false
       tags: [configure]
 
-    - name: Configure UFW forward policy for Docker networking
+    - name: Configure iptables forward policy for Docker networking
       become: true
       when: not ansible_check_mode and docker_installed
-      community.general.ufw:
-        state: enabled
-        policy: allow
-        direction: routed
+      ansible.builtin.iptables:
+        table: filter
+        chain: FORWARD
+        policy: ACCEPT
+        comment: "Allow Docker network forwarding"
       tags: [configure, docker]
 
     - name: Allow Docker bridge network forwarding
       become: true
       when: not ansible_check_mode and docker_installed
-      ansible.builtin.command: "ufw allow out from {{ docker_source }} to any"
+      ansible.builtin.iptables:
+        chain: FORWARD
+        source: "{{ docker_source }}"
+        jump: ACCEPT
+        comment: "Allow Docker source {{ docker_source }} to forward"
       loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
       loop_control:
         loop_var: docker_source
@@ -147,48 +153,40 @@
     - name: Allow return traffic from internet to Docker containers
       become: true
       when: not ansible_check_mode and docker_installed
-      ansible.builtin.command: "ufw allow in from any to {{ docker_dest }}"
+      ansible.builtin.iptables:
+        chain: INPUT
+        destination: "{{ docker_dest }}"
+        jump: ACCEPT
+        comment: "Allow traffic to Docker destination {{ docker_dest }}"
       loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
       loop_control:
         loop_var: docker_dest
       tags: [configure, docker]
 
-    - name: Allow all traffic within private subnets (incoming)
+    - name: Allow all traffic within private subnets
       become: true
       when: not ansible_check_mode and (iptables_docker_allowed_sources | length) > 0
-      ansible.builtin.command: "ufw allow in from {{ private_subnet }} to {{ private_subnet }}"
+      ansible.builtin.iptables:
+        chain: FORWARD
+        source: "{{ private_subnet }}"
+        destination: "{{ private_subnet }}"
+        jump: ACCEPT
+        comment: "Allow traffic within private subnet {{ private_subnet }}"
       loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
       loop_control:
         loop_var: private_subnet
       tags: [configure, networking]
 
-    - name: Allow all traffic within private subnets (outgoing)
+    - name: Allow custom ports
       become: true
-      when: not ansible_check_mode and (iptables_docker_allowed_sources | length) > 0
-      ansible.builtin.command: "ufw allow out from {{ private_subnet }} to {{ private_subnet }}"
-      loop: "{{ (iptables_docker_allowed_sources | default([])) + (iptables_docker_allowed_sources_extra | default([])) }}"
-      loop_control:
-        loop_var: private_subnet
-      tags: [configure, networking]
-
-    - name: Allow UFW base ports
-      become: true
-      when: not ansible_check_mode and (ufw_custom_ports | length) > 0
-      community.general.ufw:
-        rule: allow
-        port: "{{ item.port }}"
-        proto: "{{ item.proto | default('tcp') }}"
-      loop: "{{ ufw_custom_ports }}"
-      tags: [configure]
-
-    - name: Allow UFW custom ports (new API)
-      become: true
-      when: not ansible_check_mode and (ufw_custom_ports | length) > 0
-      community.general.ufw:
-        rule: allow
-        port: "{{ item.port }}"
-        proto: "{{ item.proto | default('tcp') }}"
-      loop: "{{ ufw_custom_ports }}"
+      when: not ansible_check_mode and (iptables_custom_ports | length) > 0
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: "{{ item.proto | default('tcp') }}"
+        destination_port: "{{ item.port }}"
+        jump: ACCEPT
+        comment: "Allow {{ item.proto | default('tcp') }} port {{ item.port }}"
+      loop: "{{ iptables_custom_ports }}"
       tags: [configure]
 
     - name: Docker firewall (DOCKER-USER) configuration
@@ -246,6 +244,21 @@
           Docker network MASQUERADE validation complete.
           Networks checked: {{ current_docker_networks.stdout_lines | length }}
           Missing rules fixed: {{ network_check_results.results | map(attribute='stdout') | select('match', '^[0-9].*') | list | length }}
+
+    # Ensure iptables allows Docker bridge networks for web traffic
+    - name: Allow web traffic for Docker containers
+      become: true
+      when: not ansible_check_mode and docker_installed
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: "{{ item.proto | default('tcp') }}"
+        destination_port: "{{ item.port }}"
+        jump: ACCEPT
+        comment: "Allow {{ item.proto | default('tcp') }} port {{ item.port }} for Docker containers"
+      loop:
+        - { port: 80, proto: tcp }
+        - { port: 443, proto: tcp }
+      tags: [configure, docker]
 
     - name: Stop and disable emergency rollback timer (deployment succeeded)
       become: true

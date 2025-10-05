@@ -1,5 +1,5 @@
 [Unit]
-Description=Emergency iptables recovery (UFW disable + permissive chains)
+Description=Emergency iptables recovery (iptables-persistent stop + permissive chains)
 Documentation=man:iptables(8)
 DefaultDependencies=no
 

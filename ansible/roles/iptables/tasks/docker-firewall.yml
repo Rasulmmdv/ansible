@@ -60,6 +60,16 @@
     loop_var: tcp_port
   notify: commit iptables rules
 
+- name: Allow DNS queries from containers (UDP 53)
+  become: true
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    protocol: udp
+    destination_port: 53
+    jump: RETURN
+    comment: "Allow DNS queries from containers"
+  notify: commit iptables rules
+
 - name: Block all other external traffic to containers
   become: true
   ansible.builtin.iptables:

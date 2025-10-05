@@ -7,21 +7,10 @@ all:
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-        - { port: 80, proto: tcp }    # HTTP web traffic
-        - { port: 443, proto: tcp }   # HTTPS web traffic
-
-      # Docker container access control - which container ports are externally accessible
-      # These determine which container services can be reached from external networks
       iptables_docker_public_tcp_ports:
-        - 22    # GitLab SSH for git commands
-        - 80    # GitLab web interface
-        - 443   # GitLab secure web interface
-
+        - 22 #gitlab-ce for git commands
+        - 80 # gitlab-ce for web interface
+        - 443 # gitlab-ce for web interface
       # PostgreSQL exporter monitoring configuration
       prometheus_pgexporter_hosts:
         - "prod-01"      # Production database server
@@ -31,131 +20,65 @@ all:
         job: "postgres_exporter"
         service: "postgresql"
         environment: "production"
-
       wireguard_address: 10.0.0.5/24
     prod-01: # prod server
       ansible_host: 188.124.37.101
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-        - { port: 80, proto: tcp }    # HTTP web traffic
-        - { port: 443, proto: tcp }   # HTTPS web traffic
-        - { port: 5432, proto: tcp }  # PostgreSQL database
-        - { port: 8061, proto: tcp }  # Custom application port
-
-      # Docker container access control - which container ports are externally accessible
-      # These determine which container services can be reached from external networks
+      iptables_custom_ports:
+        - { port: 5432, proto: tcp } # postgres
+        - { port: 80, proto: tcp }
+        - { port: 443, proto: tcp }
+        - { port: 8061, proto: tcp }
       iptables_docker_public_tcp_ports:
-        - 80    # Web containers
-        - 443   # Secure web containers
-        - 8061  # Custom application containers
-
-      # PostgreSQL exporter monitoring configuration
+        - 8061
+        - 80
+        - 443
       pgexporter_postgres_host: "localhost"
       pgexporter_postgres_port: 5432
       pgexporter_postgres_user: "monitoring"
       pgexporter_postgres_password: "XPgwTpfJJmwoSXe"
       pgexporter_postgres_db: "postgres"
-
       wireguard_address: 10.0.0.6/24
     prod-02: # prod server
       ansible_host: 80.249.131.232
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-
       wireguard_address: 10.0.0.7/24
     test-01: # test server Fields
       ansible_host: 82.202.197.209
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-
       wireguard_address: 10.0.0.3/24
     vpn-01: # vpn server Hetzner
       ansible_host: 159.69.207.188
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-        - { port: 40152, proto: tcp } # XRay VPN service
-        - { port: 38837, proto: tcp } # XRay web UI
-
       wireguard_address: 10.0.0.1/24
+      iptables_custom_ports:
+        - { port: 40152, proto: tcp } # xray
+        - { port: 38837, proto: tcp } # xray ui
     jitsi-01: # jitsi server
       ansible_host: 85.193.92.221
       ansible_user: root
       ansible_become: true
       ansible_become_method: sudo
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-        - { port: 80, proto: tcp }    # HTTP web traffic (Jitsi Meet web interface)
-        - { port: 443, proto: tcp }   # HTTPS web traffic (Jitsi Meet secure web interface)
-        - { port: 4443, proto: tcp }  # Jitsi JVB TCP fallback for video bridge
-        - { port: 10000, proto: udp } # Jitsi JVB UDP media traffic
-
-      # Docker container access control - which container ports are externally accessible
-      # These determine which container services can be reached from external networks
-      iptables_docker_public_tcp_ports:
-        - 80    # Jitsi Meet web containers
-        - 443   # Jitsi Meet secure web containers
-
       wireguard_address: 10.0.0.8/24
-
+      iptables_custom_ports:
+        - { port: 80, proto: tcp }
+        - { port: 443, proto: tcp }
+        - { port: 4443, proto: tcp } # Jitsi JVB TCP fallback
+        - { port: 10000, proto: udp } # Jitsi JVB media
       # Jitsi Meet configuration
       jitsi_domain: "meet-kimdevs.ru"
       jitsi_enable_letsencrypt: true
       jitsi_letsencrypt_domain: "meet-kimdevs.ru"
       jitsi_letsencrypt_email: "admin@kimdevs.ru"
       jitsi_compose_dir: "/opt/jitsi"
-    rasul-01: # rasul server
-      ansible_host: 78.46.204.134
-      ansible_user: root
-      ansible_become: true
-      ansible_become_method: sudo
-      wireguard_address: 10.0.0.9/24
-
-      # Host-level firewall rules (UFW) - ports open to external traffic
-      # These ports are accessible from the internet/public networks
-      ufw_custom_ports:
-        - { port: 22, proto: tcp }    # SSH access
-        - { port: 80, proto: tcp }    # HTTP web traffic
-        - { port: 443, proto: tcp }   # HTTPS web traffic
-        - { port: 8080, proto: tcp }  # Custom web apps
-        - { port: 8443, proto: tcp }  # Additional secure apps
-        - { port: 9000, proto: tcp }  # Development/testing ports
-        - { port: 51820, proto: udp } # WireGuard VPN
-
-      # Docker container access control - which container ports are externally accessible
-      # These determine which container services can be reached from external networks
-      iptables_docker_public_tcp_ports:
-        - 80    # HTTP containers (web servers)
-        - 443   # HTTPS containers (secure web apps)
-        - 8080  # Custom application containers
-        - 8443  # Additional secure application containers
-        - 9000  # Development container ports
   
   vars:
     # Common variables for all hosts

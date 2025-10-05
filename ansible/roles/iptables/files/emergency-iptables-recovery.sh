@@ -9,9 +9,10 @@ iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
 iptables -P OUTPUT ACCEPT
 
-# Try to disable UFW to avoid lockout
-if command -v ufw >/dev/null 2>&1; then
-  ufw --force disable || true
+# Try to stop iptables-persistent service to avoid lockout
+if systemctl is-active --quiet netfilter-persistent; then
+  systemctl stop netfilter-persistent || true
+fi
 fi
 
 # Add basic SSH rule (use ansible_port if available, fallback to 22)

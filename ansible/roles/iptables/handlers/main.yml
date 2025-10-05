@@ -1,7 +1,7 @@
 # handlers file for iptables
 ---
 
-# Save iptables rules to persistent files (disabled by default when UFW is used)
+# Save iptables rules to persistent files
 - name: Save iptables rules
   listen: "commit iptables rules"
   become: true
