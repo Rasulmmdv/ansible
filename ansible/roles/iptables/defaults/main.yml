@@ -31,10 +31,11 @@ iptables_essential_rules:
   - { chain: 'INPUT', ctstate: 'ESTABLISHED,RELATED', comment: 'Allow established and related connections' }
   - { chain: 'INPUT', in_interface: 'lo', comment: 'Allow all loopback traffic' }
   - { chain: 'INPUT', protocol: 'icmp', comment: 'Allow essential ICMP traffic' }
-  - { chain: 'INPUT', protocol: 'tcp', destination_port: '22', comment: 'Allow SSH traffic' }
+  - { chain: 'INPUT', protocol: 'tcp', destination_port: "{{ ansible_port | default(22) }}", comment: 'Allow SSH traffic' }
 
 # Ansible port rules (only added if ansible_port is different from default SSH port)
-iptables_ansible_port_rules: []
+# This gets populated dynamically based on ansible_port variable
+iptables_ansible_port_rules: "{{ (ansible_port | default(22) | int != 22) | ternary([{'chain': 'INPUT', 'protocol': 'tcp', 'destination_port': (ansible_port | default(22)), 'comment': 'Allow Ansible SSH access on custom port'}], []) }}"
 
 # CIDR notation for sources allowed to access Docker containers
 # It's recommended to keep this as restrictive as possible
@@ -67,8 +68,9 @@ iptables_custom_rules: []
 
 # UFW custom ports (preferred for host-level rules)
 # Defaults keep SSH/HTTP/HTTPS and WireGuard open
+# SSH port is dynamically determined based on ansible_port
 ufw_custom_ports:
-  - { port: 22, proto: tcp }
+  - { port: "{{ ansible_port | default(22) }}", proto: tcp }  # SSH (custom port if specified)
   - { port: 80, proto: tcp }
   - { port: 443, proto: tcp }
   - { port: 51820, proto: udp }

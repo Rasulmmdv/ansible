@@ -14,8 +14,14 @@ if command -v ufw >/dev/null 2>&1; then
   ufw --force disable || true
 fi
 
-# Add basic SSH rule
-iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+# Add basic SSH rule (use ansible_port if available, fallback to 22)
+# Check for ansible_port fact file or use default
+if [ -f "/etc/ansible/facts.d/ansible_port.fact" ]; then
+  SSH_PORT=$(cat /etc/ansible/facts.d/ansible_port.fact 2>/dev/null || echo "22")
+else
+  SSH_PORT="22"
+fi
+iptables -A INPUT -p tcp --dport "$SSH_PORT" -j ACCEPT
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -i lo -j ACCEPT
 

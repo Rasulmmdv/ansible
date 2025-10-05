@@ -11,7 +11,7 @@
 - name: Check if Docker role has been applied
   when: iptables_manage_firewall | default(true)
   become: true
-  tags: [prereq, validate, docker]
+  tags: [prereq, validate, docker, always]
   block:
     - name: Check for docker binary
       ansible.builtin.stat:
@@ -37,6 +37,7 @@
   when: not (iptables_manage_firewall | default(true))
   set_fact:
     docker_installed: false
+  tags: [always]
 
 - name: Configure firewall
   when: iptables_manage_firewall | default(true)
@@ -69,6 +70,15 @@
         src: emergency-iptables-recovery.sh
         dest: /usr/local/bin/emergency-iptables-recovery.sh
         mode: '0755'
+      tags: [configure, safety]
+
+    - name: Create ansible_port fact file for emergency script
+      become: true
+      when: not ansible_check_mode and (ansible_port | default(22) | int != 22)
+      ansible.builtin.copy:
+        content: "{{ ansible_port | default(22) }}"
+        dest: /etc/ansible/facts.d/ansible_port.fact
+        mode: '0644'
       tags: [configure, safety]
 
     - name: Install systemd unit for emergency firewall rollback (service)
@@ -187,6 +197,55 @@
       tags: [docker, iptables]
 
     # Save rules is handled within docker-firewall tasks include
+
+    # Ensure all Docker networks have MASQUERADE rules (defensive check)
+    - name: Get current Docker networks for MASQUERADE validation
+      when: not ansible_check_mode and docker_installed
+      ansible.builtin.shell: |
+        docker network ls --format "{{ '{{.Name}}' }}" | grep -v "^host$" | grep -v "^none$" | while read network; do
+          subnet=$(docker network inspect "$network" --format '{{ "{{range .IPAM.Config}}{{.Subnet}}{{end}}" }}' 2>/dev/null || echo "")
+          if [ ! -z "$subnet" ]; then
+            echo "$network:$subnet"
+          fi
+        done
+      register: current_docker_networks
+      changed_when: false
+      failed_when: false
+
+    - name: Check each Docker network for missing MASQUERADE rules
+      when: not ansible_check_mode and docker_installed and current_docker_networks.stdout_lines | length > 0
+      ansible.builtin.shell: |
+        network_info="{{ item }}"
+        if [ ! -z "$network_info" ] && echo "$network_info" | grep -q ":"; then
+          subnet=$(echo "$network_info" | cut -d: -f2)
+          # Check if MASQUERADE rule exists for this subnet
+          if ! iptables -t nat -C POSTROUTING -s "$subnet" -j MASQUERADE 2>/dev/null; then
+            echo "$subnet"
+          fi
+        fi
+      register: network_check_results
+      changed_when: false
+      failed_when: false
+      loop: "{{ current_docker_networks.stdout_lines }}"
+
+    - name: Add missing MASQUERADE rules for Docker networks
+      when: not ansible_check_mode and docker_installed and network_check_results.results | map(attribute='stdout') | select('match', '^[0-9].*') | list | length > 0
+      ansible.builtin.iptables:
+        table: nat
+        chain: POSTROUTING
+        source: "{{ item }}"
+        jump: MASQUERADE
+        comment: "NAT for Docker network (auto-added)"
+      loop: "{{ network_check_results.results | map(attribute='stdout') | select('match', '^[0-9].*') | list | unique }}"
+      notify: commit iptables rules
+
+    - name: Show MASQUERADE rule validation results
+      when: not ansible_check_mode and docker_installed and current_docker_networks.stdout_lines | length > 0
+      ansible.builtin.debug:
+        msg: |
+          Docker network MASQUERADE validation complete.
+          Networks checked: {{ current_docker_networks.stdout_lines | length }}
+          Missing rules fixed: {{ network_check_results.results | map(attribute='stdout') | select('match', '^[0-9].*') | list | length }}
 
     - name: Stop and disable emergency rollback timer (deployment succeeded)
       become: true
