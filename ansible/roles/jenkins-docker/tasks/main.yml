@@ -35,8 +35,8 @@
         error_message: "jenkins_data_dir must be an absolute path starting with '/'"
 
 - name: Setup Jenkins
-  block:
   tags: [install, configure, docker]
+  block:
     - name: Setup Jenkins user and directories (standardized)
       include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
       vars:
@@ -198,8 +198,8 @@
   when: not ansible_check_mode
 
 - name: Create basic Jenkins configuration files
-  template:
   tags: [configure, web]
+  template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     owner: "{{ jenkins_user }}"
@@ -258,8 +258,8 @@
   when: not ansible_check_mode
 
 - name: Create Docker Compose configuration
-  template:
   tags: [configure, deploy, docker]
+  template:
     src: docker-compose.yml.j2
     dest: "{{ jenkins_data_dir }}/docker-compose.yml"
     owner: "{{ jenkins_user }}"
@@ -294,8 +294,8 @@
     - jenkins_container_logs.json is defined
 
 - name: Test Jenkins login functionality
-  uri:
   tags: [validate, web]
+  uri:
     url: "https://{{ jenkins_domain }}/login"
     method: GET
     validate_certs: "{{ jenkins_verify_ssl_certs | default(false) }}"

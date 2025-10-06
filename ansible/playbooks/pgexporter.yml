@@ -1,6 +1,56 @@
 ---
-- name: Deploy PostgreSQL Exporter for database monitoring
+# Consolidated PostgreSQL Exporter Playbook
+# Combines: pgexporter.yml, pgexporter-container.yml
+#
+# Usage:
+#   Direct deployment (default):
+#     ansible-playbook -i inventory.yml playbooks/pgexporter.yml
+#
+#   Container deployment:
+#     ansible-playbook -i inventory.yml playbooks/pgexporter.yml -e "pgexporter_deployment_method=container"
+
+- name: Deploy PostgreSQL Exporter for Database Monitoring
   hosts: all
   become: true
+  vars:
+    # Deployment method selection
+    pgexporter_deployment_method: "{{ pgexporter_deploy_method | default('direct') }}"
+    
+    # Required PostgreSQL connection variables
+    pgexporter_postgres_host: "{{ pgexporter_host | default('localhost') }}"
+    pgexporter_postgres_port: "{{ pgexporter_port | default('5432') }}"
+    pgexporter_postgres_user: "{{ pgexporter_user | default('postgres') }}"
+    pgexporter_postgres_password: "{{ pgexporter_password | default('changeme') }}"
+    pgexporter_postgres_db: "{{ pgexporter_database | default('postgres') }}"
+    
+  pre_tasks:
+    - name: Validate deployment method
+      assert:
+        that: pgexporter_deployment_method in ['direct', 'container']
+        fail_msg: "pgexporter_deployment_method must be 'direct' or 'container'"
+      tags: always
+
+    - name: Display deployment configuration
+      debug:
+        msg:
+          - "=== PostgreSQL Exporter Deployment Configuration ==="
+          - "Deployment Method: {{ pgexporter_deployment_method }}"
+          - "PostgreSQL Host: {{ pgexporter_postgres_host }}:{{ pgexporter_postgres_port }}"
+          - "Database: {{ pgexporter_postgres_db }}"
+          - "User: {{ pgexporter_postgres_user }}"
+          - "================================================"
+      tags: always
+
   roles:
-    - pgexporter
+    - role: "{{ 'pgexporter-container' if pgexporter_deployment_method == 'container' else 'pgexporter' }}"
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "✅ PostgreSQL Exporter deployment completed!"
+          - "================================================"
+          - "Deployment Method: {{ pgexporter_deployment_method }}"
+          - "PostgreSQL Exporter: http://{{ ansible_default_ipv4.address }}:9187/metrics"
+          - "Database Connection: {{ pgexporter_postgres_host }}:{{ pgexporter_postgres_port }}/{{ pgexporter_postgres_db }}"
+          - "================================================"

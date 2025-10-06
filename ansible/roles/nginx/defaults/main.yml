@@ -32,7 +32,7 @@ nginx_nf_conntrack_max: 1548576
 nginx_configs:
   common:
     content:
-      - user nginx
+      - user www-data
       - worker_processes {{ nginx_worker_processes }}
       - worker_rlimit_nofile {{ nginx_worker_rlimit_nofile }}
       - error_log /var/log/nginx/error.log warn
@@ -58,8 +58,9 @@ nginx_configs:
           - gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript
           - proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=microcache:5m max_size=1000m
           - include /etc/nginx/conf.d/*.conf
-      - stream:
-          - include /etc/nginx/conf.d/*.stream
+  stream:
+    content:
+      - include /etc/nginx/conf.d/*.stream
 
 # Site configurations
 nginx_sites:

@@ -2,4 +2,14 @@
 
 {% from "_macros.j2" import nginx_write_params with context -%}
 
-{{ nginx_write_params(item.value.content) }}
+{% for section_name, section_config in nginx_configs.items() %}
+{% if section_name == 'stream' %}
+{{ nginx_write_params(section_config.content) }}
+{% endif %}
+{% endfor %}
+
+{% for section_name, section_config in nginx_configs.items() %}
+{% if section_name != 'stream' %}
+{{ nginx_write_params(section_config.content) }}
+{% endif %}
+{% endfor %}

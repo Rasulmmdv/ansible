@@ -1,6 +1,6 @@
 ---
 - name: Deploy Blackbox Exporter with Website Monitoring
-  hosts: monitoring_servers
+  hosts: all
   become: true
   vars:
     blackbox_enable_website_monitoring: true

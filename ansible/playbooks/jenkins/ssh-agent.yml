@@ -1,0 +1,12 @@
+---
+# Playbook for deploying Jenkins SSH agent
+
+- name: Deploy Jenkins SSH Agent
+  hosts: all
+  become: true
+  roles:
+    - role: jenkins-ssh-agent-docker
+      vars:
+        jenkins_ssh_agent_name: "{{ inventory_hostname }}-ssh-agent"
+        jenkins_master_url: "http://jenkins:8080"
+        jenkins_network_name: "jenkins-network" 

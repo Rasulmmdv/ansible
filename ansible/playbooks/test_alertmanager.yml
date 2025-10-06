@@ -1,6 +1,6 @@
 ---
 - name: Test Alertmanager Deployment
-  hosts: monitoring_servers
+  hosts: all
   become: true
   
   tasks:

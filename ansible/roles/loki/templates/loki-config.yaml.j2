@@ -67,7 +67,6 @@ ingester:
   max_chunk_age: {{ loki_ingester.max_chunk_age }}
   chunk_target_size: {{ loki_ingester.chunk_target_size }}
   chunk_retain_period: {{ loki_ingester.chunk_retain_period }}
-  max_transfer_retries: {{ loki_ingester.max_transfer_retries }}
   lifecycler:
     ring:
       kvstore:
@@ -79,8 +78,6 @@ ingester:
     heartbeat_period: {{ loki_ingester.heartbeat_period }}
     observe_period: {{ loki_ingester.observe_period }}
     join_after: {{ loki_ingester.join_after }}
-    claim_on_rollout: false
-    normalise_tokens: false
 
 ruler:
   storage:

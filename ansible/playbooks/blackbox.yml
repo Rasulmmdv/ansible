@@ -1,0 +1,55 @@
+---
+# Consolidated Blackbox Exporter Playbook
+# Combines: blackbox_exporter.yml, blackbox_multi_endpoints.yml, blackbox_website_monitoring.yml
+#
+# Usage:
+#   Basic deployment:
+#     ansible-playbook -i inventory.yml playbooks/blackbox.yml
+#
+#   With website monitoring:
+#     ansible-playbook -i inventory.yml playbooks/blackbox.yml -e "blackbox_enable_website_monitoring=true"
+#
+#   With custom endpoints:
+#     ansible-playbook -i inventory.yml playbooks/blackbox.yml -e "blackbox_custom_endpoints=true"
+
+- name: Deploy Blackbox Exporter with Configurable Monitoring
+  hosts: all
+  become: true
+  vars:
+    # Enable website monitoring (combines blackbox_website_monitoring.yml functionality)
+    blackbox_enable_website_monitoring: "{{ blackbox_website_monitoring | default(false) }}"
+    
+    # Enable multi-endpoint monitoring (combines blackbox_multi_endpoints.yml functionality)
+    blackbox_custom_endpoints: "{{ blackbox_multi_endpoints | default(false) }}"
+    
+    # Default endpoints (can be overridden)
+    blackbox_endpoints: "{{ blackbox_custom_endpoint_list | default([]) }}"
+    
+  pre_tasks:
+    - name: Display deployment configuration
+      debug:
+        msg:
+          - "=== Blackbox Exporter Deployment Configuration ==="
+          - "Website Monitoring: {{ blackbox_enable_website_monitoring }}"
+          - "Custom Endpoints: {{ blackbox_custom_endpoints }}"
+          - "Endpoint Count: {{ blackbox_endpoints | length }}"
+          - "================================================"
+      tags: always
+
+  roles:
+    - role: prometheus
+      when: blackbox_enable_website_monitoring or blackbox_custom_endpoints
+      
+    - blackbox_exporter
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "✅ Blackbox Exporter deployment completed!"
+          - "================================================"
+          - "Blackbox Exporter: http://{{ ansible_default_ipv4.address }}:9115"
+          - "Prometheus Integration: {{ 'Enabled' if (blackbox_enable_website_monitoring or blackbox_custom_endpoints) else 'Disabled' }}"
+          - "Website Monitoring: {{ 'Enabled' if blackbox_enable_website_monitoring else 'Disabled' }}"
+          - "Custom Endpoints: {{ blackbox_endpoints | length }} configured"
+          - "================================================"

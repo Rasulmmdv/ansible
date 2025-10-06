@@ -55,7 +55,6 @@ loki_ingester:
   max_chunk_age: "1h"
   chunk_target_size: 1048576  # 1MB
   chunk_retain_period: "30s"
-  max_transfer_retries: 0
   min_ready_duration: "15s"  # Controls the "waiting for 15s" behavior
   num_tokens: 512
   heartbeat_period: "5s"

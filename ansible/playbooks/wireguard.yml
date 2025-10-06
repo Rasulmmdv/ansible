@@ -1,32 +1,91 @@
 ---
-# Playbook: wireguard.yml
-# Description: Configures WireGuard VPN server
-# Usage: ansible-playbook -i inventory.yml playbooks/wireguard.yml
+# Enhanced WireGuard Playbook with Optional Components
+# Combines: wireguard.yml, wireguard_xray_gost_client.yml
+#
+# Usage:
+#   Basic WireGuard only:
+#     ansible-playbook -i inventory.yml playbooks/wireguard.yml
+#
+#   WireGuard with Xray and Gost:
+#     ansible-playbook -i inventory.yml playbooks/wireguard.yml -e "wireguard_enable_xray=true" -e "wireguard_enable_gost=true"
+#
+#   Full client stack:
+#     ansible-playbook -i inventory.yml playbooks/wireguard.yml -e "wireguard_client_stack=true"
 
-- name: Configure WireGuard VPN server
+- name: Deploy WireGuard VPN with Optional Xray and Gost Components
   hosts: all
   become: true
   vars:
     # REQUIRED: Set your project name for VPN naming
-    # project_name: myproject
-    project_name: "kimdevs"
-
+    project_name: "{{ wireguard_project_name | default('kimdevs') }}"
+    
     # REQUIRED: Set your WireGuard private key (per host, or in host_vars)
     # wireguard_private_key: "..."
-
+    
     # REQUIRED: Set your DNS domain
-    # dnsmasq_domain: "example.local"
-    # domain: "example.local"
-    dnsmasq_domain: "kimdevs.ru"
-    domain: "kimdevs.ru"
-    wireguard_interface: wg0
-    wireguard_port: 51820
+    dnsmasq_domain: "{{ wireguard_dns_domain | default('kimdevs.ru') }}"
+    domain: "{{ wireguard_domain | default('kimdevs.ru') }}"
+    
+    # WireGuard configuration
+    wireguard_interface: "{{ wireguard_interface_name | default('wg0') }}"
+    wireguard_port: "{{ wireguard_port_number | default(51820) }}"
     wireguard_manage_iptables: false
+    
+    # Optional component flags
+    wireguard_enable_xray: "{{ wireguard_xray_enabled | default(false) }}"
+    wireguard_enable_gost: "{{ wireguard_gost_enabled | default(false) }}"
+    wireguard_client_stack: "{{ wireguard_full_client_stack | default(false) }}"
+    
+    # Xray/Gost configuration
+    gost_version: "{{ wireguard_gost_version | default('3.2.3') }}"
+    
+  pre_tasks:
+    - name: Set component flags based on client stack option
+      set_fact:
+        wireguard_enable_xray: "{{ wireguard_client_stack | bool }}"
+        wireguard_enable_gost: "{{ wireguard_client_stack | bool }}"
+      when: wireguard_client_stack is defined and wireguard_client_stack | bool
+
+    - name: Display deployment configuration
+      debug:
+        msg:
+          - "=== WireGuard VPN Deployment Configuration ==="
+          - "Project Name: {{ project_name }}"
+          - "Domain: {{ domain }}"
+          - "Interface: {{ wireguard_interface }}"
+          - "Port: {{ wireguard_port }}"
+          - "Xray Integration: {{ wireguard_enable_xray }}"
+          - "Gost Integration: {{ wireguard_enable_gost }}"
+          - "Full Client Stack: {{ wireguard_client_stack }}"
+          - "================================================"
+      tags: always
+
   roles:
-    - wireguard
+    - role: wireguard
+      when: not wireguard_client_stack | default(false) | bool
+
+    - role: wireguard_xray_gost_client
+      when: wireguard_client_stack | default(false) | bool
+      vars:
+        gost_version: "{{ gost_version }}"
+
   handlers:
     - name: Save iptables rules
       become: true
       ansible.builtin.shell: iptables-save > /etc/iptables.rules
       args:
         executable: /bin/bash
+      when: not wireguard_client_stack | default(false) | bool
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "✅ WireGuard VPN deployment completed!"
+          - "================================================"
+          - "Configuration: {{ 'Full Client Stack' if wireguard_client_stack | default(false) | bool else 'Basic WireGuard' }}"
+          - "VPN Interface: {{ wireguard_interface }}"
+          - "VPN Port: {{ wireguard_port }}"
+          - "Xray: {{ 'Enabled' if wireguard_enable_xray | bool else 'Disabled' }}"
+          - "Gost: {{ 'Enabled' if wireguard_enable_gost | bool else 'Disabled' }}"
+          - "================================================"

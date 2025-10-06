@@ -2,7 +2,7 @@
 # Playbook for deploying Jenkins SSH agent
 
 - name: Deploy Jenkins SSH Agent
-  hosts: jenkins_agents
+  hosts: all
   become: true
   roles:
     - role: jenkins-ssh-agent-docker

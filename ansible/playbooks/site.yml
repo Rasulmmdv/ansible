@@ -9,9 +9,9 @@
     - docker
     - iptables
     - common
-    - restic
+    # - restic  # Excluded as requested
     # - portainer-agent
-    # - tailscale
+    # - tailscale  # Excluded as requested
     # - traefik
     # - portainer
 

@@ -1,6 +1,6 @@
 ---
 - name: "Deploy Docker Registry"
-  hosts: ci_infrastructure
+  hosts: all
   become: true
   vars:
     # REQUIRED: Set your S3 credentials for Docker Registry

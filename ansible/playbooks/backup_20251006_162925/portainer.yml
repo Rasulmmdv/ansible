@@ -1,6 +1,6 @@
 ---
 - name: Deploy Portainer
-  hosts: infra-01
+  hosts: all
   become: yes
   roles:
     - portainer 
