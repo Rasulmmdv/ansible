@@ -5,7 +5,7 @@ Requires={{ restic_service_name }}.service
 [Timer]
 OnCalendar={{ restic_backup_schedule }}
 Persistent=true
-RandomizedDelaySec=300
+RandomizedDelaySec=1800
 
 [Install]
 WantedBy=timers.target 
