@@ -1,55 +1,80 @@
 # Traefik dynamic configuration
-# Priority system: Higher numbers = higher priority
-# 100+ = High priority (dashboard, API, redirects)
-# 50-99 = Medium priority (service-specific routers)
-# 1-49 = Low priority (catch-all, fallbacks)
+# Simple configuration: dashboard at /traefik path, internal access only
 http:
-  # Routers
   routers:
-    # Router for Traefik dashboard
-    dashboard:
+    # Router for Traefik API at /traefik/api path
+    traefik-api:
       entryPoints:
-        - "traefik"
-      rule: "Host(`{{ traefik_dashboard_domain | default('localhost') }}`) && PathPrefix(`/`)"
+        - "web"
+        - "websecure"
+      rule: "PathPrefix(`/traefik/api`)"
       service: "api@internal"
       middlewares:
-        - "vpn-whitelist@file"  # Tailscale-compatible whitelist
-      priority: 100 # High priority for dashboard, but specific to dashboard domain
+        - "traefik-api-rewrite@file"  # Rewrites /traefik/api to /api
+        - "internal-whitelist@file"  # Internal network whitelist
+      priority: 100
 
-    # Router for Traefik API endpoints and health check
-    api:
+    # Router for direct /api access (dashboard makes requests to /api/...)
+    traefik-api-direct:
       entryPoints:
-        - "traefik"
-      rule: "PathPrefix(`/api`) || Path(`/ping`)"
+        - "web"
+        - "websecure"
+      rule: "PathPrefix(`/api`) && !PathPrefix(`/traefik/api`)"  # Match /api but not /traefik/api
       service: "api@internal"
       middlewares:
-        - "vpn-whitelist@file"  # Tailscale-compatible whitelist
-      priority: 100 # High priority for API access
+        - "internal-whitelist@file"  # Internal network whitelist
+      priority: 100
 
-    # Router to catch all HTTP traffic and redirect to HTTPS
+    # Router for dashboard assets at /assets path (dashboard may request assets from root)
+    traefik-assets:
+      entryPoints:
+        - "web"
+        - "websecure"
+      rule: "PathPrefix(`/assets`)"  # Match /assets/...
+      service: "api@internal"
+      middlewares:
+        - "traefik-assets-rewrite@file"  # Rewrites /assets to /dashboard/assets
+        - "internal-whitelist@file"  # Internal network whitelist
+      priority: 100
+
+    # Router for dashboard resources (icons, providers, etc.)
+    traefik-resources:
+      entryPoints:
+        - "web"
+        - "websecure"
+      rule: "PathPrefix(`/providers`) || PathPrefix(`/icons`) || Path(`/app-logo-128x128.png`)"  # Match various dashboard resources
+      service: "api@internal"
+      middlewares:
+        - "traefik-resources-rewrite@file"  # Rewrites to /dashboard/...
+        - "internal-whitelist@file"  # Internal network whitelist
+      priority: 100
+
+    # Router for Traefik dashboard at /traefik path (handles both /traefik and /traefik/)
+    # This matches /traefik and all paths under it (except /traefik/api)
+    traefik-dashboard:
+      entryPoints:
+        - "web"
+        - "websecure"
+      rule: "PathPrefix(`/traefik`) && !PathPrefix(`/traefik/api`)"  # Match /traefik and /traefik/... but not /traefik/api
+      service: "api@internal"
+      middlewares:
+        - "traefik-dashboard-rewrite@file"  # Rewrites /traefik to /dashboard/ and /traefik/... to /dashboard/...
+        - "internal-whitelist@file"  # Internal network whitelist
+{% if traefik_dashboard_auth_enabled and traefik_password_bcrypt is defined and traefik_password_bcrypt.stdout is defined %}
+        - "traefik-auth@file"  # Basic auth protection
+{% endif %}
+      priority: 100
+
+    # Router to catch all HTTP traffic and redirect to HTTPS (but exclude /traefik, /api, /assets, and resource paths)
     web-redirect:
       entryPoints:
         - "web"
-      rule: "HostRegexp(`{host:.+}`) && !PathPrefix(`/.well-known/acme-challenge`)"
+      rule: "HostRegexp(`{host:.+}`) && !PathPrefix(`/.well-known/acme-challenge`) && !PathPrefix(`/traefik`) && !PathPrefix(`/api`) && !PathPrefix(`/assets`) && !PathPrefix(`/providers`) && !PathPrefix(`/icons`) && !Path(`/app-logo-128x128.png`)"
       middlewares:
         - "https-redirect@file"
-      service: "noop@internal" # A dummy service, as it's just a redirect
-      priority: 1 # Low priority to not interfere with other routers
-
-{% if traefik_domain != "localhost" %}
-    # Router to redirect www to non-www
-    www-redirect:
-      entryPoints:
-        - "websecure"
-      rule: "Host(`www.{{ traefik_domain }}`)"
-      middlewares:
-        - "www-redirect@file"
       service: "noop@internal"
-      priority: 100 # High priority to catch www requests first
-      tls: true
-{% endif %}
+      priority: 1
 
-  # Services
   services:
     # Noop service for redirect
     noop:
@@ -57,28 +82,3 @@ http:
         servers:
           - url: "http://127.0.0.1:1"
 
-{% if traefik_rate_limit_enabled %}
-  # Middlewares
-  middlewares:
-    # Rate limiting middleware
-    rate-limit:
-      rateLimit:
-        average: {{ traefik_rate_limit_average }}
-        burst: {{ traefik_rate_limit_burst }}
-{% endif %}
-
-{% if traefik_certificate_type == 'custom' and traefik_certificates_enabled %}
-# TLS Configuration for Custom Certificates
-tls:
-  certificates:
-{% for cert in traefik_certificate_files_container %}
-    - certFile: "{{ cert.cert }}"
-      keyFile: "{{ cert.key }}"
-{% if cert.stores is defined %}
-      stores:
-{% for store in cert.stores %}
-        - "{{ store }}"
-{% endfor %}
-{% endif %}
-{% endfor %}
-{% endif %}

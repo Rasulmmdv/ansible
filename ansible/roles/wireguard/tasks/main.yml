@@ -1,31 +1,61 @@
 ---
 # Tasks for WireGuard setup using traditional wg-quick
 
-# Validate required variables for WireGuard
+# Check for existing WireGuard config and extract key before validation
+- name: Check if WireGuard config file exists
+  ansible.builtin.stat:
+    path: "/etc/wireguard/{{ wireguard_interface | default('wg0') }}.conf"
+  register: existing_wg_config
+  become: true
+  changed_when: false
+
+- name: Extract private key from existing config if it exists
+  ansible.builtin.shell: |
+    set -eo pipefail
+    grep -oP 'PrivateKey\s*=\s*\K.*' "/etc/wireguard/{{ wireguard_interface | default('wg0') }}.conf" || echo ""
+  args:
+    executable: /bin/bash
+  register: existing_private_key
+  when: existing_wg_config.stat.exists
+  changed_when: false
+  failed_when: false
+  no_log: true
+  become: true
+
+- name: Use existing private key if found
+  ansible.builtin.set_fact:
+    wireguard_private_key: "{{ existing_private_key.stdout }}"
+  when:
+    - existing_wg_config.stat.exists
+    - existing_private_key.rc == 0
+    - existing_private_key.stdout | length > 0
+  no_log: true
+
+# Validate required variables for WireGuard (private key is optional, will be generated if missing)
 - name: Validate WireGuard configuration variables
   include_tasks: "{{ role_path }}/../common/tasks/variable_validation.yml"
   vars:
     role_name: "wireguard"
     required_variables:
       - "wireguard_address"
-      - "wireguard_private_key"
       - "wireguard_port"
       - "wireguard_interface"
     sensitive_variables:
       - "wireguard_private_key"
     custom_validations:
       - name: "wireguard_port"
-        validation: "wireguard_port | int > 0 and wireguard_port | int <= 65535"
+        validation: "int > 0 and int <= 65535"
         error_message: "wireguard_port must be a valid port number (1-65535)"
       - name: "wireguard_address"
-        validation: "wireguard_address | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(/[0-9]+)?$')"
+        validation: "regex_search('[0-9]+\\.[0-9]+')"
         error_message: "wireguard_address must be a valid IP address with optional CIDR notation (e.g., 10.0.0.1/24)"
       - name: "wireguard_interface"
-        validation: "wireguard_interface | regex_search('^wg[0-9]+$')"
+        validation: "regex_search('^wg[0-9]+$')"
         error_message: "wireguard_interface must be a valid WireGuard interface name (e.g., wg0, wg1)"
       - name: "wireguard_private_key"
-        validation: "wireguard_private_key | length == 44"
-        error_message: "wireguard_private_key must be a valid WireGuard private key (44 characters base64)"
+        validation: "length == 44"
+        condition: "wireguard_private_key is defined and wireguard_private_key | length > 0"
+        error_message: "wireguard_private_key must be a valid WireGuard private key (44 characters base64) if provided"
 
 - name: Clear any cached host errors
   ansible.builtin.meta: clear_host_errors
@@ -51,32 +81,6 @@
       - wireguard-tools
     state: present
   become: true
-
-- name: Check if WireGuard config file exists
-  ansible.builtin.stat:
-    path: "/etc/wireguard/{{ wireguard_interface }}.conf"
-  register: existing_wg_config
-
-- name: Extract private key from existing config if it exists
-  ansible.builtin.shell: |
-    set -eo pipefail
-    grep -oP 'PrivateKey\s*=\s*\K.*' "/etc/wireguard/{{ wireguard_interface }}.conf" || echo ""
-  args:
-    executable: /bin/bash
-  register: existing_private_key
-  when: existing_wg_config.stat.exists
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Use existing private key if found
-  ansible.builtin.set_fact:
-    wireguard_private_key: "{{ existing_private_key.stdout }}"
-  when:
-    - existing_wg_config.stat.exists
-    - existing_private_key.rc == 0
-    - existing_private_key.stdout | length > 0
-  no_log: true
 
 - name: Check if WireGuard private key is still needed
   ansible.builtin.set_fact:
@@ -142,6 +146,15 @@
   failed_when: false
   changed_when: false
 
+- name: Calculate WireGuard network prefix
+  ansible.builtin.set_fact:
+    wireguard_network_prefix: >-
+      {%- if '/' in wireguard_address -%}
+        {{ wireguard_address }}
+      {%- else -%}
+        {{ wireguard_address }}/24
+      {%- endif -%}
+
 - name: Deploy WireGuard PostUp script
   ansible.builtin.template:
     src: wireguard-postup.sh.j2
@@ -150,6 +163,8 @@
     owner: root
     group: root
   become: true
+  vars:
+    wireguard_network_prefix: "{{ wireguard_network_prefix }}"
 
 - name: Deploy WireGuard PostDown script
   ansible.builtin.template:
@@ -159,6 +174,8 @@
     owner: root
     group: root
   become: true
+  vars:
+    wireguard_network_prefix: "{{ wireguard_network_prefix }}"
 
 - name: Ensure WireGuard configuration file exists
   ansible.builtin.file:
@@ -205,7 +222,7 @@
       [Peer]
       # {{ host }}
       PublicKey = {{ hostvars[host]['wireguard_public_key'] }}
-      AllowedIPs = {{ hostvars[host]['wireguard_address'] | ipaddr('network/prefix') }}
+      AllowedIPs = {{ hostvars[host]['wireguard_address'] }}
       Endpoint = {{ hostvars[host]['ansible_host'] }}:{{ wireguard_port }}
       PersistentKeepalive = 25
       {% endif %}
@@ -282,8 +299,10 @@
   vars:
     iptables_allowed_udp_ports:
       - "{{ wireguard_port }}"
-    # iptables_install_when_docker_present: true  # Removed due to recursive templating issues
-  when: wireguard_manage_iptables | default(true)
+    iptables_install_when_docker_present: true
+  when: 
+    - wireguard_manage_iptables | default(true)
+    - not ansible_check_mode
 
 - name: Enable IP forwarding for WireGuard
   sysctl:

@@ -275,6 +275,8 @@
         owner: "{{ traefik_user }}"
         group: "{{ traefik_group }}"
         mode: '0644'
+      vars:
+        traefik_password_bcrypt: "{{ traefik_password_bcrypt | default({'stdout': ''}) }}"
       become: true
       notify: restart traefik
 
@@ -285,6 +287,8 @@
         owner: "{{ traefik_user }}"
         group: "{{ traefik_group }}"
         mode: '0644'
+      vars:
+        traefik_password_bcrypt: "{{ traefik_password_bcrypt | default({'stdout': ''}) }}"
       become: true
       notify: restart traefik
 

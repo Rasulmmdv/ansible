@@ -16,7 +16,7 @@ iptables -I DOCKER-USER -i {{ wireguard_interface }} -j ACCEPT
 iptables -I DOCKER-USER -o {{ wireguard_interface }} -m state --state RELATED,ESTABLISHED -j ACCEPT
 
 # Allow VPN clients to access the server itself
-iptables -A INPUT -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT
+iptables -A INPUT -s {{ wireguard_network_prefix }} -j ACCEPT
 
 # Note: No NAT masquerading - clients use their own internet connection
 # Only traffic destined for the server network goes through VPN
@@ -25,7 +25,7 @@ iptables -A INPUT -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEP
 # Block external access to VPN-only TCP ports
 {% for port in wireguard_vpn_only_ports.tcp %}
 # Block external access to port {{ port }} but allow VPN access
-iptables -A INPUT -p tcp --dport {{ port }} -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT
+iptables -A INPUT -p tcp --dport {{ port }} -s {{ wireguard_network_prefix }} -j ACCEPT
 iptables -A INPUT -p tcp --dport {{ port }} -j DROP
 {% endfor %}
 {% endif %}
@@ -34,7 +34,7 @@ iptables -A INPUT -p tcp --dport {{ port }} -j DROP
 # Block external access to VPN-only UDP ports
 {% for port in wireguard_vpn_only_ports.udp %}
 # Block external access to port {{ port }} but allow VPN access
-iptables -A INPUT -p udp --dport {{ port }} -s {{ wireguard_address | ipaddr('network/prefix') }} -j ACCEPT
+iptables -A INPUT -p udp --dport {{ port }} -s {{ wireguard_network_prefix }} -j ACCEPT
 iptables -A INPUT -p udp --dport {{ port }} -j DROP
 {% endfor %}
 {% endif %}

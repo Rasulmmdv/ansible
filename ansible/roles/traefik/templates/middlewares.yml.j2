@@ -30,13 +30,6 @@ http:
         stsPreload: true
 {% endif %}
 
-    # Remove trailing slash
-    trailing-slash-redirect:
-      redirectRegex:
-        regex: "^(https?://[^/]+/.*)/+$$"
-        replacement: "$1"
-        permanent: true
-
     # CORS middleware
     cors-headers:
       headers:
@@ -56,40 +49,15 @@ http:
         accessControlMaxAge: 100
         addVaryHeader: true
 
-    # Error pages middleware
-    error-pages:
-      errors:
-        status:
-          - "400-599"
-        service: "error-pages-service"
-        query: "/{status}.html"
-
-    # IP whitelist (example)
+    # IP whitelist for internal networks (VPN/Tailscale/WireGuard/local)
     internal-whitelist:
       ipAllowList:
         sourceRange:
-          - "10.0.0.0/8"
-          - "172.16.0.0/12"
-          - "192.168.0.0/16"
-          - "127.0.0.1/32"
-
-    # Buffering middleware
-    buffering:
-      buffering:
-        maxRequestBodyBytes: 10000000
-        memRequestBodyBytes: 2000000
-        maxResponseBodyBytes: 10000000
-        memResponseBodyBytes: 2000000
-        retryExpression: "IsNetworkError() && Attempts() <= 2"
-
-{% if traefik_rate_limit_enabled %}
-    # Rate limiting
-    rate-limit:
-      rateLimit:
-        average: {{ traefik_rate_limit_average }}
-        period: "1m"
-        burst: {{ traefik_rate_limit_burst }}
-{% endif %}
+          - "10.0.0.0/8"      # WireGuard and private networks (10.0.0.0/24 is included)
+          - "100.64.0.0/10"   # Tailscale network
+          - "172.16.0.0/12"   # Docker and private networks
+          - "192.168.0.0/16"   # Private networks
+          - "127.0.0.1/32"     # Localhost
 
     # Middleware for redirecting HTTP to HTTPS
     https-redirect:
@@ -98,26 +66,54 @@ http:
         port: "443"
         permanent: true
 
-    # VPN whitelist middleware (dynamic based on traefik_dashboard_allow_network)
-    vpn-whitelist:
-      ipAllowList:
-        sourceRange:
-{% if traefik_dashboard_allow_network == "tailscale" %}
-          - "{{ traefik_tailscale_network }}"  # Tailscale overlay network (100.64.0.0/10)
-{% elif traefik_dashboard_allow_network == "wireguard" %}
-          - "{{ traefik_wireguard_network }}"  # WireGuard network (10.0.0.0/16)
-{% else %}
-          - "{{ traefik_tailscale_network }}"  # Default to Tailscale
-{% endif %}
-          - "127.0.0.1/32"    # Allow localhost for health checks
-          - "172.16.0.0/12"   # Allow Docker internal networks
-          - "192.168.0.0/16"  # Allow local networks 
+    # Rewrite middleware for API - converts /traefik/api to /api
+    traefik-api-rewrite:
+      replacePathRegex:
+        regex: "^/traefik/api(.*)$"
+        replacement: "/api$1"
 
-{% if traefik_domain != "localhost" %}
-    # WWW redirect middleware - redirects www to non-www for both dev and prod
-    www-redirect:
+    # Redirect middleware - redirects /traefik to /traefik/
+    traefik-add-slash:
       redirectRegex:
-        regex: "^https://www\\.(dev\\.)?{{ traefik_domain }}(.*)$"
-        replacement: "https://$1{{ traefik_domain }}$2"
+        regex: "^/traefik$"
+        replacement: "/traefik/"
         permanent: true
-{% endif %} 
+
+    # Rewrite middleware for dashboard - converts /traefik to /dashboard/ and /traefik/... to /dashboard/...
+    # Uses two separate regex replacements to handle both cases
+    traefik-dashboard-rewrite-root:
+      replacePathRegex:
+        regex: "^/traefik$"
+        replacement: "/dashboard/"
+
+    traefik-dashboard-rewrite-path:
+      replacePathRegex:
+        regex: "^/traefik(/.*)$"
+        replacement: "/dashboard$1"
+
+    # Chain middleware to try root first, then path
+    traefik-dashboard-rewrite:
+      chain:
+        middlewares:
+          - "traefik-dashboard-rewrite-root"
+          - "traefik-dashboard-rewrite-path"
+
+    # Rewrite middleware for assets - converts /assets to /dashboard/assets
+    traefik-assets-rewrite:
+      replacePathRegex:
+        regex: "^/assets(.*)$"
+        replacement: "/dashboard/assets$1"
+
+    # Rewrite middleware for dashboard resources (providers, icons, logos, etc.)
+    traefik-resources-rewrite:
+      replacePathRegex:
+        regex: "^(/providers|/icons|/app-logo-128x128\\.png)(.*)$"
+        replacement: "/dashboard$1$2"
+
+{% if traefik_dashboard_auth_enabled and traefik_password_bcrypt is defined and traefik_password_bcrypt.stdout is defined %}
+    # Basic auth middleware for Traefik dashboard
+    traefik-auth:
+      basicAuth:
+        users:
+          - "{{ traefik_dashboard_username }}:{{ traefik_password_bcrypt.stdout }}"
+{% endif %}
