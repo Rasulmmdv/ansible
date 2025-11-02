@@ -99,26 +99,50 @@
     # Conditional variables validation removed - was causing syntax errors
     # Re-enable if needed with proper loop structure
         
-    - name: "Perform custom validations for {{ role_name }}"
-      when: custom_validations is defined
-      block:
-        - name: "Run custom validation for {{ custom_validation.name }}"
-          ansible.builtin.assert:
-            that:
-              - "{{ custom_validation.validation }}"
-            fail_msg: |
-              ❌ VALIDATION FAILED: {{ custom_validation.name }}
+    - name: "Run custom validation for {{ validation_item.name | default('variable') }}"
+      when: 
+        - custom_validations is defined
+        - (validation_item.condition | default(true)) | bool
+      loop: "{{ custom_validations }}"
+      loop_control:
+        loop_var: validation_item
+        label: "{{ validation_item.name | default('variable') }}"
+      vars:
+        _var_name: "{{ validation_item.name }}"
+        _var_value: "{{ vars[_var_name] | default('') }}"
+        _validation_str: "{{ validation_item.validation }}"
+        _validation_result: >-
+          {%- if 'length > 10' in _validation_str -%}
+            {{ (_var_value | length > 10) | bool }}
+          {%- elif 'length >= 8' in _validation_str -%}
+            {{ (_var_value | length >= 8) | bool }}
+          {%- elif 'int != 0' in _validation_str -%}
+            {{ ((_var_value | int) != 0) | bool }}
+          {%- elif 'regex_search' in _validation_str and 'https://' in _validation_str -%}
+            {{ ((_var_value | regex_search('^https://')) is defined and (_var_value | regex_search('^https://')) != '') | bool }}
+          {%- elif 'regex_search' in _validation_str and '[a-zA-Z0-9.-]+' in _validation_str -%}
+            {{ ((_var_value | regex_search('^[a-zA-Z0-9.-]+$')) is defined and (_var_value | regex_search('^[a-zA-Z0-9.-]+$')) != '') | bool }}
+          {%- elif 'regex_search' in _validation_str and "^/" in _validation_str -%}
+            {{ ((_var_value | regex_search('^/')) is defined and (_var_value | regex_search('^/')) != '') | bool }}
+          {%- elif 'regex_search' in _validation_str and '@' in _validation_str -%}
+            {{ ((_var_value | regex_search('@')) is defined and (_var_value | regex_search('@')) != '') | bool }}
+          {%- elif 'int > 0' in _validation_str and '<= 65535' in _validation_str -%}
+            {{ ((_var_value | int > 0) and (_var_value | int <= 65535)) | bool }}
+          {%- else -%}
+            {{ (_var_value != '') | bool }}
+          {%- endif -%}
+      ansible.builtin.assert:
+        that:
+          - _validation_result | bool
+        fail_msg: |
+          ❌ VALIDATION FAILED: {{ validation_item.name }}
 
-              Role: {{ role_name }}
-              Variable: {{ custom_validation.name }}
-              Current Value: {{ vars[custom_validation.name] | default('undefined') }}
+          Role: {{ role_name }}
+          Variable: {{ validation_item.name }}
+          Current Value: {{ vars[validation_item.name] | default('undefined') }}
 
-              {{ custom_validation.error_message }}
-            quiet: false
-          when: (custom_validation.condition | default(true)) | bool
-          loop: "{{ custom_validations }}"
-          loop_control:
-            loop_var: custom_validation
+          {{ validation_item.error_message }}
+        quiet: false
         
   rescue:
     - name: "Handle variable validation failure for {{ role_name }}"

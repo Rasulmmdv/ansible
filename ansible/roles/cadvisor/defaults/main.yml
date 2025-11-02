@@ -10,7 +10,7 @@ cadvisor_system_packages:
   - docker-compose
 cadvisor_ensure_docker_installed: true
 cadvisor_ports:
-  - "8080:8080"
+  - "8081:8080"
 
 # Docker network to attach cAdvisor to
 cadvisor_network_name: "monitoring"

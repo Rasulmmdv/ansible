@@ -203,3 +203,4 @@
     fail_msg: "PostgreSQL Exporter metrics endpoint is not accessible on port {{ pgexporter_host_port }}"
   when: exporter_response.status is defined and not ansible_check_mode
   tags: [configure, monitoring]
+

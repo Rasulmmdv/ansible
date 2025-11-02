@@ -34,3 +34,4 @@
   become: true
   when: not ansible_check_mode
   tags: [configure, monitoring]
+

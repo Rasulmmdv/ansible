@@ -24,6 +24,8 @@
         service_name: "cadvisor"
         service_user: "{{ cadvisor_user }}"
         service_group: "{{ cadvisor_group }}"
+        service_uid: "9116"
+        service_gid: "9116"
         service_directories:
           - "{{ cadvisor_data_dir }}"
         directory_mode: "0755"
