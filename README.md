@@ -93,6 +93,38 @@ ansible-playbook -i all/inventory.yml playbooks/jenkins-docker.yml
 4. **Testing & Validation** - Always test with `--syntax-check` and `--check`
 5. **Documentation & Finalization** - Keep README and testing logs updated
 
+## Automation & Monitoring
+
+### Automated Health Checks
+Run periodic health checks on all services:
+```bash
+ansible-playbook -i all/inventory.yml playbooks/health_check.yml
+```
+
+### Configuration Drift Detection
+Detect when actual system state differs from desired state:
+```bash
+# Manual check
+ansible-playbook -i all/inventory.yml playbooks/orchestrate.yml --check --diff
+
+# Automated drift detection (via common role)
+# Configured via systemd timer
+```
+
+### Automation Status
+See `AUTOMATION_ROBUSTNESS.md` for:
+- Current automation level assessment
+- Recommendations for enhanced robustness
+- Implementation roadmap
+- Quick wins for immediate improvement
+
+**Current Automation Level**: ~70%
+- ✅ Deployment: Fully automated
+- ✅ Monitoring: Good coverage  
+- ✅ Backups: Automated
+- ⚠️ Self-healing: Basic (needs enhancement)
+- ⚠️ Alerting: Configured but needs verification
+
 ## Security Notes
 
 - Never commit secrets or credentials

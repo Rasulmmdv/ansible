@@ -10,7 +10,14 @@
 #                    automatically added so that they run first.
 #                    Keep this lightweight—only specify what is strictly
 #                    required for the role to succeed.
+#
+# reverse_proxy: Select reverse proxy for this environment.
+#                Options: "traefik" (default), "nginx", or "none"
+#                This controls which reverse proxy role is executed.
 # -------------------------------------------------
+
+# Reverse proxy selection (defaults to traefik for backward compatibility)
+reverse_proxy: "traefik"
 
 roles_all:
   # Core & baseline configuration
@@ -28,8 +35,10 @@ roles_all:
 
   # Containerised infrastructure & services
   - docker-registry      # Private Docker registry (needs docker)
-  - traefik              # Edge reverse-proxy / load balancer
-  - portainer            # Portainer UI (needs docker & traefik certs)
+  - traefik              # Edge reverse-proxy / load balancer (conditional based on reverse_proxy)
+  - certbot              # SSL certificate management via Let's Encrypt (works with nginx, should run before nginx)
+  - nginx                 # Nginx reverse-proxy (conditional based on reverse_proxy)
+  - portainer            # Portainer UI (needs docker & reverse proxy)
   - portainer-agent      # Portainer agent side-car
   
   # Monitoring infrastructure (create network and base configs first)
@@ -56,7 +65,9 @@ role_dependencies:
 
   docker-registry: [docker]
   traefik: [docker]
-  portainer: [docker, traefik]
+  nginx: []  # Nginx is a system package, doesn't need docker
+  certbot: []  # Certbot uses DNS validation, no dependencies required
+  portainer: [docker]  # Depends on reverse_proxy, but dependency resolved dynamically
   portainer-agent: [docker, portainer]
 
   # Monitoring stack orchestrates all monitoring components

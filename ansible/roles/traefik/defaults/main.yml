@@ -5,16 +5,29 @@
 # Traefik Docker configuration
 traefik_image: "traefik:v3.4"
 traefik_container_name: "traefik"
-traefik_dashboard_port: 8080
+traefik_domain: "localhost" # Default domain for local development/testing
+
+# Entrypoint port configuration
+traefik_entrypoints:
+  web:
+    host_port: 80
+    container_port: 80
+  websecure:
+    host_port: 443
+    container_port: 443
+  dashboard:
+    host_port: 8080
+    container_port: 8080
+
+# Backward compatibility - individual port variables (deprecated, use traefik_entrypoints)
 traefik_web_port: 80
 traefik_websecure_port: 443
-traefik_domain: "localhost" # Default domain for local development/testing
+traefik_dashboard_port: 8080
 
 # Traefik directories
 traefik_data_dir: "/opt/traefik"
 traefik_config_dir: "/opt/traefik/config"
 traefik_certs_dir: "/opt/traefik/certs"
-traefik_logs_dir: "/opt/traefik/logs"
 
 # User and group
 traefik_user: "traefik"
@@ -26,7 +39,6 @@ traefik_network_name: "traefik-network"
 # Dashboard configuration
 traefik_dashboard_enabled: true
 traefik_dashboard_insecure: false
-traefik_dashboard_domain: "traefik.local"
 traefik_dashboard_auth_enabled: true
 traefik_dashboard_username: "admin"
 # Default password - should be overridden in production for security
@@ -75,23 +87,11 @@ traefik_certificate_files_container:
 traefik_acme_challenge_type: "http"  # Options: http, dns, tls
 # traefik_acme_dns_provider: ""  # Set in playbook if using DNS challenge
 
-# Entrypoints
-traefik_entrypoints:
-  web:
-    port: 80
-    redirect_to_https: true
-  websecure:
-    port: 443
-    tls: true
-
-# Logging
+# Logging (logs go to stdout/stderr for Docker)
 traefik_log_level: "INFO"  # Options: DEBUG, INFO, WARN, ERROR, FATAL, PANIC
 traefik_access_logs_enabled: true
-traefik_access_logs_file: "/logs/access.log"
-traefik_logs_file: "/logs/traefik.log"
 
 # Security settings
-traefik_global_redirect_to_https: true
 traefik_hsts_enabled: true
 traefik_frame_deny: true
 traefik_content_type_nosniff: true
@@ -133,18 +133,20 @@ traefik_default_middlewares:
   - "secure-headers"
   - "vpn-whitelist"
 
-# VPN whitelist configuration
-traefik_vpn_network: "10.0.0.0/24"  # Default WireGuard network (test environment)
-# Note: For production environments, this should be set to "10.0.1.0/24"
-# For multi-environment setups, consider using a broader range like "10.0.0.0/16"
-
-# VPN network configuration
-traefik_dashboard_allow_network: "tailscale"  # Options: "wireguard" or "tailscale"
-# Controls which VPN whitelist is used for dashboard/API access
-
-# Network ranges for different VPN types
-traefik_tailscale_network: "100.64.0.0/10"  # Tailscale overlay network
-traefik_wireguard_network: "10.0.0.0/16"    # WireGuard network range
+# Internal network whitelist configuration
+# The internal-whitelist middleware allows access from:
+# - 10.0.0.0/8 (includes WireGuard, private networks)
+# - 100.64.0.0/10 (Tailscale network)
+# - 172.16.0.0/12 (Docker and private networks)
+# - 192.168.0.0/16 (Private networks)
+# - 127.0.0.1/32 (Localhost)
+# Custom networks can be added via traefik_internal_networks variable
+traefik_internal_networks:
+  - "10.0.0.0/8"
+  - "100.64.0.0/10"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1/32"
 
 # System requirements
 minimum_disk_space_gb: 2

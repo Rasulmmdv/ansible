@@ -16,11 +16,36 @@ grafana_env:
   GF_SECURITY_ADMIN_USER: "admin"
   GF_SECURITY_ADMIN_PASSWORD: "admin"
 
-# Traefik integration settings
-grafana_enable_traefik: false  # Enable/disable Traefik reverse proxy integration
+# Reverse proxy integration
+# Routing mode: "path" for subpath (e.g., /grafana), "domain" for separate domain
+grafana_routing_mode: "path"  # Options: "path" or "domain"
+grafana_reverse_proxy: "{{ reverse_proxy | default('traefik') }}"  # Use reverse_proxy from inventory
+
+# Path-based routing configuration (when grafana_routing_mode == "path")
+grafana_path: "/grafana"  # Path prefix for Grafana (e.g., /grafana)
+grafana_base_domain: "{{ (traefik_domain if (reverse_proxy | default('traefik')) == 'traefik' else (nginx_domain | default(domain))) | default('localhost') }}"  # Base domain to use
+
+# Domain-based routing configuration (when grafana_routing_mode == "domain")
+grafana_domain: ""  # Domain for Grafana (e.g., test-monitoring.projectdot.work), empty to disable
+# Note: Domain-based routing works only with domain names. For IP/VPN access, use path-based routing instead.
+
+# Internal service configuration
+grafana_port: "3000"  # Internal port Grafana listens on
+grafana_container_port: "3000"  # Port inside container
+
+# Reverse proxy specific settings
+grafana_enable_reverse_proxy: true  # Enable reverse proxy integration
+
+# Traefik-specific settings
 grafana_traefik_router_name: "grafana"  # Router name for Traefik
-grafana_traefik_domain: "grafana.local"  # Domain for Grafana access
-grafana_traefik_port: "3000"  # Internal port Grafana listens on
-grafana_traefik_entrypoints: ["websecure"]  # Traefik entrypoints to use
+grafana_traefik_entrypoints: ["web", "websecure"]  # Traefik entrypoints to use
 grafana_traefik_tls: true  # Enable TLS for Grafana
-grafana_traefik_middlewares: ["vpn-whitelist"]  # Middlewares to apply 
+grafana_traefik_middlewares: ["internal-whitelist@file"]  # Middlewares to apply
+grafana_traefik_cert_resolver: "{{ traefik_ssl_certificate_resolver | default('letsencrypt') }}"
+
+# Nginx-specific settings (for future nginx support)
+grafana_nginx_upstream: "grafana"
+grafana_nginx_listen_port: "80"
+grafana_nginx_ssl_listen_port: "443"
+grafana_nginx_ssl_cert_path: "/etc/ssl/certs/grafana.crt"
+grafana_nginx_ssl_key_path: "/etc/ssl/private/grafana.key" 

@@ -8,24 +8,18 @@ services:
       - --providers.file.directory=/config
       - --providers.file.watch=true
     ports:
-      - "{{ traefik_web_port }}:80"
+      - "{{ traefik_entrypoints.web.host_port }}:{{ traefik_entrypoints.web.container_port }}"
 {% if traefik_ssl_enabled %}
-      - "{{ traefik_websecure_port }}:443"
+      - "{{ traefik_entrypoints.websecure.host_port }}:{{ traefik_entrypoints.websecure.container_port }}"
 {% endif %}
 {% if traefik_dashboard_enabled and traefik_dashboard_expose_port %}
-      - "{{ traefik_dashboard_port }}:8080"
+      - "{{ traefik_entrypoints.dashboard.host_port }}:{{ traefik_entrypoints.dashboard.container_port }}"
 {% endif %}
     volumes:
       - "{{ traefik_data_dir }}/traefik.yml:/etc/traefik/traefik.yml:ro"
       - "{{ traefik_config_dir }}:/config:ro"
       - "{{ traefik_certs_dir }}:/certificates"
-      - "{{ traefik_logs_dir }}:/logs"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    environment:
-      - TRAEFIK_LOG_LEVEL={{ traefik_log_level }}
-{% if traefik_acme_enabled and traefik_acme_challenge_type == "dns" and traefik_acme_dns_provider is defined and traefik_acme_dns_provider %}
-      # DNS provider specific environment variables can be added here
-{% endif %}
     networks:
       - traefik-network
     labels:

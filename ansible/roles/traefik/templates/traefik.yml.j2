@@ -69,18 +69,12 @@ certificatesResolvers:
 {% endif %}
 {% endif %}
 
-# Logging
+# Logging (outputs to stdout/stderr)
 log:
   level: "{{ traefik_log_level }}"
-{% if traefik_logs_file %}
-  filePath: "{{ traefik_logs_file }}"
-{% endif %}
 
 {% if traefik_access_logs_enabled %}
 accessLog:
-{% if traefik_access_logs_file %}
-  filePath: "{{ traefik_access_logs_file }}"
-{% endif %}
   bufferingSize: 100
 {% endif %}
 

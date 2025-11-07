@@ -11,7 +11,6 @@
     # traefik_acme_dns_provider: "cloudflare"
 
     # Basic Traefik configuration
-    #traefik_dashboard_domain: "" # TODO: add domain name
     # REQUIRED: Set your Traefik dashboard password
     # traefik_dashboard_password: "supersecret"
     
@@ -55,7 +54,6 @@
       debug:
         msg:
           - "Traefik has been successfully deployed!"
-          - "Dashboard URL: https://{{ traefik_dashboard_domain }}/dashboard/"
           - "Username: {{ traefik_dashboard_username }}"
           - "Password: {{ traefik_dashboard_password }}"
           - "Network: {{ traefik_network_name }}"

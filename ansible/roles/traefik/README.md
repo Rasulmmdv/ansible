@@ -85,7 +85,6 @@ traefik_websecure_port: 443
 traefik_data_dir: "/opt/traefik"
 traefik_config_dir: "/opt/traefik/config"
 traefik_certs_dir: "/opt/traefik/certs"
-traefik_logs_dir: "/opt/traefik/logs"
 
 # User and group
 traefik_user: "traefik"
@@ -100,7 +99,6 @@ traefik_network_name: "traefik-network"
 ```yaml
 # Dashboard settings
 traefik_dashboard_enabled: true
-traefik_dashboard_domain: "traefik.local"
 traefik_dashboard_auth_enabled: true
 traefik_dashboard_username: "admin"
 traefik_dashboard_password: "changeme"  # Please change this!
@@ -138,7 +136,6 @@ traefik_certificate_files:
 
 ```yaml
 # Security options
-traefik_global_redirect_to_https: true
 traefik_hsts_enabled: true
 traefik_frame_deny: true
 traefik_content_type_nosniff: true
@@ -160,11 +157,9 @@ traefik_file_provider_watch: true
 ### Logging
 
 ```yaml
-# Logging settings
+# Logging settings (logs go to stdout/stderr for Docker)
 traefik_log_level: "INFO"
 traefik_access_logs_enabled: true
-traefik_access_logs_file: "/logs/access.log"
-traefik_logs_file: "/logs/traefik.log"
 ```
 
 ### Prerequisites and Dependencies
@@ -220,7 +215,6 @@ traefik_configure_firewall: false
 - hosts: servers
   vars:
     # Custom configuration
-    traefik_dashboard_domain: "traefik.example.com"
     traefik_acme_email: "ssl@example.com"
     traefik_dashboard_password: "secure-password-here"
     traefik_log_level: "DEBUG"
@@ -244,7 +238,6 @@ traefik_configure_firewall: false
 ---
 - hosts: servers
   vars:
-    traefik_dashboard_domain: "traefik.yourdomain.com"
     traefik_certificate_type: "acme"
     traefik_acme_email: "ssl@yourdomain.com"
     traefik_acme_use_staging: false  # Production mode
@@ -272,7 +265,6 @@ traefik_configure_firewall: false
 ---
 - hosts: servers
   vars:
-    traefik_dashboard_domain: "traefik.yourdomain.com"
     traefik_dashboard_password: "very-secure-password"
     
     # Use custom certificates instead of ACME
@@ -367,11 +359,10 @@ Default credentials (if authentication is enabled):
 ├── config/              # Dynamic configuration directory
 │   ├── dynamic.yml      # Dynamic routing configuration
 │   └── middlewares.yml  # Middleware definitions
-├── certs/               # SSL certificates directory
-│   └── acme.json       # Let's Encrypt certificates
-└── logs/               # Log files directory
-    ├── traefik.log     # Traefik logs
-    └── access.log      # Access logs
+└── certs/               # SSL certificates directory
+    └── acme.json       # Let's Encrypt certificates
+
+# Note: Logs go to stdout/stderr (view with `docker logs traefik`)
 ```
 
 ## Troubleshooting
@@ -400,14 +391,14 @@ Default credentials (if authentication is enabled):
 
 Check Traefik logs for troubleshooting:
 ```bash
-# View real-time logs
-docker compose -f /opt/traefik/docker-compose.yml logs -f
+# View real-time logs (stdout/stderr)
+docker logs traefik -f
 
-# Check access logs
-tail -f /opt/traefik/logs/access.log
+# Last 100 lines
+docker logs traefik --tail 100
 
-# Check Traefik logs
-tail -f /opt/traefik/logs/traefik.log
+# With timestamps
+docker logs traefik -f --timestamps
 ```
 
 ## Security Considerations

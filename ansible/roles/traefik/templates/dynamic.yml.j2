@@ -1,75 +1,76 @@
 # Traefik dynamic configuration
-# Simple configuration: dashboard at /traefik path, internal access only
+# Dashboard accessible at /traefik path, internal access only
 http:
   routers:
-    # Router for Traefik API at /traefik/api path
+    # Router for Traefik API (dashboard makes requests to /api/...)
     traefik-api:
       entryPoints:
         - "web"
         - "websecure"
-      rule: "PathPrefix(`/traefik/api`)"
+      rule: "PathPrefix(`/api`)"  # Match /api and all API endpoints
       service: "api@internal"
       middlewares:
-        - "traefik-api-rewrite@file"  # Rewrites /traefik/api to /api
         - "internal-whitelist@file"  # Internal network whitelist
+{% if traefik_ssl_enabled and traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+      tls:
+        certResolver: "{{ traefik_ssl_certificate_resolver }}"
+{% endif %}
       priority: 100
 
-    # Router for direct /api access (dashboard makes requests to /api/...)
-    traefik-api-direct:
+    # Router for exact /traefik path (no trailing slash) - redirects to /traefik/
+    traefik-dashboard-redirect:
       entryPoints:
         - "web"
         - "websecure"
-      rule: "PathPrefix(`/api`) && !PathPrefix(`/traefik/api`)"  # Match /api but not /traefik/api
-      service: "api@internal"
+      rule: "Path(`/traefik`)"  # Exact match for /traefik
       middlewares:
-        - "internal-whitelist@file"  # Internal network whitelist
-      priority: 100
+        - "internal-whitelist@file"  # Apply whitelist
+        - "traefik-redirect-slash@file"  # Redirects /traefik to /traefik/
+      service: "noop@internal"  # Redirect happens in middleware before reaching service
+{% if traefik_ssl_enabled and traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+      tls:
+        certResolver: "{{ traefik_ssl_certificate_resolver }}"
+{% endif %}
+      priority: 200  # Higher priority to catch exact match
 
-    # Router for dashboard assets at /assets path (dashboard may request assets from root)
-    traefik-assets:
-      entryPoints:
-        - "web"
-        - "websecure"
-      rule: "PathPrefix(`/assets`)"  # Match /assets/...
-      service: "api@internal"
-      middlewares:
-        - "traefik-assets-rewrite@file"  # Rewrites /assets to /dashboard/assets
-        - "internal-whitelist@file"  # Internal network whitelist
-      priority: 100
-
-    # Router for dashboard resources (icons, providers, etc.)
-    traefik-resources:
-      entryPoints:
-        - "web"
-        - "websecure"
-      rule: "PathPrefix(`/providers`) || PathPrefix(`/icons`) || Path(`/app-logo-128x128.png`)"  # Match various dashboard resources
-      service: "api@internal"
-      middlewares:
-        - "traefik-resources-rewrite@file"  # Rewrites to /dashboard/...
-        - "internal-whitelist@file"  # Internal network whitelist
-      priority: 100
-
-    # Router for Traefik dashboard at /traefik path (handles both /traefik and /traefik/)
-    # This matches /traefik and all paths under it (except /traefik/api)
+    # Router for Traefik dashboard at /traefik/ path
+    # Handles /traefik/ and /traefik/... and rewrites to /dashboard/...
     traefik-dashboard:
       entryPoints:
         - "web"
         - "websecure"
-      rule: "PathPrefix(`/traefik`) && !PathPrefix(`/traefik/api`)"  # Match /traefik and /traefik/... but not /traefik/api
+      rule: "PathPrefix(`/traefik`) && !Path(`/traefik`)"  # Match /traefik/ and subpaths, but not exact /traefik
       service: "api@internal"
       middlewares:
-        - "traefik-dashboard-rewrite@file"  # Rewrites /traefik to /dashboard/ and /traefik/... to /dashboard/...
+        - "traefik-dashboard-rewrite@file"  # Rewrites /traefik/ → /dashboard/ and /traefik/... → /dashboard/...
         - "internal-whitelist@file"  # Internal network whitelist
 {% if traefik_dashboard_auth_enabled and traefik_password_bcrypt is defined and traefik_password_bcrypt.stdout is defined %}
         - "traefik-auth@file"  # Basic auth protection
 {% endif %}
+{% if traefik_ssl_enabled and traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+      tls:
+        certResolver: "{{ traefik_ssl_certificate_resolver }}"
+{% endif %}
       priority: 100
 
-    # Router to catch all HTTP traffic and redirect to HTTPS (but exclude /traefik, /api, /assets, and resource paths)
+    # Default router for domain root (helps with ACME certificate generation)
+    # This router matches the domain to trigger certificate generation even if no specific service is configured
+    domain-default:
+      entryPoints:
+        - "websecure"
+      rule: "Host(`{{ traefik_domain }}`)"
+{% if traefik_ssl_enabled and traefik_certificate_type == 'acme' and traefik_acme_enabled %}
+      tls:
+        certResolver: "{{ traefik_ssl_certificate_resolver }}"
+{% endif %}
+      service: "noop@internal"
+      priority: 10
+
+    # Router to catch all HTTP traffic and redirect to HTTPS (but exclude special paths)
     web-redirect:
       entryPoints:
         - "web"
-      rule: "HostRegexp(`{host:.+}`) && !PathPrefix(`/.well-known/acme-challenge`) && !PathPrefix(`/traefik`) && !PathPrefix(`/api`) && !PathPrefix(`/assets`) && !PathPrefix(`/providers`) && !PathPrefix(`/icons`) && !Path(`/app-logo-128x128.png`)"
+      rule: "HostRegexp(`{host:.+}`) && !PathPrefix(`/.well-known/acme-challenge`) && !PathPrefix(`/traefik`) && !PathPrefix(`/api`) && !PathPrefix(`/grafana`)"
       middlewares:
         - "https-redirect@file"
       service: "noop@internal"

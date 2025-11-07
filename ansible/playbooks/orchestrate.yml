@@ -22,6 +22,23 @@
       include_vars: "{{ playbook_dir }}/../group_vars/all/main.yml"
       tags: always
 
+    - name: Set reverse proxy feature flags
+      set_fact:
+        reverse_proxy: "{{ reverse_proxy | default('traefik') }}"  # Default to traefik for backward compatibility
+        traefik_enabled: "{{ reverse_proxy == 'traefik' }}"
+        nginx_enabled: "{{ reverse_proxy == 'nginx' }}"
+      tags: always
+
+    - name: Validate reverse proxy selection
+      assert:
+        that:
+          - reverse_proxy in ['traefik', 'nginx', 'none']
+          - not (traefik_enabled and nginx_enabled)
+        fail_msg: |
+          Invalid reverse_proxy value: {{ reverse_proxy }}.
+          Must be 'traefik', 'nginx', or 'none'. Cannot enable both proxies.
+      tags: always
+
     - name: Determine requested roles
       set_fact:
         _roles_requested: "{{ (run_all_roles | default(false) | bool) | ternary(roles_all, roles_enabled | default([])) }}"
@@ -49,10 +66,37 @@
         _roles_needed: "{{ _roles_requested }}"
       tags: always
 
-    - name: Expand dependencies
+    - name: Expand dependencies (first pass)
       set_fact:
         _roles_needed: "{{ ((_roles_needed | default([])) + (role_dependencies.get(item, []))) | unique }}"
-      loop: "{{ _roles_requested }}"
+      loop: "{{ _roles_needed | default(_roles_requested) }}"
+      loop_control:
+        label: "deps_for_{{ item }}"
+      tags: always
+
+    - name: Resolve reverse proxy dependency for portainer
+      set_fact:
+        _roles_needed: "{{ _roles_needed + [reverse_proxy] }}"
+      when: 
+        - "'portainer' in _roles_needed"
+        - reverse_proxy != 'none'
+        - reverse_proxy not in _roles_needed
+      tags: always
+
+    - name: Resolve certbot dependency for nginx (when certbot_domains configured)
+      set_fact:
+        _roles_needed: "{{ _roles_needed + ['certbot'] }}"
+      when:
+        - "'nginx' in _roles_needed"
+        - certbot_domains is defined
+        - certbot_domains | length > 0
+        - "'certbot' not in _roles_needed"
+      tags: always
+
+    - name: Expand dependencies (second pass for reverse proxy deps)
+      set_fact:
+        _roles_needed: "{{ ((_roles_needed | default([])) + (role_dependencies.get(item, []))) | unique }}"
+      loop: "{{ _roles_needed | default(_roles_requested) }}"
       loop_control:
         label: "deps_for_{{ item }}"
       tags: always
@@ -65,7 +109,12 @@
 
     - name: Show orchestration plan
       debug:
-        var: final_roles
+        msg:
+          - "Requested roles: {{ _roles_requested }}"
+          - "Final roles to execute: {{ final_roles }}"
+          - "Reverse proxy: {{ reverse_proxy }}"
+          - "Traefik enabled: {{ traefik_enabled }}"
+          - "Nginx enabled: {{ nginx_enabled }}"
       tags: always
 
   # ------------- MAIN: INCLUDE ROLES IN ORDER -------------------
@@ -77,5 +126,11 @@
         apply:
           tags: "{{ ansible_playbook_tags | default([]) }}"
       loop: "{{ final_roles }}"
+      # Conditionally execute reverse proxy roles based on reverse_proxy selection
+      # If explicitly requested, always run it; otherwise check reverse_proxy flag
+      when: |
+        (item == 'traefik' and (traefik_enabled or item in _roles_requested)) or
+        (item == 'nginx' and (nginx_enabled or item in _roles_requested)) or
+        (item != 'traefik' and item != 'nginx')
       loop_control:
         label: "{{ item }}"

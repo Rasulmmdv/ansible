@@ -67,6 +67,46 @@
   notify: reload_nginx
   tags: [configure, nginx]
 
+- name: Collect proxied services information
+  set_fact:
+    _proxied_services: "{{ nginx_proxied_services | default([]) + _auto_registered_services | default([]) }}"
+  vars:
+    _auto_registered_services:
+      - name: "grafana"
+        enabled: "{{ (grafana_enable_reverse_proxy | default(false)) and (reverse_proxy | default('traefik')) == 'nginx' }}"
+        upstream_name: "{{ grafana_nginx_upstream | default('grafana') }}"
+        port: "{{ grafana_port | default(3000) }}"
+        path: "{{ grafana_path | default('/grafana') if grafana_routing_mode | default('path') == 'path' else '' }}"
+      - name: "cadvisor"
+        enabled: "{{ (cadvisor_expose_port | default(false)) and (reverse_proxy | default('traefik')) == 'nginx' }}"
+        upstream_name: "cadvisor"
+        port: "{{ cadvisor_port | default(8080) }}"
+        path: "{{ cadvisor_path | default('/cadvisor') }}"
+  when: (reverse_proxy | default('traefik')) == 'nginx'
+  tags: [configure, nginx, upstreams]
+
+- name: Build upstreams dictionary from enabled services
+  set_fact:
+    _auto_upstreams: "{{ _auto_upstreams | default({}) | combine({service.upstream_name: [{'server': 'localhost:' ~ service.port}]}) }}"
+  loop: "{{ _proxied_services | default([]) | selectattr('enabled', 'equalto', true) | list }}"
+  loop_control:
+    label: "{{ service.name }}"
+    loop_var: service
+  when:
+    - (reverse_proxy | default('traefik')) == 'nginx'
+    - _proxied_services is defined
+    - _proxied_services | default([]) | selectattr('enabled', 'equalto', true) | list | length > 0
+  tags: [configure, nginx, upstreams]
+
+- name: Auto-generate nginx upstreams from proxied services
+  set_fact:
+    nginx_upstreams: "{{ nginx_upstreams | default({}) | combine(_auto_upstreams | default({})) }}"
+  when:
+    - (reverse_proxy | default('traefik')) == 'nginx'
+    - _auto_upstreams is defined
+    - _auto_upstreams | length > 0
+  tags: [configure, nginx, upstreams]
+
 - name: Configure upstreams
   ansible.builtin.template:
     src: nginx_upstreams.conf.j2
@@ -91,6 +131,87 @@
   when: nginx_streams | length > 0
   notify: reload_nginx
   tags: [configure, nginx, streams]
+
+- name: Build HTTP site configuration
+  set_fact:
+    _http_site_config:
+      - "listen 80"
+      - "server_name {{ nginx_domain }}"
+      - location /.well-known/acme-challenge:
+        - "root /var/www/certbot"
+      - location /:
+        - "return 301 https://$host$request_uri"
+  when:
+    - nginx_domain is defined
+    - (nginx_sites | default({})).main_http is not defined
+  tags: [configure, nginx, sites]
+
+- name: Build service location blocks
+  set_fact:
+    _service_locations: "{{ _service_locations | default([]) + [_location_block] }}"
+  vars:
+    _location_block:
+      "location {{ service.path }}:":
+        - "proxy_pass http://{{ service.upstream_name }}"
+        - "proxy_set_header Host $host"
+        - "proxy_set_header X-Real-IP $remote_addr"
+        - "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for"
+        - "proxy_set_header X-Forwarded-Proto $scheme"
+        - "proxy_set_header X-Forwarded-Host $host"
+        - "proxy_redirect off"
+  loop: "{{ _proxied_services | default([]) | selectattr('enabled', 'equalto', true) | selectattr('path', 'defined') | selectattr('path', 'ne', '') | list }}"
+  loop_control:
+    label: "{{ service.name }}"
+    loop_var: service
+  when:
+    - (reverse_proxy | default('traefik')) == 'nginx'
+    - _proxied_services is defined
+    - _proxied_services | default([]) | selectattr('enabled', 'equalto', true) | selectattr('path', 'defined') | selectattr('path', 'ne', '') | list | length > 0
+  tags: [configure, nginx, sites]
+
+- name: Check if SSL certificates exist
+  stat:
+    path: "/etc/letsencrypt/live/{{ nginx_domain }}/fullchain.pem"
+  register: ssl_certificate_stat
+  when:
+    - nginx_domain is defined
+    - certbot_domains is defined
+  tags: [configure, nginx, sites, ssl]
+
+- name: Build HTTPS site configuration
+  set_fact:
+    _https_site_config: "{{ _https_base_config + _service_locations | default([]) + _default_location_config }}"
+  vars:
+    _https_base_config:
+      - "listen 443 ssl http2"
+      - "server_name {{ nginx_domain }}"
+      - "ssl_certificate /etc/letsencrypt/live/{{ nginx_domain }}/fullchain.pem"
+      - "ssl_certificate_key /etc/letsencrypt/live/{{ nginx_domain }}/privkey.pem"
+      - "ssl_protocols {{ nginx_ssl_protocols }}"
+      - "ssl_ciphers {{ nginx_ssl_ciphers }}"
+      - "ssl_prefer_server_ciphers off"
+      - "ssl_dhparam /etc/nginx/dhparams.pem"
+    _default_location_config:
+      - "location /:"
+      - 'return 404 "Service not found"'
+  when:
+    - nginx_domain is defined
+    - certbot_domains is defined
+    - (nginx_sites | default({})).main_https is not defined
+    - (reverse_proxy | default('traefik')) == 'nginx'
+    - ssl_certificate_stat.stat.exists | default(false) | bool
+  tags: [configure, nginx, sites]
+
+- name: Auto-generate nginx sites from domain and service variables
+  set_fact:
+    nginx_sites: "{{ nginx_sites | default({}) | combine(_auto_sites | default({})) }}"
+  vars:
+    _auto_sites:
+      main_http: "{{ _http_site_config | default([]) }}"
+      main_https: "{{ _https_site_config | default([]) }}"
+  when:
+    - _http_site_config is defined or _https_site_config is defined
+  tags: [configure, nginx, sites]
 
 - name: Configure sites
   ansible.builtin.template:

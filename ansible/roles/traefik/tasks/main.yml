@@ -9,11 +9,9 @@
     role_name: "traefik"
     required_variables:
       - "traefik_domain"
-      - "traefik_dashboard_domain"
       - "traefik_data_dir"
       - "traefik_config_dir"
       - "traefik_certs_dir"
-      - "traefik_logs_dir"
       - "traefik_user"
       - "traefik_group"
       - "traefik_network_name"
@@ -35,9 +33,6 @@
       - name: "traefik_domain"
         validation: "traefik_domain | regex_search('^[a-zA-Z0-9.-]+$')"
         error_message: "traefik_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
-      - name: "traefik_dashboard_domain"
-        validation: "traefik_dashboard_domain | regex_search('^[a-zA-Z0-9.-]+$')"
-        error_message: "traefik_dashboard_domain must be a valid domain name (letters, numbers, dots, hyphens only)"
       - name: "traefik_acme_email"
         condition: "traefik_acme_enabled | default(false)"
         validation: "traefik_acme_email | regex_search('@')"
@@ -51,27 +46,23 @@
       - name: "traefik_certs_dir"
         validation: "traefik_certs_dir | regex_search('^/')"
         error_message: "traefik_certs_dir must be an absolute path starting with '/'"
-      - name: "traefik_logs_dir"
-        validation: "traefik_logs_dir | regex_search('^/')"
-        error_message: "traefik_logs_dir must be an absolute path starting with '/'"
-      - name: "traefik_web_port"
-        validation: "traefik_web_port | int > 0 and traefik_web_port | int <= 65535"
-        error_message: "traefik_web_port must be a valid port number (1-65535)"
-      - name: "traefik_websecure_port"
-        validation: "traefik_websecure_port | int > 0 and traefik_websecure_port | int <= 65535"
-        error_message: "traefik_websecure_port must be a valid port number (1-65535)"
-      - name: "traefik_dashboard_port"
-        validation: "traefik_dashboard_port | int > 0 and traefik_dashboard_port | int <= 65535"
-        error_message: "traefik_dashboard_port must be a valid port number (1-65535)"
+      - name: "traefik_entrypoints"
+        validation: "traefik_entrypoints is defined and traefik_entrypoints is mapping"
+        error_message: "traefik_entrypoints must be a dictionary/mapping"
       - name: "traefik_certificate_type"
         validation: "traefik_certificate_type in ['acme', 'custom', 'none']"
         error_message: "traefik_certificate_type must be one of: acme, custom, none"
       - name: "traefik_log_level"
         validation: "traefik_log_level in ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL', 'PANIC']"
         error_message: "traefik_log_level must be one of: DEBUG, INFO, WARN, ERROR, FATAL, PANIC"
-      - name: "traefik_dashboard_allow_network"
-        validation: "traefik_dashboard_allow_network in ['wireguard', 'tailscale']"
-        error_message: "traefik_dashboard_allow_network must be one of: wireguard, tailscale"
+
+# Extract port values from entrypoints for backward compatibility
+- name: Set port variables from entrypoints for backward compatibility
+  set_fact:
+    traefik_web_port: "{{ traefik_entrypoints.web.host_port }}"
+    traefik_websecure_port: "{{ traefik_entrypoints.websecure.host_port }}"
+    traefik_dashboard_port: "{{ traefik_entrypoints.dashboard.host_port }}"
+  tags: always
 
 # Prerequisites installation
 - name: Install system prerequisites
@@ -179,7 +170,7 @@
 # Build the list of TCP ports that must remain open (existing + Traefik-specific)
 - name: Determine firewall TCP ports for Traefik
   set_fact:
-    traefik_firewall_tcp_ports: "{{ ((iptables_allowed_tcp_ports | default([22, 80, 443])) + [traefik_web_port, traefik_websecure_port] + (traefik_dashboard_expose_port | default(false) | ternary([traefik_dashboard_port], []))) | unique }}"
+    traefik_firewall_tcp_ports: "{{ ((iptables_allowed_tcp_ports | default([22, 80, 443])) + [traefik_entrypoints.web.host_port, traefik_entrypoints.websecure.host_port] + (traefik_dashboard_expose_port | default(false) | ternary([traefik_entrypoints.dashboard.host_port], []))) | unique }}"
   when: traefik_configure_firewall | default(true)
 
 - name: Configure firewall rules for Traefik
@@ -198,7 +189,7 @@
       - "  - bcrypt: {{ 'OK' if bcrypt_check.json is defined and bcrypt_check.rc == 0 else 'FAILED' }}"
       - "  - docker (Python): {{ 'OK' if docker_python_check.json is defined and docker_python_check.rc == 0 else 'FAILED'  }}"
       - "  - Docker Compose: {{ 'OK' if docker_compose_check.json is defined and docker_compose_check.rc == 0 else 'SKIPPED' if not traefik_ensure_docker_installed | default(true) else 'FAILED' }}"
-      - "  - Required ports configured: {{ traefik_web_port }}, {{ traefik_websecure_port }}, {{ traefik_dashboard_port }}"
+      - "  - Required ports configured: {{ traefik_entrypoints.web.host_port }}, {{ traefik_entrypoints.websecure.host_port }}, {{ traefik_entrypoints.dashboard.host_port }}"
 
 - name: Setup Traefik user and directories (standardized)
   include_tasks: "{{ role_path }}/../common/tasks/setup_service_user.yml"
@@ -214,7 +205,6 @@
       - "{{ traefik_data_dir }}"
       - "{{ traefik_config_dir }}"
       - "{{ traefik_certs_dir }}"
-      - "{{ traefik_logs_dir }}"
     directory_mode: "0755"
     
 - name: Set Traefik UID and GID variables for backward compatibility
@@ -232,7 +222,6 @@
     - "{{ traefik_data_dir }}"
     - "{{ traefik_config_dir }}"
     - "{{ traefik_certs_dir }}"
-    - "{{ traefik_logs_dir }}"
   become: true
 
 - name: Set special permissions for certificates directory
@@ -398,8 +387,8 @@
   tags: [validate, web]
   vars:
     service_name: "traefik"
-    service_url: "http://localhost:{{ traefik_dashboard_port }}/ping"
-    service_port: "{{ traefik_dashboard_port }}"
+    service_url: "http://localhost:{{ traefik_entrypoints.dashboard.host_port }}/ping"
+    service_port: "{{ traefik_entrypoints.dashboard.host_port }}"
     expected_status_codes: [200]
     max_retries: 30
     retry_delay: 10
@@ -412,9 +401,9 @@
     msg: |
       Traefik deployment completed successfully!
       
-      Dashboard: http://localhost:{{ traefik_dashboard_port }}
-      Web port: {{ traefik_web_port }}
-      Web secure port: {{ traefik_websecure_port }}
+      Dashboard: http://localhost:{{ traefik_entrypoints.dashboard.host_port }}
+      Web port: {{ traefik_entrypoints.web.host_port }}
+      Web secure port: {{ traefik_entrypoints.websecure.host_port }}
       
       Service status: {{ traefik_service.changed | ternary('Started', 'Already running') }}
       Ready check: {{ traefik_ready_check.status | default('N/A') }}

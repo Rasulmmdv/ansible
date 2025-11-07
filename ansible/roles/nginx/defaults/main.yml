@@ -73,7 +73,14 @@ nginx_sites:
         - deny all
 
 # Upstream configurations
+# Auto-generated from proxied services when reverse_proxy=nginx
+# Can be manually overridden in inventory if needed
 nginx_upstreams: {}
 
 # Stream configurations
 nginx_streams: {}
+
+# Proxied services registry
+# Services register themselves here automatically, but can be overridden in inventory
+# Format: List of service definitions with name, enabled, upstream_name, port, path
+nginx_proxied_services: []

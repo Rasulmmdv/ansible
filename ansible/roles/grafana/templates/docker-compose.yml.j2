@@ -3,10 +3,12 @@ services:
     image: "{{ grafana_image }}"
     container_name: "{{ grafana_container_name }}"
     restart: unless-stopped
+{% if not grafana_enable_reverse_proxy or (grafana_enable_reverse_proxy and grafana_reverse_proxy == 'nginx') %}
     ports:
 {% for port in grafana_ports %}
       - "{{ port }}"
 {% endfor %}
+{% endif %}
     volumes:
 {% for volume in grafana_volumes %}
       - {{ volume }}
@@ -16,36 +18,62 @@ services:
 {% for key, value in grafana_env.items() %}
       - {{ key }}={{ value }}
 {% endfor %}
+{% if grafana_routing_mode == 'path' and grafana_enable_reverse_proxy %}
+      # Configure Grafana for subpath serving
+      - GF_SERVER_ROOT_URL={{ 'https' if (grafana_reverse_proxy == 'traefik' and grafana_traefik_tls) or (grafana_reverse_proxy == 'nginx') else 'http' }}://{{ grafana_base_domain }}{{ grafana_path }}/  # Must end with /
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+{% elif grafana_routing_mode == 'domain' and grafana_domain and grafana_enable_reverse_proxy %}
+      # Configure Grafana for domain-based access
+      # Note: Domain routing only works with domain names. For IP/VPN access, use path-based routing.
+      - GF_SERVER_ROOT_URL={{ 'https' if (grafana_reverse_proxy == 'traefik' and grafana_traefik_tls) or (grafana_reverse_proxy == 'nginx') else 'http' }}://{{ grafana_domain }}/  # Must end with /
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+{% endif %}
     user: '0'
-{% if grafana_enable_traefik %}
+{% if grafana_enable_reverse_proxy and grafana_reverse_proxy == 'traefik' %}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network={{ traefik_network_name | default('traefik-network') }}"
-      - "traefik.http.routers.{{ grafana_traefik_router_name }}.rule=Host(`{{ grafana_traefik_domain }}`)"
+{% if grafana_routing_mode == 'path' %}
+      # Path-based routing
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.rule=PathPrefix(`{{ grafana_path }}`)"
+{% elif grafana_routing_mode == 'domain' and grafana_domain %}
+      # Domain-based routing (domain-only, for IP access use path-based routing)
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.rule=Host(`{{ grafana_domain }}`)"
+{% endif %}
 {% for entrypoint in grafana_traefik_entrypoints %}
       - "traefik.http.routers.{{ grafana_traefik_router_name }}.entrypoints={{ entrypoint }}"
 {% endfor %}
 {% if grafana_traefik_tls %}
-      - "traefik.http.routers.{{ grafana_traefik_router_name }}.tls=true"
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.tls.certResolver={{ grafana_traefik_cert_resolver }}"
 {% endif %}
-{% if grafana_traefik_middlewares is defined and grafana_traefik_middlewares %}
-{% for middleware in grafana_traefik_middlewares %}
-      # - "traefik.http.routers.{{ grafana_traefik_router_name }}.middlewares={{ middleware }}@file"
-{% endfor %}
+{% if grafana_routing_mode == 'path' %}
+      # Don't strip prefix - Grafana handles the full path based on ROOT_URL
+      # Traefik forwards /grafana/... directly to Grafana, which serves from /grafana/... based on GF_SERVER_ROOT_URL
+{% if grafana_traefik_middlewares %}
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.middlewares={{ grafana_traefik_middlewares | join(',') }}"
 {% endif %}
-      - "traefik.http.services.{{ grafana_traefik_router_name }}.loadbalancer.server.port={{ grafana_traefik_port }}"
+{% elif grafana_traefik_middlewares %}
+      - "traefik.http.routers.{{ grafana_traefik_router_name }}.middlewares={{ grafana_traefik_middlewares | join(',') }}"
+{% endif %}
+      - "traefik.http.services.{{ grafana_traefik_router_name }}.loadbalancer.server.port={{ grafana_port }}"
+{% elif grafana_enable_reverse_proxy and grafana_reverse_proxy == 'nginx' %}
+    labels:
+      # Nginx integration labels (for future use with nginx role)
+      - "nginx.enable=true"
+      - "nginx.upstream={{ grafana_nginx_upstream }}"
+      - "nginx.port={{ grafana_port }}"
 {% endif %}
     networks:
       - monitoring
-{% if grafana_enable_traefik %}
+{% if grafana_enable_reverse_proxy and grafana_reverse_proxy == 'traefik' %}
       - {{ traefik_network_name | default('traefik-network') }}
 {% endif %}
 
 networks:
   monitoring:
     external: true
-{% if grafana_enable_traefik %}
+{% if grafana_enable_reverse_proxy and grafana_reverse_proxy == 'traefik' %}
   {{ traefik_network_name | default('traefik-network') }}:
     name: "{{ traefik_network_name | default('traefik-network') }}"
     external: true
-{% endif %} 
+{% endif %}

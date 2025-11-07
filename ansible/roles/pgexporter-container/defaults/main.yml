@@ -58,3 +58,4 @@ pgexporter_health_check_timeout: "10s"
 pgexporter_health_check_retries: 3
 pgexporter_health_check_start_period: "40s"
 
+

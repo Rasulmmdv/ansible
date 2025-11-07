@@ -8,7 +8,15 @@ certbot_domains: []
 certbot_mail: server@kimdevs.ru
 
 # Cloudflare DNS API token (should be set via environment variable)
+# If not set, certbot will fall back to HTTP-01 challenge
 dns_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_KIMDEVS') }}"
+
+# Challenge type: 'dns' (DNS-01) or 'http' (HTTP-01)
+# If dns_token is not set, automatically uses 'http'
+certbot_challenge_type: "{{ 'http' if (dns_token is not defined or dns_token | length == 0) else 'dns' }}"
+
+# Webroot path for HTTP-01 challenge (when using webroot mode instead of standalone)
+certbot_webroot_path: "/var/www/certbot"
 
 # Deploy hook to run after certificate renewal
 certbot_deploy_hook: "systemctl reload nginx"
@@ -18,3 +26,7 @@ certbot_route53_deploy_hook: ""
 
 # DNS propagation timeout in seconds
 certbot_dns_propagation_seconds: 60
+
+# Use Let's Encrypt staging environment (for testing)
+# Set to true to use staging API (no rate limits, fake certificates)
+certbot_use_staging: false

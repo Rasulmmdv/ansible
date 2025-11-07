@@ -15,11 +15,35 @@
   become: true
   tags: [install, certbot]
 
+- name: Determine challenge type and validate prerequisites
+  set_fact:
+    certbot_use_dns: "{{ certbot_challenge_type | default('dns') == 'dns' }}"
+    certbot_use_http: "{{ certbot_challenge_type | default('http') == 'http' }}"
+  tags: [configure, certbot]
+
+- name: Validate Cloudflare API token for DNS challenge
+  assert:
+    that:
+      - dns_token is defined
+      - dns_token | length > 0
+    fail_msg: |
+      Cloudflare API token is missing but DNS challenge was requested.
+      Please set the CLOUDFLARE_KIMDEVS environment variable:
+      export CLOUDFLARE_KIMDEVS="your-cloudflare-api-token"
+      
+      Or use HTTP challenge by leaving CLOUDFLARE_KIMDEVS unset.
+    quiet: true
+  when:
+    - certbot_use_dns | default(false)
+    - certbot_domains | length > 0
+  tags: [configure, certbot]
+
 - name: Create secrets directory for cloudflare credentials
   ansible.builtin.file:
     state: directory
     path: "{{ ansible_env.HOME }}/.secrets"
     mode: '0700'
+  when: certbot_use_dns | default(false)
   tags: [configure, certbot]
 
 - name: Add cloudflare DNS configuration
@@ -27,11 +51,25 @@
     src: config.j2
     dest: "{{ ansible_env.HOME }}/.secrets/cloudflare.ini"
     mode: '0600'
+  when: certbot_use_dns | default(false)
   tags: [configure, certbot]
 
-- name: Obtain SSL certificates from Let's Encrypt
+- name: Create webroot directory for HTTP challenge
+  ansible.builtin.file:
+    path: "{{ certbot_webroot_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: certbot_use_http | default(false)
+  tags: [configure, certbot]
+
+- name: Obtain SSL certificates using DNS-01 challenge
   ansible.builtin.shell: >
-    certbot certonly --noninteractive --dns-cloudflare
+    certbot certonly --noninteractive
+    {% if certbot_use_staging | default(false) %}--staging{% endif %}
+    --dns-cloudflare
     --dns-cloudflare-credentials {{ ansible_env.HOME }}/.secrets/cloudflare.ini
     --preferred-challenges dns-01
     -d {{ certbot_domains | join(' -d ') }}
@@ -40,7 +78,63 @@
     --dns-cloudflare-propagation-seconds {{ certbot_dns_propagation_seconds }}
     {% if certbot_route53_deploy_hook is defined and certbot_route53_deploy_hook != '' %}--deploy-hook="{{ certbot_route53_deploy_hook }}"{% endif %}
   become: true
-  when: certbot_domains | length > 0
+  when:
+    - certbot_domains | length > 0
+    - certbot_use_dns | default(false)
   tags: [configure, certbot]
   register: certbot_result
   changed_when: "'Certificate is saved at' in certbot_result.stdout or 'Congratulations!' in certbot_result.stdout"
+
+- name: Check if nginx is installed and running
+  ansible.builtin.command: systemctl is-active nginx
+  become: true
+  register: nginx_status_check
+  failed_when: false
+  changed_when: false
+  when:
+    - certbot_domains | length > 0
+    - certbot_use_http | default(false)
+  tags: [configure, certbot]
+
+- name: Stop nginx temporarily for HTTP-01 standalone challenge
+  ansible.builtin.service:
+    name: nginx
+    state: stopped
+  become: true
+  when:
+    - certbot_domains | length > 0
+    - certbot_use_http | default(false)
+    - nginx_status_check.rc is defined
+    - nginx_status_check.rc == 0
+  tags: [configure, certbot]
+  register: nginx_stopped
+
+- name: Obtain SSL certificates using HTTP-01 challenge (standalone)
+  ansible.builtin.shell: >
+    certbot certonly --noninteractive
+    {% if certbot_use_staging | default(false) %}--staging{% endif %}
+    --standalone
+    --preferred-challenges http-01
+    -d {{ certbot_domains | join(' -d ') }}
+    --agree-tos -m {{ certbot_mail }}
+    {% if certbot_deploy_hook is defined %}--deploy-hook="{{ certbot_deploy_hook }}"{% endif %}
+  become: true
+  when:
+    - certbot_domains | length > 0
+    - certbot_use_http | default(false)
+  tags: [configure, certbot]
+  register: certbot_result
+  changed_when: "'Certificate is saved at' in certbot_result.stdout or 'Congratulations!' in certbot_result.stdout"
+
+- name: Start nginx after HTTP-01 challenge
+  ansible.builtin.service:
+    name: nginx
+    state: started
+  become: true
+  when:
+    - certbot_domains | length > 0
+    - certbot_use_http | default(false)
+    - nginx_status_check.rc is defined
+    - nginx_status_check.rc == 0
+    - nginx_stopped.changed | default(false)
+  tags: [configure, certbot]
