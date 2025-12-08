@@ -1,10 +1,12 @@
 ---
 # Playbook: root_ssh_access.yml
 # Description: Configures SSH access for root user
-# Usage: ansible-playbook -i inventory.yml playbooks/root_ssh_access.yml
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/root_ssh_access.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/root_ssh_access.yml -e "target_hosts=personal"
 
 - name: Ensure root SSH access is configured
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     root_authorized_keys: []  # List of SSH public keys

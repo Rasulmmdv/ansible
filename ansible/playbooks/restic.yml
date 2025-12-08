@@ -1,6 +1,12 @@
 ---
+# Playbook: restic.yml
+# Description: Deploy Restic Backup Solution for Yandex Cloud S3 Storage
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/restic.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/restic.yml -e "target_hosts=personal"
+
 - name: Deploy Restic Backup Solution for Yandex Cloud S3 Storage
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: yes
   vars:
     project_name: "kimdev"  # Set a default project name for paths

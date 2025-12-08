@@ -1,10 +1,12 @@
 ---
 # Playbook: update.yml
 # Description: Updates system packages
-# Usage: ansible-playbook -i inventory.yml playbooks/update.yml
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/update.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/update.yml -e "target_hosts=personal"
 
 - name: Update and reboot hosts if required
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     update_reboot: false  # Set to true for automatic reboot

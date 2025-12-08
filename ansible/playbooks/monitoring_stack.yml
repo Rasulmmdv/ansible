@@ -1,6 +1,12 @@
 ---
+# Playbook: monitoring_stack.yml
+# Description: Deploy Full Monitoring and Observability Stack
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/monitoring_stack.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/monitoring_stack.yml -e "target_hosts=personal"
+
 - name: Deploy Full Monitoring and Observability Stack
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   roles:
     - { role: monitoring-stack, tags: ["monitoring"] }

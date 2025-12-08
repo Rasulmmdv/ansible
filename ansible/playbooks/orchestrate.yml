@@ -6,10 +6,12 @@
 #     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e run_all_roles=true
 #
 #   Run a subset (roleA + roleB) and their dependencies:
-#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e "roles_enabled=['roleA','roleB']"
+#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e '{"roles_enabled": ["roleA","roleB"]}'
+#     OR: ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e "roles_enabled=[roleA,roleB]"
 #
 #   Run only installation steps for a subset:
-#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e "roles_enabled=['docker']" -t install
+#     ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e '{"roles_enabled": ["docker"]}' -t install
+#     OR: ansible-playbook -i inventory.ini ansible/playbooks/orchestrate.yml -e "roles_enabled=[docker]" -t install
 #
 # -----------------------------------------------------
 - name: Orchestrate selected roles
@@ -22,9 +24,29 @@
       include_vars: "{{ playbook_dir }}/../group_vars/all/main.yml"
       tags: always
 
+    - name: Normalize roles_enabled to always be a list
+      set_fact:
+        _roles_enabled_normalized: >-
+          {%- if roles_enabled is not defined -%}
+            []
+          {%- elif roles_enabled is string -%}
+            {%- set yaml_parsed = roles_enabled | from_yaml | default('__FAILED__') -%}
+            {%- if yaml_parsed != '__FAILED__' and yaml_parsed is iterable and yaml_parsed is not string -%}
+              {{ yaml_parsed | list }}
+            {%- else -%}
+              [{{ roles_enabled | quote }}]
+            {%- endif -%}
+          {%- elif roles_enabled is iterable and roles_enabled is not string -%}
+            {{ roles_enabled | list }}
+          {%- else -%}
+            [{{ roles_enabled | string | quote }}]
+          {%- endif -%}
+      when: roles_enabled is defined or run_all_roles is not defined
+      tags: always
+
     - name: Determine requested roles
       set_fact:
-        _roles_requested: "{{ (run_all_roles | default(false) | bool) | ternary(roles_all, roles_enabled | default([])) }}"
+        _roles_requested: "{{ (run_all_roles | default(false) | bool) | ternary(roles_all, _roles_enabled_normalized | default([])) }}"
       tags: always
 
     # validation tasks continue here
@@ -70,7 +92,7 @@
 
   # ------------- MAIN: INCLUDE ROLES IN ORDER -------------------
   tasks:
-    - name: "Apply role: {{ item }}"
+    - name: Apply role
       include_role:
         name: "{{ item }}"
         # Apply any tags passed on CLI to each role (inheritance)

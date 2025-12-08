@@ -13,7 +13,7 @@
 #     ansible-playbook -i inventory.yml playbooks/wireguard.yml -e "wireguard_client_stack=true"
 
 - name: Deploy WireGuard VPN with Optional Xray and Gost Components
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     # REQUIRED: Set your project name for VPN naming

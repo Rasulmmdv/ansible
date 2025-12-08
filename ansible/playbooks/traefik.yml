@@ -1,7 +1,11 @@
 ---
 # Example playbook for deploying Traefik reverse proxy
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/traefik.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/traefik.yml -e "target_hosts=personal"
+
 - name: Deploy Traefik Reverse Proxy
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     # REQUIRED: Set your Traefik domain

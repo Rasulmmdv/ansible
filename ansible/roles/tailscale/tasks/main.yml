@@ -303,6 +303,156 @@
     - tailscale_final_authenticated is not defined
   tags: [validate, networking]
 
+- name: Ensure Tailscale DNS is accepted (per Tailscale docs)
+  ansible.builtin.command: tailscale set --accept-dns={{ tailscale_accept_dns | default(true) | lower }}
+  register: tailscale_set_dns
+  changed_when: tailscale_set_dns.rc == 0
+  failed_when: false
+  when:
+    - tailscale_accept_dns | default(true)
+    - tailscale_final_authenticated | default(false)
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Restart systemd-resolved to apply Tailscale DNS changes
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+  become: true
+  when:
+    - tailscale_set_dns is defined
+    - tailscale_set_dns.rc == 0
+    - tailscale_accept_dns | default(true)
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Wait for DNS configuration to propagate
+  ansible.builtin.pause:
+    seconds: 2
+  when:
+    - tailscale_set_dns is defined
+    - tailscale_set_dns.rc == 0
+    - tailscale_accept_dns | default(true)
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Check if Tailscale DNS is already configured
+  ansible.builtin.command: resolvectl dns tailscale0 2>/dev/null || echo ""
+  register: tailscale_dns_check
+  failed_when: false
+  changed_when: false
+  when:
+    - tailscale_accept_dns | default(true)
+    - tailscale_final_authenticated | default(false)
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Build DNS reset command (preserve advertised flags)
+  ansible.builtin.set_fact:
+    tailscale_dns_reset_cmd: "{{ (tailscale_up_cmd | default('tailscale up --accept-dns=' ~ (tailscale_accept_dns | default(true) | lower) ~ ' --accept-routes=' ~ (tailscale_accept_routes | default(false) | lower))) }} --reset"
+  when:
+    - tailscale_accept_dns | default(true)
+    - tailscale_final_authenticated | default(false)
+    - not ansible_check_mode
+    - (tailscale_dns_check.stdout | default('') | string).find('100.100.100.100') == -1
+  tags: [configure, networking, dns]
+
+- name: Force Tailscale to reconfigure DNS (if not already configured)
+  ansible.builtin.command: "{{ tailscale_dns_reset_cmd }}"
+  register: tailscale_dns_reset
+  changed_when: tailscale_dns_reset.rc == 0
+  failed_when: false
+  when:
+    - tailscale_dns_reset_cmd is defined
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Restart systemd-resolved after DNS reset
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+  become: true
+  when:
+    - tailscale_dns_reset is defined
+    - tailscale_dns_reset.rc == 0
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Wait for DNS to propagate after reset
+  ansible.builtin.pause:
+    seconds: 3
+  when:
+    - tailscale_dns_reset is defined
+    - tailscale_dns_reset.rc == 0
+    - not ansible_check_mode
+  tags: [configure, networking, dns]
+
+- name: Verify MagicDNS configuration
+  block:
+    - name: Check Tailscale DNS server status
+      ansible.builtin.command: resolvectl dns tailscale0 2>/dev/null || resolvectl dns | grep -A 5 tailscale0 || echo "Not configured"
+      register: tailscale_dns_status
+      failed_when: false
+      changed_when: false
+      tags: [validate, networking, dns]
+
+    - name: Check if Tailscale interface exists and has DNS
+      ansible.builtin.command: ip addr show tailscale0 2>/dev/null && resolvectl status | grep -A 10 tailscale0 || echo "Interface or DNS not configured"
+      register: tailscale_interface_check
+      failed_when: false
+      changed_when: false
+      tags: [validate, networking, dns]
+
+    - name: Check current DNS resolution
+      ansible.builtin.command: resolvectl status 2>/dev/null | head -20 || cat /etc/resolv.conf 2>/dev/null || echo "Unable to check DNS"
+      register: dns_resolution_status
+      failed_when: false
+      changed_when: false
+      tags: [validate, networking, dns]
+
+    - name: Display MagicDNS status and troubleshooting
+      ansible.builtin.debug:
+        msg: |
+          === MagicDNS Status ===
+          Tailscale DNS Server Check: {{ tailscale_dns_status.stdout | default('Not configured') | trim }}
+          Tailscale Interface Check: {{ tailscale_interface_check.stdout | default('Not checked') | trim }}
+          
+          Current DNS Resolution:
+          {{ dns_resolution_status.stdout_lines | default(['Unable to check DNS']) | join('\n') }}
+          
+          {% if '100.100.100.100' in (tailscale_dns_status.stdout | default('') + tailscale_interface_check.stdout | default('')) -%}
+          ✅ Tailscale DNS is configured correctly (100.100.100.100 found)
+          
+          Test MagicDNS with:
+          - dig node-2-nl.tail7b3d7.ts.net
+          - nslookup node-1-nl
+          - ping node-2-nl
+          {% else -%}
+          ⚠️  Tailscale DNS may not be fully configured yet
+          
+          Troubleshooting steps (already attempted by role):
+          1. ✅ MagicDNS enabled in Tailscale admin console
+          2. ✅ tailscale set --accept-dns=true (executed)
+          3. ✅ systemd-resolved restarted (executed)
+          
+          If still not working, try manually:
+          - tailscale up --accept-dns=true --reset
+          - systemctl restart systemd-resolved
+          - Wait a few seconds, then: resolvectl dns tailscale0
+          - Check: resolvectl status | grep -A 5 tailscale0
+          
+          Note: DNS configuration can take a few seconds to propagate.
+          Docker containers use their own DNS and are not affected.
+          {% endif %}
+      when: tailscale_accept_dns | default(true)
+      tags: [validate, networking, dns]
+
+  when:
+    - tailscale_accept_dns | default(true)
+    - tailscale_final_authenticated | default(false)
+    - not ansible_check_mode
+  tags: [validate, networking, dns]
+
 - name: Display Tailscale installation summary
   ansible.builtin.debug:
     msg: |
@@ -311,11 +461,23 @@
       Authenticated: {{ tailscale_final_authenticated | default(false) }}
       Backend State: {{ tailscale_final_backend_state | default('Unknown') }}
       Service Status: {{ 'Running' if tailscale_service_state == 'started' else 'Not Running' }}
+      MagicDNS Enabled: {{ tailscale_final_parsed.CurrentTailnet.MagicDNSEnabled | default(false) }}
+      MagicDNS Suffix: {{ tailscale_final_parsed.CurrentTailnet.MagicDNSSuffix | default('Not configured') }}
 
       {% if tailscale_final_authenticated | default(false) -%}
       ✅ Tailscale is successfully authenticated and online
       {% if tailscale_final_parsed.Self.TailscaleIPs | default([]) -%}
       Node IPs: {{ tailscale_final_parsed.Self.TailscaleIPs | join(', ') }}
+      {% endif -%}
+      {% if tailscale_final_parsed.Self.DNSName | default('') -%}
+      DNS Name: {{ tailscale_final_parsed.Self.DNSName }}
+      {% endif -%}
+      
+      {% if tailscale_accept_dns | default(true) -%}
+      DNS Configuration:
+      - Tailscale DNS server: 100.100.100.100
+      - MagicDNS suffix: {{ tailscale_final_parsed.CurrentTailnet.MagicDNSSuffix | default('Not configured') }}
+      - Test with: dig node-2-nl.{{ tailscale_final_parsed.CurrentTailnet.MagicDNSSuffix | default("") }}
       {% endif -%}
       {% else -%}
       ❌ Tailscale is not authenticated

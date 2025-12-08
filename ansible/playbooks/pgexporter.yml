@@ -10,7 +10,7 @@
 #     ansible-playbook -i inventory.yml playbooks/pgexporter.yml -e "pgexporter_deployment_method=container"
 
 - name: Deploy PostgreSQL Exporter for Database Monitoring
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     # Deployment method selection

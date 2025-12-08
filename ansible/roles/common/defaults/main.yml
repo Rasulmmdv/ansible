@@ -31,13 +31,16 @@ common_shell_utils_packages:
 
 # Network utilities
 common_network_utils_packages:
-  - net-tools
-  - iproute2
-  - nmap
-  - traceroute
-  - tcpdump
-  - iperf3
-  - iftop
+  - net-tools  # Provides ifconfig, netstat, route, etc.
+  - iproute2  # Provides ip, ss, tc, etc.
+  - iputils-ping  # Provides ping command
+  - iputils-tracepath  # Provides tracepath command
+  - nmap  # Network scanner
+  - traceroute  # Route tracing
+  - tcpdump  # Packet analyzer
+  - iperf3  # Network performance testing
+  - iftop  # Network bandwidth monitoring
+  - bind9-dnsutils  # Provides nslookup and dig commands
 
 # Monitoring tools
 common_monitoring_packages:

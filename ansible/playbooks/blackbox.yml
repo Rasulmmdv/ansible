@@ -13,7 +13,7 @@
 #     ansible-playbook -i inventory.yml playbooks/blackbox.yml -e "blackbox_custom_endpoints=true"
 
 - name: Deploy Blackbox Exporter with Configurable Monitoring
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     # Enable website monitoring (combines blackbox_website_monitoring.yml functionality)

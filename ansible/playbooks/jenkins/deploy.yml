@@ -6,7 +6,7 @@
 #   ansible-playbook -i inventory.yml playbooks/jenkins/deploy.yml
 
 - name: Deploy Jenkins with Docker
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   vars:
     # REQUIRED: Set your Jenkins admin password

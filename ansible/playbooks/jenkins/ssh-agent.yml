@@ -1,8 +1,11 @@
 ---
 # Playbook for deploying Jenkins SSH agent
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/jenkins/ssh-agent.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/jenkins/ssh-agent.yml -e "target_hosts=personal"
 
 - name: Deploy Jenkins SSH Agent
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: true
   roles:
     - role: jenkins-ssh-agent-docker

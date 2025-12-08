@@ -1,6 +1,12 @@
 ---
+# Playbook: site.yml
+# Description: Configure all servers
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/site.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/site.yml -e "target_hosts=personal"
+
 - name: Configure all servers
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   roles:
     - update
     - common

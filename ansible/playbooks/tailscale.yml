@@ -1,6 +1,12 @@
 ---
+# Playbook: tailscale.yml
+# Description: Install Tailscale agent
+# Usage: 
+#   From ansible/ directory: ansible-playbook playbooks/tailscale.yml -e "target_hosts=personal"
+#   From root directory: ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/all ansible/playbooks/tailscale.yml -e "target_hosts=personal"
+
 - name: Install Tailscale agent
-  hosts: all
+  hosts: "{{ target_hosts | default('all') }}"
   become: yes
   roles:
     - tailscale 

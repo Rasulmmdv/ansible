@@ -1,0 +1,32 @@
+---
+# Common variables shared across all inventories
+# These variables apply to all hosts unless overridden in specific inventory files
+all:
+  vars:
+    # Common variables for all hosts
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_python_interpreter: /usr/bin/python3
+    restic_aws_access_key_id: ""
+    restic_aws_secret_access_key: ""
+    restic_password: ""
+    restic_setup_selectel_ca: false
+    project_name: kimdev
+    # Personal infrastructure specific vars (from inventory.yml)
+    tailscale_auth_key: "tskey-auth-"
+    tailscale_install_url: "https://tailscale.com/install.sh"
+    tailscale_exit_node_allow_lan_access: true
+    tailscale_advertise_exit_node: true
+    # Disable firewall configuration for all roles
+    traefik_configure_firewall: false
+    wireguard_manage_iptables: false
+    node_exporter_manage_firewall: false
+    iptables_manage_firewall: false
+    # VPN whitelist control for Traefik dashboard/API access
+    # Options: "tailscale" (default) or "wireguard"
+    traefik_dashboard_allow_network: "tailscale"
+    # Grafana Traefik integration
+    grafana_enable_traefik: true
+    traefik_dashboard_enabled: false
+
+
+

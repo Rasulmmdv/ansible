@@ -103,22 +103,41 @@
       when: custom_validations is defined
       block:
         - name: "Run custom validation for {{ custom_validation.name }}"
-          ansible.builtin.assert:
-            that:
-              - "{{ custom_validation.validation }}"
-            fail_msg: |
-              ❌ VALIDATION FAILED: {{ custom_validation.name }}
+          block:
+            - name: "Evaluate validation for {{ custom_validation.name }}"
+              set_fact:
+                _validation_passed: >-
+                  {%- if 'regex_search' in custom_validation.validation -%}
+                    {%- set var_name = custom_validation.validation.split('|')[0].strip() -%}
+                    {{- vars[var_name] | default('') | regex_search('^https://') is not none -}}
+                  {%- elif 'length >' in custom_validation.validation -%}
+                    {%- set var_name = custom_validation.validation.split('|')[0].strip() -%}
+                    {%- set length_val = custom_validation.validation.split('>')[-1].strip() | int -%}
+                    {{- (vars[var_name] | default('') | length) > length_val -}}
+                  {%- else -%}
+                    {{- vars[custom_validation.name] | default('') | bool -}}
+                  {%- endif -%}
+              loop: "{{ custom_validations }}"
+              loop_control:
+                loop_var: custom_validation
 
-              Role: {{ role_name }}
-              Variable: {{ custom_validation.name }}
-              Current Value: {{ vars[custom_validation.name] | default('undefined') }}
+            - name: "Assert custom validation for {{ custom_validation.name }}"
+              ansible.builtin.assert:
+                that:
+                  - _validation_passed | bool
+                fail_msg: |
+                  ❌ VALIDATION FAILED: {{ custom_validation.name }}
 
-              {{ custom_validation.error_message }}
-            quiet: false
-          when: (custom_validation.condition | default(true)) | bool
-          loop: "{{ custom_validations }}"
-          loop_control:
-            loop_var: custom_validation
+                  Role: {{ role_name }}
+                  Variable: {{ custom_validation.name }}
+                  Current Value: {{ vars[custom_validation.name] | default('undefined') }}
+
+                  {{ custom_validation.error_message }}
+                quiet: false
+              when: (custom_validation.condition | default(true)) | bool
+              loop: "{{ custom_validations }}"
+              loop_control:
+                loop_var: custom_validation
         
   rescue:
     - name: "Handle variable validation failure for {{ role_name }}"
