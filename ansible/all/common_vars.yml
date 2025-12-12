@@ -27,6 +27,10 @@ all:
     # Grafana Traefik integration
     grafana_enable_traefik: true
     traefik_dashboard_enabled: false
+    # Restic backup configuration
+    # Disable inline verification - it conflicts with concurrent backups from multiple hosts
+    # Weekly verification runs on Sunday at 04:00:00 via restic_check_schedule
+    restic_verify_backups: false
 
 
 

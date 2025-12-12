@@ -45,12 +45,14 @@ all:
           pgexporter_postgres_password: "XPgwTpfJJmwoSXe"
           pgexporter_postgres_db: "postgres"
           wireguard_address: 10.0.0.6/24
+          restic_postgresql_backup_enabled: true
         prod-02: # prod server
           ansible_host: 80.249.131.232
           ansible_user: root
           ansible_become: true
           ansible_become_method: sudo
           wireguard_address: 10.0.0.7/24
+          restic_postgresql_backup_enabled: true
         test-01: # test server Fields
           ansible_host: 82.202.197.209
           ansible_user: root

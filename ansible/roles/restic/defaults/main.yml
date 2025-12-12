@@ -49,8 +49,17 @@ restic_backup_paths:
   - "/home"
   - "/root"
 
+# Restic retry configuration for transient failures (repo locks, network hiccups, etc.)
+# When multiple hosts share the same repository, locks can cause conflicts.
+# These settings make backups more resilient by retrying with exponential backoff.
+restic_backup_retry_attempts: 12                # Total attempts (including first try)
+restic_backup_retry_base_sleep_seconds: 300     # 5 minutes - base delay for exponential backoff
+restic_backup_retry_max_sleep_seconds: 1800     # 30 minutes - cap per retry
+# Pattern: 5m, 10m, 15m, 20m, 25m, 30m, 30m, 30m, 30m, 30m, 30m (total ~3-4 hour window)
+
 # PostgreSQL backup configuration
-restic_postgresql_backup_enabled: true
+# Set to true in your inventory/playbook for hosts with databases
+restic_postgresql_backup_enabled: false
 restic_postgresql_backup_dir: "{{ restic_base_dir }}/db-dumps"
 restic_postgresql_retention_days: 7  # Keep database dumps for 7 days locally
 
@@ -78,8 +87,11 @@ restic_keep_yearly: 2    # Keep yearly snapshots for 2 years
 
 # Backup schedule
 restic_backup_schedule: "*-*-* 02:00:00"  # Daily at 2 AM
-restic_prune_schedule: "Sun *-*-* 03:00:00"   # Weekly on Sunday at 3 AM
-restic_check_schedule: "Sun *-*-* 04:00:00"   # Weekly on Sunday at 4 AM
+# Randomized delay in systemd timer (in seconds) - helps spread backups when multiple hosts start simultaneously
+# Default 10800 = 180 minutes, meaning backups can start anywhere from 02:00 to 05:00
+restic_backup_randomized_delay_seconds: 10800
+restic_prune_schedule: "Sun *-*-* 04:00:00"   # Weekly on Sunday at 4 AM
+restic_check_schedule: "Sun *-*-* 05:00:00"   # Weekly on Sunday at 5 AM
 
 # Systemd service configuration
 restic_service_name: "restic_backup"

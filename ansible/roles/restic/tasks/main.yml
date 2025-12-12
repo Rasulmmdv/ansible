@@ -216,7 +216,9 @@
   when: 
     - restic_postgresql_backup_enabled | bool
     - databases_conf_file.stat.exists
-    - databases_conf_content.content | b64decode | regex_search('true|localhost')
+    - databases_conf_content is defined
+    - databases_conf_content.content is defined
+    - (databases_conf_content.content | b64decode | regex_search('true|localhost')) is defined
 
 # Ensure restic user is in docker group when PostgreSQL backup is enabled (fallback)
 - name: Ensure restic user is in docker group for PostgreSQL backup
