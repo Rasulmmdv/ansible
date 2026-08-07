@@ -1,0 +1,166 @@
+---
+# Test playbook for Hetzner test server
+# Target: 159.69.115.15, domain: test.projectdot.work, user: root
+# Usage:
+#   ansible-playbook -i inventory/hetzner-test playbooks/test_hetzner.yml
+#   ansible-playbook -i inventory/hetzner-test playbooks/test_hetzner.yml --tags docker
+#   ansible-playbook -i inventory/hetzner-test playbooks/test_hetzner.yml --check --diff
+#   ansible-playbook -i inventory/hetzner-test playbooks/test_hetzner.yml --tags smoke
+
+- name: Deploy full stack on Hetzner test server
+  hosts: hetzner-test
+  gather_facts: true
+  # User is root — no become needed
+  become: false
+
+  pre_tasks:
+    - name: "PRE | Verify SSH connectivity"
+      ping:
+      tags: always
+
+    - name: "PRE | Verify Python 3 interpreter"
+      command: python3 --version
+      changed_when: false
+      tags: always
+
+    - name: "PRE | Check OS version (Ubuntu 22.04+ required)"
+      assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_major_version | int >= 22
+        fail_msg: "Requires Ubuntu 22.04+, found {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      tags: always
+
+    - name: "PRE | Check available disk space (>= 15 GB free)"
+      assert:
+        that:
+          - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first > 15000000000
+        fail_msg: "Insufficient disk space on /"
+      tags: always
+
+    - name: "PRE | Disable systemd-resolved stub listener (port 53 for dnsmasq)"
+      lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: "^#?DNSStubListener="
+        line: "DNSStubListener=no"
+      notify: Restart systemd-resolved
+      tags: ["always", "dnsmasq"]
+
+    - name: "PRE | Ensure resolv.conf points to systemd-resolved managed file"
+      file:
+        src: /run/systemd/resolve/resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+      tags: ["always", "dnsmasq"]
+
+    - name: "PRE | Flush handlers (restart resolved before dnsmasq)"
+      meta: flush_handlers
+      tags: always
+
+  handlers:
+    - name: Restart systemd-resolved
+      systemd:
+        name: systemd-resolved
+        state: restarted
+
+  roles:
+    # ── Foundation ─────────────────────────────────────────────────────────────
+    - { role: update,         tags: ["update"] }
+    - { role: common,         tags: ["common"] }
+    - { role: system-config,  tags: ["system-config"] }
+
+    # ── Container runtime ──────────────────────────────────────────────────────
+    - { role: docker,         tags: ["docker"] }
+
+    # ── Network security ───────────────────────────────────────────────────────
+    - { role: iptables,       tags: ["iptables"] }
+    - { role: fail2ban,       tags: ["fail2ban"] }
+    - { role: dnsmasq,        tags: ["dnsmasq"] }
+
+    # ── Nginx (install only — Traefik is the reverse proxy) ───────────────────
+    - { role: nginx,          tags: ["nginx"] }
+
+    # ── Reverse proxy + TLS ────────────────────────────────────────────────────
+    - { role: traefik,        tags: ["traefik"] }
+    - { role: certbot,        tags: ["certbot"] }
+
+    # ── Database ───────────────────────────────────────────────────────────────
+    - { role: postgres,       tags: ["postgres"] }
+
+    # ── Metrics exporters ──────────────────────────────────────────────────────
+    - { role: node_exporter,         tags: ["node_exporter", "exporters"] }
+    - { role: cadvisor,              tags: ["cadvisor", "exporters"] }
+    - { role: blackbox_exporter,     tags: ["blackbox_exporter", "exporters"] }
+    - { role: pgexporter-container,  tags: ["pgexporter", "exporters"] }
+
+    # ── Monitoring stack ───────────────────────────────────────────────────────
+    - { role: prometheus,       tags: ["prometheus", "monitoring"] }
+    - { role: loki,             tags: ["loki", "monitoring"] }
+    - { role: alertmanager,     tags: ["alertmanager", "monitoring"] }
+    - { role: alloy,            tags: ["alloy", "monitoring"] }
+    - { role: grafana,          tags: ["grafana", "monitoring"] }
+    - { role: monitoring-stack, tags: ["monitoring-stack", "monitoring"] }
+
+    # ── Container management ───────────────────────────────────────────────────
+    - { role: portainer,        tags: ["portainer"] }
+    - { role: portainer-agent,  tags: ["portainer-agent", "portainer"] }
+
+    # ── Registry ───────────────────────────────────────────────────────────────
+    - { role: docker-registry,  tags: ["docker-registry", "registry"] }
+
+    # ── CI/CD ──────────────────────────────────────────────────────────────────
+    - { role: jenkins-docker,            tags: ["jenkins"] }
+    - { role: jenkins-ssh-agent-docker,  tags: ["jenkins-agent", "jenkins"] }
+
+    # ── Backup ─────────────────────────────────────────────────────────────────
+    - { role: rclone,           tags: ["rclone"] }
+
+    # ── Access control ─────────────────────────────────────────────────────────
+    - { role: root_ssh_access,    tags: ["root_ssh_access"] }
+
+    # ── Remote monitoring ──────────────────────────────────────────────────────
+    - { role: remote_monitoring,  tags: ["remote_monitoring"] }
+
+  post_tasks:
+    - name: "SMOKE | Wait for Traefik to be ready (port 443)"
+      wait_for:
+        host: "127.0.0.1"
+        port: 443
+        delay: 10
+        timeout: 60
+      tags: ["smoke", "never"]
+
+    - name: "SMOKE | Test all path-based endpoints"
+      uri:
+        url: "{{ item.url }}"
+        method: GET
+        status_code: "{{ item.status | default([200, 301, 302, 401, 403]) }}"
+        validate_certs: false
+        follow_redirects: safe
+        timeout: 30
+      loop:
+        - { name: "Traefik dashboard",  url: "https://test.projectdot.work/traefik/dashboard/" }
+        - { name: "Grafana",            url: "https://test.projectdot.work/grafana" }
+        - { name: "Prometheus ready",   url: "https://test.projectdot.work/prometheus/-/ready" }
+        - { name: "Alertmanager",       url: "https://test.projectdot.work/alertmanager/-/healthy" }
+        - { name: "Loki ready",         url: "https://test.projectdot.work/loki/ready", status: [200, 404] }
+        - { name: "Portainer",          url: "https://test.projectdot.work/portainer" }
+        - { name: "Docker registry",    url: "https://test.projectdot.work/registry/v2/", status: [200, 401] }
+        - { name: "Jenkins",            url: "https://test.projectdot.work/jenkins",      status: [200, 403] }
+        - { name: "Blackbox metrics",   url: "https://test.projectdot.work/blackbox/metrics" }
+        - { name: "pgexporter metrics", url: "https://test.projectdot.work/pgexporter/metrics", status: [200, 401] }
+      loop_control:
+        label: "{{ item.name }}"
+      register: smoke_results
+      ignore_errors: true
+      tags: ["smoke", "never"]
+
+    - name: "SMOKE | Report results"
+      debug:
+        msg: "{{ item.item.name }}: HTTP {{ item.status }} — {{ 'OK' if item.status in [200,301,302,401,403] else 'FAILED' }}"
+      loop: "{{ smoke_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: smoke_results is defined
+      tags: ["smoke", "never"]

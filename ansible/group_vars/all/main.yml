@@ -79,7 +79,9 @@ role_dependencies:
   jenkins-docker: [docker]
   jenkins-ssh-agent-docker: [jenkins-docker]
 
-  restic: [docker]
+  #restic: [docker]
+  restic: []
+
 
   # PostgreSQL backup configuration for restic role
   restic_postgresql_backup_enabled: true

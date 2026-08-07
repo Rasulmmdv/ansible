@@ -2,7 +2,7 @@
 # handlers file for pgexporter-container
 
 - name: restart postgres-exporter container
-  docker_compose:
+  community.docker.docker_compose_v2:
     project_src: "{{ pgexporter_compose_dir }}"
     state: present
     recreate: always
@@ -11,7 +11,7 @@
   tags: [configure, monitoring]
 
 - name: stop postgres-exporter container
-  docker_compose:
+  community.docker.docker_compose_v2:
     project_src: "{{ pgexporter_compose_dir }}"
     state: absent
   become: true
@@ -19,7 +19,7 @@
   tags: [configure, monitoring]
 
 - name: start postgres-exporter container
-  docker_compose:
+  community.docker.docker_compose_v2:
     project_src: "{{ pgexporter_compose_dir }}"
     state: present
   become: true
@@ -27,7 +27,7 @@
   tags: [configure, monitoring]
 
 - name: reload postgres-exporter container
-  docker_compose:
+  community.docker.docker_compose_v2:
     project_src: "{{ pgexporter_compose_dir }}"
     state: present
     recreate: always

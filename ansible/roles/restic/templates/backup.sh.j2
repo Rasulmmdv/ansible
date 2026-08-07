@@ -162,12 +162,25 @@ for attempt in $(seq 1 "${RESTIC_BACKUP_RETRY_ATTEMPTS}"); do
 
     if is_retryable_restic_failure "$RESTIC_STDERR_TMP" && [ "$attempt" -lt "${RESTIC_BACKUP_RETRY_ATTEMPTS}" ]; then
         log "⚠️  Retryable restic failure detected (exit code $BACKUP_EXIT_CODE)"
+        # Log the actual error for debugging (last 10 lines to avoid spam)
+        if [ -f "$RESTIC_STDERR_TMP" ] && [ -s "$RESTIC_STDERR_TMP" ]; then
+            log "📋 Error details (last 10 lines):"
+            tail -10 "$RESTIC_STDERR_TMP" | while IFS= read -r line; do
+                log "   $line"
+            done
+        fi
         rm -f "$RESTIC_STDERR_TMP" "$RESTIC_STDOUT_TMP" || true
         sleep_with_backoff "$attempt"
         continue
     fi
 
-    # Not retryable or last attempt
+    # Not retryable or last attempt - log the full error
+    if [ -f "$RESTIC_STDERR_TMP" ] && [ -s "$RESTIC_STDERR_TMP" ]; then
+        log "❌ Backup error details (exit code $BACKUP_EXIT_CODE):"
+        cat "$RESTIC_STDERR_TMP" | while IFS= read -r line; do
+            log "   $line"
+        done
+    fi
     rm -f "$RESTIC_STDERR_TMP" "$RESTIC_STDOUT_TMP" || true
     break
 done
